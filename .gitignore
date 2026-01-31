@@ -1,0 +1,98 @@
+# Build directories
+build/
+build-*/
+cmake-build-*/
+
+# Compiled binaries
+*.o
+*.a
+*.so
+*.so.*
+*.dylib
+*.exe
+*.out
+oric1-emu
+bas2tap
+bin2tap
+tap2sedoric
+
+# Coverage files
+*.gcda
+*.gcno
+*.gcov
+coverage/
+coverage.info
+
+# Debug files
+*.dSYM/
+*.su
+*.idb
+*.pdb
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# CMake files
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+install_manifest.txt
+CTestTestfile.cmake
+Testing/
+
+# Documentation build
+docs/_build/
+docs/html/
+docs/latex/
+
+# ROM files (may be copyrighted)
+*.rom
+!roms/.gitkeep
+
+# Tape/Disk images (user files)
+*.tap
+*.dsk
+!tests/roms/*.tap
+!tests/roms/*.dsk
+
+# Temporary files
+*.tmp
+*.log
+*.bak
+*.orig
+
+# Package files
+*.deb
+*.rpm
+*.tar.gz
+*.zip
+
+# Core dumps
+core
+core.*
+vgcore.*
+
+# Profiling data
+gmon.out
+callgrind.out.*
+perf.data
+perf.data.old
+
+# Backup files
+*~
+\#*\#
+.\#*
+
+# Python (if any scripts)
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Save states
+*.sav
+*.state

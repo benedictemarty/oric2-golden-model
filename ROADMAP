@@ -1,0 +1,279 @@
+# ROADMAP - ORIC-1 Emulator
+
+## Vision
+Create a cycle-accurate ORIC-1 emulator in C/C++ with modern features including
+host filesystem sharing and conversion tools for legacy BASIC/machine code programs.
+
+---
+
+## Phase 1: Foundation (Sprint 1-3) - Q1 2026
+
+### Sprint 1: Core CPU (v0.2.0-alpha)
+**Goal**: Implement cycle-accurate 6502 CPU core
+
+#### User Stories
+- [ ] As a developer, I want a 6502 CPU that executes all official opcodes
+- [ ] As a developer, I want cycle-accurate timing for each instruction
+- [ ] As a developer, I want proper flag handling (N, V, Z, C, I, D)
+- [ ] As a developer, I want all addressing modes implemented
+
+#### Tasks
+- [ ] Implement 6502 instruction set (151 official opcodes)
+- [ ] Create CPU state structure (A, X, Y, SP, PC, flags)
+- [ ] Implement all addressing modes (13 modes)
+- [ ] Create cycle-accurate timing system
+- [ ] Write unit tests for each opcode
+- [ ] Document CPU architecture
+
+#### Definition of Done
+- All official opcodes pass test suite
+- Cycle counts verified against hardware specs
+- 100% code coverage for CPU core
+- API documentation complete
+
+---
+
+### Sprint 2: Memory & I/O (v0.3.0-alpha)
+**Goal**: Implement memory management and VIA 6522
+
+#### User Stories
+- [ ] As a user, I want 64KB addressable memory space
+- [ ] As a user, I want ROM/RAM banking
+- [ ] As a developer, I want VIA 6522 for keyboard/cassette I/O
+- [ ] As a developer, I want memory-mapped I/O
+
+#### Tasks
+- [ ] Implement memory management system
+- [ ] Create ROM/RAM banking mechanism
+- [ ] Implement VIA 6522 emulation
+- [ ] Add keyboard matrix scanning
+- [ ] Create cassette I/O interface
+- [ ] Write memory/I/O tests
+- [ ] Document memory map
+
+#### Definition of Done
+- Memory access works correctly
+- VIA 6522 passes hardware tests
+- Keyboard input functional
+- Documentation complete
+
+---
+
+### Sprint 3: Video System (v0.4.0-alpha)
+**Goal**: Implement ORIC-1 video display
+
+#### User Stories
+- [ ] As a user, I want to see text mode output (40x28)
+- [ ] As a user, I want HIRES graphics (240x200)
+- [ ] As a user, I want proper color attribute handling
+- [ ] As a developer, I want frame-accurate rendering
+
+#### Tasks
+- [ ] Implement text mode (40x28 characters)
+- [ ] Implement HIRES mode (240x200, 6 colors)
+- [ ] Create character ROM handling
+- [ ] Implement color attributes system
+- [ ] Add alternate character set support
+- [ ] Create SDL2 display backend
+- [ ] Write video tests
+- [ ] Document video system
+
+#### Definition of Done
+- Text and HIRES modes work correctly
+- Colors display properly
+- Frame rate matches hardware (50Hz PAL)
+- Documentation complete
+
+---
+
+## Phase 2: Audio & Storage (Sprint 4-6) - Q2 2026
+
+### Sprint 4: Audio System (v0.5.0-alpha)
+**Goal**: Implement AY-3-8910 sound chip
+
+#### User Stories
+- [ ] As a user, I want to hear sound effects and music
+- [ ] As a developer, I want accurate PSG emulation
+- [ ] As a user, I want proper tone and noise generation
+
+#### Tasks
+- [ ] Implement AY-3-8910 emulation
+- [ ] Create 3-channel tone generators
+- [ ] Implement noise generator
+- [ ] Add envelope control
+- [ ] Create audio output backend (SDL2 Audio)
+- [ ] Write audio tests
+- [ ] Document audio system
+
+---
+
+### Sprint 5: Cassette Storage (v0.6.0-alpha)
+**Goal**: Implement .TAP format support
+
+#### User Stories
+- [ ] As a user, I want to load .TAP files
+- [ ] As a user, I want to save programs to .TAP
+- [ ] As a developer, I want fast load support
+
+#### Tasks
+- [ ] Implement .TAP file format parser
+- [ ] Create cassette loading mechanism
+- [ ] Add fast load support
+- [ ] Implement save functionality
+- [ ] Write storage tests
+- [ ] Document .TAP format
+
+---
+
+### Sprint 6: Disk Storage (v0.7.0-alpha)
+**Goal**: Implement Sedoric disk system
+
+#### User Stories
+- [ ] As a user, I want to use .DSK disk images
+- [ ] As a user, I want Sedoric filesystem support
+- [ ] As a developer, I want disk I/O operations
+
+#### Tasks
+- [ ] Implement Microdisc controller
+- [ ] Create .DSK format support
+- [ ] Implement Sedoric filesystem
+- [ ] Add disk I/O operations
+- [ ] Write disk tests
+- [ ] Document disk system
+
+---
+
+## Phase 3: Host Integration (Sprint 7-9) - Q3 2026
+
+### Sprint 7: Host Filesystem (v0.8.0-alpha)
+**Goal**: Enable host filesystem sharing
+
+#### User Stories
+- [ ] As a user, I want to access host files from ORIC
+- [ ] As a user, I want to share files between host and emulator
+- [ ] As a developer, I want transparent file operations
+
+#### Tasks
+- [ ] Implement virtual filesystem layer
+- [ ] Create host directory mounting
+- [ ] Add file transfer utilities
+- [ ] Implement automatic format conversion
+- [ ] Write hostfs tests
+- [ ] Document hostfs usage
+
+---
+
+### Sprint 8: Conversion Tools (v0.9.0-alpha)
+**Goal**: Create format conversion utilities
+
+#### User Stories
+- [ ] As a user, I want to convert BASIC programs to .TAP
+- [ ] As a user, I want to convert machine code to .TAP
+- [ ] As a user, I want to convert .TAP to Sedoric format
+
+#### Tasks
+- [ ] Create `bas2tap` converter (BASIC → .TAP)
+- [ ] Create `bin2tap` converter (binary → .TAP)
+- [ ] Create `tap2sedoric` converter
+- [ ] Create `sedoric2tap` converter
+- [ ] Add hybrid BASIC/machine code support
+- [ ] Write conversion tool tests
+- [ ] Document all tools
+
+---
+
+### Sprint 9: Polish & Optimization (v0.9.5-beta)
+**Goal**: Optimize and stabilize
+
+#### Tasks
+- [ ] Profile and optimize CPU emulation
+- [ ] Optimize video rendering
+- [ ] Add configuration system
+- [ ] Improve error handling
+- [ ] Complete documentation
+- [ ] Perform security audit
+- [ ] Fix all known bugs
+
+---
+
+## Phase 4: Release (Sprint 10) - Q4 2026
+
+### Sprint 10: v1.0.0 Release
+**Goal**: Production-ready release
+
+#### Tasks
+- [ ] Complete user guide
+- [ ] Create example programs
+- [ ] Package for Linux distributions
+- [ ] Create website/landing page
+- [ ] Announce release
+- [ ] Setup issue tracking
+- [ ] Plan future enhancements
+
+---
+
+## Future Enhancements (Post v1.0.0)
+
+### Advanced Features
+- [ ] ORIC Atmos support
+- [ ] Telestrat support
+- [ ] Debugger with breakpoints
+- [ ] Trace logging
+- [ ] Save states
+- [ ] Network capabilities
+- [ ] Joystick support
+- [ ] Printer emulation
+
+### Developer Tools
+- [ ] Disassembler
+- [ ] Memory viewer
+- [ ] Register inspector
+- [ ] Performance profiler
+- [ ] ROM analysis tools
+
+### Community
+- [ ] Plugin system
+- [ ] Custom ROM support
+- [ ] Expansion modules
+- [ ] Game compatibility database
+
+---
+
+## Success Metrics
+
+### Technical
+- 100% CPU instruction compatibility
+- Cycle-accurate timing (±1 cycle)
+- 95%+ game compatibility
+- <5% CPU overhead on modern hardware
+
+### Quality
+- 90%+ code coverage
+- Zero critical bugs
+- Complete API documentation
+- Comprehensive user guide
+
+### Community
+- 10+ contributors
+- 100+ GitHub stars
+- Active user community
+- Regular releases
+
+---
+
+## Risk Management
+
+### Technical Risks
+- **Timing accuracy**: Mitigation through extensive testing
+- **Performance**: Regular profiling and optimization
+- **Compatibility**: Large test ROM collection
+
+### Project Risks
+- **Scope creep**: Strict sprint planning
+- **Time overruns**: Buffer time in estimates
+- **Resource constraints**: Focus on core features first
+
+---
+
+**Last Updated**: 2026-01-31
+**Next Review**: End of Sprint 1

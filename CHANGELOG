@@ -1,0 +1,47 @@
+# CHANGELOG - ORIC-1 Emulator
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+### Planned
+- 6502 CPU cycle-accurate implementation
+- Memory management system
+- VIA 6522 I/O controller
+- Video system (text and hires modes)
+- AY-3-8910 audio chip
+- Storage support (.TAP, Sedoric)
+- Host filesystem sharing
+- Conversion tools (BASIC/machine → .TAP/Sedoric)
+
+## [0.1.0-alpha] - 2026-01-31
+
+### Added
+- Project repository initialization
+- Directory structure for modular architecture
+- Agile project management documentation
+- VERSION_TRACKING system
+- CHANGELOG file
+- ROADMAP document
+- Git configuration (user: bmarty, email: bmarty@mailo.com)
+- Build system structure (CMake support planned)
+- Test framework structure
+- Documentation skeleton
+
+### Architecture
+- Modular design: CPU, Memory, I/O, Video, Audio, Storage, HostFS
+- Separation between emulator core and utilities
+- Test-driven development structure
+- Documentation-driven development approach
+
+### Development Setup
+- C/C++ project structure
+- Unit and integration test directories
+- API, specifications, and user guide documentation structure
+- Tools directory for conversion utilities
+
+[Unreleased]: https://github.com/bmarty/oric1-emulator/compare/v0.1.0-alpha...HEAD
+[0.1.0-alpha]: https://github.com/bmarty/oric1-emulator/releases/tag/v0.1.0-alpha

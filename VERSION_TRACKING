@@ -1,0 +1,25 @@
+VERSION_TRACKING - ORIC-1 Emulator
+=====================================
+
+Current Version: 0.1.0-alpha
+Release Date: 2026-01-31
+Status: Initial Development
+
+Version History:
+----------------
+- 0.1.0-alpha (2026-01-31): Project initialization
+  * Repository structure created
+  * Initial architecture defined
+  * Agile project management setup
+
+Semantic Versioning:
+-------------------
+MAJOR.MINOR.PATCH-LABEL
+- MAJOR: Incompatible API changes
+- MINOR: New functionality (backward compatible)
+- PATCH: Bug fixes (backward compatible)
+- LABEL: alpha, beta, rc, stable
+
+Next Planned Version: 0.2.0-alpha
+Target Date: TBD
+Planned Features: 6502 CPU core implementation

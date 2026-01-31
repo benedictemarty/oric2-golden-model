@@ -1,0 +1,180 @@
+/**
+ * @file memory.h
+ * @brief ORIC-1 Memory management (64KB addressable)
+ * @author bmarty <bmarty@mailo.com>
+ * @date 2026-01-31
+ * @version 0.1.0-alpha
+ *
+ * ORIC-1 Memory Map:
+ * $0000-$00FF: Zero Page
+ * $0100-$01FF: Stack
+ * $0200-$02FF: System variables
+ * $0300-$03FF: Keyboard buffer
+ * $0400-$B3FF: User RAM (48KB on ORIC-1)
+ * $B400-$B4FF: VIA 6522 (repeated)
+ * $B500-$BFFF: I/O space
+ * $C000-$DFFF: Character ROM / RAM overlay
+ * $E000-$F7FF: BASIC ROM
+ * $F800-$FFFF: Monitor ROM
+ */
+
+#ifndef MEMORY_H
+#define MEMORY_H
+
+#include <stdint.h>
+#include <stdbool.h>
+
+#define MEMORY_SIZE 65536  /**< Total addressable memory (64KB) */
+#define RAM_SIZE    49152  /**< User RAM size (48KB) */
+#define ROM_SIZE    16384  /**< ROM size (16KB) */
+
+/**
+ * @brief Memory access types (for debugging/tracing)
+ */
+typedef enum {
+    MEM_READ,
+    MEM_WRITE,
+    MEM_EXEC
+} mem_access_type_t;
+
+/**
+ * @brief Memory banking mode
+ */
+typedef enum {
+    BANK_ROM,   /**< ROM mapped */
+    BANK_RAM    /**< RAM overlay mapped */
+} memory_bank_t;
+
+/**
+ * @brief Memory subsystem structure
+ */
+typedef struct {
+    uint8_t ram[RAM_SIZE];      /**< Main RAM */
+    uint8_t rom[ROM_SIZE];      /**< ROM (BASIC + Monitor) */
+    uint8_t charset[2048];      /**< Character set ROM */
+
+    memory_bank_t charset_bank; /**< Character set banking */
+    bool rom_enabled;           /**< ROM enable flag */
+
+    /* I/O device callbacks */
+    uint8_t (*io_read)(uint16_t address, void* userdata);
+    void (*io_write)(uint16_t address, uint8_t value, void* userdata);
+    void* io_userdata;
+
+    /* Memory access tracing (for debugging) */
+    bool trace_enabled;
+    void (*trace_callback)(uint16_t address, uint8_t value, mem_access_type_t type);
+} memory_t;
+
+/**
+ * @brief Initialize memory subsystem
+ *
+ * @param mem Pointer to memory structure
+ * @return true on success, false on failure
+ */
+bool memory_init(memory_t* mem);
+
+/**
+ * @brief Cleanup memory subsystem
+ *
+ * @param mem Pointer to memory structure
+ */
+void memory_cleanup(memory_t* mem);
+
+/**
+ * @brief Load ROM file
+ *
+ * @param mem Pointer to memory structure
+ * @param filename Path to ROM file
+ * @param offset Offset in ROM to load at
+ * @return true on success, false on failure
+ */
+bool memory_load_rom(memory_t* mem, const char* filename, uint16_t offset);
+
+/**
+ * @brief Load character set ROM
+ *
+ * @param mem Pointer to memory structure
+ * @param filename Path to charset file
+ * @return true on success, false on failure
+ */
+bool memory_load_charset(memory_t* mem, const char* filename);
+
+/**
+ * @brief Read byte from memory
+ *
+ * @param mem Pointer to memory structure
+ * @param address Address to read from
+ * @return Byte value
+ */
+uint8_t memory_read(memory_t* mem, uint16_t address);
+
+/**
+ * @brief Write byte to memory
+ *
+ * @param mem Pointer to memory structure
+ * @param address Address to write to
+ * @param value Byte value to write
+ */
+void memory_write(memory_t* mem, uint16_t address, uint8_t value);
+
+/**
+ * @brief Read 16-bit word (little-endian)
+ *
+ * @param mem Pointer to memory structure
+ * @param address Address to read from
+ * @return Word value
+ */
+uint16_t memory_read_word(memory_t* mem, uint16_t address);
+
+/**
+ * @brief Write 16-bit word (little-endian)
+ *
+ * @param mem Pointer to memory structure
+ * @param address Address to write to
+ * @param value Word value to write
+ */
+void memory_write_word(memory_t* mem, uint16_t address, uint16_t value);
+
+/**
+ * @brief Set I/O callbacks for memory-mapped I/O
+ *
+ * @param mem Pointer to memory structure
+ * @param read_cb Read callback function
+ * @param write_cb Write callback function
+ * @param userdata User data passed to callbacks
+ */
+void memory_set_io_callbacks(memory_t* mem,
+                             uint8_t (*read_cb)(uint16_t, void*),
+                             void (*write_cb)(uint16_t, uint8_t, void*),
+                             void* userdata);
+
+/**
+ * @brief Enable/disable memory access tracing
+ *
+ * @param mem Pointer to memory structure
+ * @param enabled true to enable, false to disable
+ * @param callback Trace callback function
+ */
+void memory_set_trace(memory_t* mem, bool enabled,
+                     void (*callback)(uint16_t, uint8_t, mem_access_type_t));
+
+/**
+ * @brief Clear all RAM
+ *
+ * @param mem Pointer to memory structure
+ * @param pattern Fill pattern (0x00 or 0xFF typical)
+ */
+void memory_clear_ram(memory_t* mem, uint8_t pattern);
+
+/**
+ * @brief Get pointer to memory region (direct access for speed)
+ * WARNING: Use with caution, bypasses banking and I/O
+ *
+ * @param mem Pointer to memory structure
+ * @param address Starting address
+ * @return Pointer to memory region or NULL if invalid
+ */
+uint8_t* memory_get_ptr(memory_t* mem, uint16_t address);
+
+#endif /* MEMORY_H */
