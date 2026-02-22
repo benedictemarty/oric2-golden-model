@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include <signal.h>
 #include <getopt.h>
 #include <sys/stat.h>
@@ -63,6 +64,7 @@ static void print_usage(const char* program_name) {
     printf("      --screenshot-at C:FILE Screenshot after C cycles to FILE\n");
     printf("      --frame-dump DIR       Dump frames to directory\n");
     printf("      --frame-dump-interval N  Dump every Nth frame (default: 50)\n");
+    printf("  -k, --keyboard LAYOUT      Keyboard layout: qwerty (default) or azerty\n");
     printf("  -?, --help                 Show this help\n");
     printf("\n");
     printf("Controls:\n");
@@ -418,6 +420,7 @@ int main(int argc, char* argv[]) {
     const char* screenshot_at_arg = NULL;
     const char* frame_dump_dir = NULL;
     int frame_dump_interval = 50;
+    const char* keyboard_layout = NULL;
 
     /* Long option codes for options without short equivalents */
     enum { OPT_SCREENSHOT = 256, OPT_SCREENSHOT_AT, OPT_FRAME_DUMP, OPT_FRAME_DUMP_INTERVAL };
@@ -435,6 +438,7 @@ int main(int argc, char* argv[]) {
         {"screenshot-at",       required_argument, 0, OPT_SCREENSHOT_AT},
         {"frame-dump",          required_argument, 0, OPT_FRAME_DUMP},
         {"frame-dump-interval", required_argument, 0, OPT_FRAME_DUMP_INTERVAL},
+        {"keyboard",            required_argument, 0, 'k'},
         {"help",                no_argument,       0, '?'},
         {0, 0, 0, 0}
     };
@@ -442,7 +446,7 @@ int main(int argc, char* argv[]) {
     int opt;
     int option_index = 0;
 
-    while ((opt = getopt_long(argc, argv, "t:d:r:h:fnc:v?", long_options, &option_index)) != -1) {
+    while ((opt = getopt_long(argc, argv, "t:d:r:h:fnc:vk:?", long_options, &option_index)) != -1) {
         switch (opt) {
             case 't': tape_file = optarg; break;
             case 'd': disk_file = optarg; break;
@@ -456,6 +460,7 @@ int main(int argc, char* argv[]) {
             case OPT_SCREENSHOT_AT: screenshot_at_arg = optarg; break;
             case OPT_FRAME_DUMP: frame_dump_dir = optarg; break;
             case OPT_FRAME_DUMP_INTERVAL: frame_dump_interval = atoi(optarg); break;
+            case 'k': keyboard_layout = optarg; break;
             case '?':
             default:
                 print_usage(argv[0]);
@@ -479,6 +484,14 @@ int main(int argc, char* argv[]) {
     emu.fast_load = fast_load;
     emu.max_cycles = max_cycles;
     emu.screenshot_file = screenshot_file;
+
+    /* Set keyboard layout */
+    if (keyboard_layout && strcasecmp(keyboard_layout, "azerty") == 0) {
+        oric_keyboard_set_layout(&emu.keyboard, ORIC_KB_AZERTY);
+        log_info("Keyboard layout: AZERTY");
+    } else {
+        log_info("Keyboard layout: QWERTY");
+    }
     emu.frame_dump_dir = frame_dump_dir;
     emu.frame_dump_interval = (frame_dump_interval > 0) ? frame_dump_interval : 50;
 

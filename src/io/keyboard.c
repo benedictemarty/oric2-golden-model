@@ -3,15 +3,15 @@
  * @brief ORIC-1 keyboard matrix emulation with SDL2 key mapping
  * @author bmarty <bmarty@mailo.com>
  * @date 2026-02-22
- * @version 0.5.0-alpha
+ * @version 1.0.0-beta.3
  *
  * The ORIC keyboard is an 8-column x 8-row matrix (64 keys).
  * Column select via VIA Port B bits 0-2 → 74LS138 decoder.
  * Row data read via PSG Port A (register 14), active low.
  * ROM scans keyboard via VIA PB3 (set when a key matches).
  *
- * Key mapping table based on Oricutron by Peter Gordon (GPL v2).
- * The table maps SDL2 keycodes to (column, row) positions.
+ * Key mapping tables based on Oricutron by Peter Gordon (GPL v2).
+ * Supports QWERTY (UK/US) and AZERTY (French) layouts.
  * Layout: keytab[row*8 + column_bit_index] = SDL keycode
  * Where column_bit_index maps to the bit position in the row mask:
  *   FE(bit0) FD(bit1) FB(bit2) F7(bit3) EF(bit4) DF(bit5) BF(bit6) 7F(bit7)
@@ -22,10 +22,15 @@
 
 void oric_keyboard_init(oric_keyboard_t* kb) {
     memset(kb->matrix, 0xFF, sizeof(kb->matrix));
+    kb->layout = ORIC_KB_QWERTY;
 }
 
 void oric_keyboard_reset(oric_keyboard_t* kb) {
     memset(kb->matrix, 0xFF, sizeof(kb->matrix));
+}
+
+void oric_keyboard_set_layout(oric_keyboard_t* kb, oric_kb_layout_t layout) {
+    kb->layout = layout;
 }
 
 #ifdef HAS_SDL2
@@ -33,11 +38,9 @@ void oric_keyboard_reset(oric_keyboard_t* kb) {
 /**
  * ORIC keyboard matrix mapping (QWERTY layout from Oricutron)
  *
- * The matrix is 8 rows × 8 columns.
+ * The matrix is 8 rows x 8 columns.
  * Each entry keytab[row * 8 + col] gives the SDL keycode.
- * Row = index / 8, Column bit = index % 8.
  *
- * Matrix layout (from Oricutron 8912.c):
  *              Col0(FE) Col1(FD) Col2(FB) Col3(F7) Col4(EF)  Col5(DF)  Col6(BF)  Col7(7F)
  * Row 0:       7        n        5        v        RCTRL     1         x         3
  * Row 1:       j        t        r        f        (none)    ESC       q         d
@@ -48,7 +51,7 @@ void oric_keyboard_reset(oric_keyboard_t* kb) {
  * Row 6:       y        h        g        e        RALT      a         s         w
  * Row 7:       8        l        0        /        RSHIFT    RETURN    `         =
  */
-static const SDL_Keycode keytab[64] = {
+static const SDL_Keycode qwerty_tab[64] = {
     /* Row 0 */ SDLK_7,     SDLK_n,     SDLK_5,        SDLK_v,     SDLK_RCTRL,    SDLK_1,        SDLK_x,         SDLK_3,
     /* Row 1 */ SDLK_j,     SDLK_t,     SDLK_r,        SDLK_f,     0,             SDLK_ESCAPE,   SDLK_q,         SDLK_d,
     /* Row 2 */ SDLK_m,     SDLK_6,     SDLK_b,        SDLK_4,     SDLK_LCTRL,    SDLK_z,        SDLK_2,         SDLK_c,
@@ -59,6 +62,26 @@ static const SDL_Keycode keytab[64] = {
     /* Row 7 */ SDLK_8,     SDLK_l,     SDLK_0,        SDLK_SLASH, SDLK_RSHIFT,   SDLK_RETURN,   SDLK_BACKQUOTE, SDLK_EQUALS
 };
 
+/**
+ * ORIC keyboard matrix mapping (AZERTY layout from Oricutron)
+ *
+ * Differences from QWERTY:
+ * - ORIC 'Q' (Row 1 Col 6) → SDL 'a' (physical A key on AZERTY)
+ * - ORIC 'A' (Row 6 Col 5) → SDL 'q' (physical Q key on AZERTY)
+ * - ORIC 'Z' (Row 2 Col 5) → SDL 'w' (physical W key on AZERTY)
+ * - ORIC 'W' (Row 6 Col 7) → SDL 'z' (physical Z key on AZERTY)
+ */
+static const SDL_Keycode azerty_tab[64] = {
+    /* Row 0 */ SDLK_7,     SDLK_n,     SDLK_5,        SDLK_v,     SDLK_RCTRL,    SDLK_1,        SDLK_x,         SDLK_3,
+    /* Row 1 */ SDLK_j,     SDLK_t,     SDLK_r,        SDLK_f,     0,             SDLK_ESCAPE,   SDLK_a,         SDLK_d,
+    /* Row 2 */ SDLK_m,     SDLK_6,     SDLK_b,        SDLK_4,     SDLK_LCTRL,    SDLK_w,        SDLK_2,         SDLK_c,
+    /* Row 3 */ SDLK_k,     SDLK_9,     SDLK_SEMICOLON,SDLK_MINUS, SDLK_HASH,     0,             SDLK_BACKSLASH, SDLK_QUOTE,
+    /* Row 4 */ SDLK_SPACE, SDLK_COMMA, SDLK_PERIOD,   SDLK_UP,    SDLK_LSHIFT,   SDLK_LEFT,     SDLK_DOWN,      SDLK_RIGHT,
+    /* Row 5 */ SDLK_u,     SDLK_i,     SDLK_o,        SDLK_p,     SDLK_LALT,     SDLK_BACKSPACE,SDLK_RIGHTBRACKET,SDLK_LEFTBRACKET,
+    /* Row 6 */ SDLK_y,     SDLK_h,     SDLK_g,        SDLK_e,     SDLK_RALT,     SDLK_q,        SDLK_s,         SDLK_z,
+    /* Row 7 */ SDLK_8,     SDLK_l,     SDLK_0,        SDLK_SLASH, SDLK_RSHIFT,   SDLK_RETURN,   SDLK_BACKQUOTE, SDLK_EQUALS
+};
+
 bool oric_keyboard_handle_sdl_event(oric_keyboard_t* kb, const SDL_Event* event) {
     if (event->type != SDL_KEYDOWN && event->type != SDL_KEYUP)
         return false;
@@ -66,9 +89,11 @@ bool oric_keyboard_handle_sdl_event(oric_keyboard_t* kb, const SDL_Event* event)
     SDL_Keycode key = event->key.keysym.sym;
     bool down = (event->type == SDL_KEYDOWN);
 
+    const SDL_Keycode* tab = (kb->layout == ORIC_KB_AZERTY) ? azerty_tab : qwerty_tab;
+
     /* Search for this key in the mapping table */
     for (int i = 0; i < 64; i++) {
-        if (keytab[i] == key) {
+        if (tab[i] == key) {
             int row = i / 8;  /* Which row in the matrix */
             int col = i % 8;  /* Which column bit */
 

@@ -107,7 +107,7 @@ host filesystem sharing and conversion tools for legacy BASIC/machine code progr
 - [x] Fix PSG bus decode: CA2=BC1, CB2=BDIR (was swapped)
 - [x] Fix ghost keypresses: VIA PB3 keyboard scan feedback
 - [x] PSG Port A input callback for keyboard row data
-- [x] SDL2 keyboard mapping (64 keys, QWERTY from Oricutron)
+- [x] SDL2 keyboard mapping (64 keys, QWERTY + AZERTY from Oricutron)
 - [x] SDL2 event polling: keyboard input, F5/F10/F11/F12
 - [x] Clean boot screen validated (no more stars)
 

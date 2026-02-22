@@ -20,16 +20,24 @@
 #include <SDL2/SDL.h>
 #endif
 
+/** Keyboard layout selection */
+typedef enum {
+    ORIC_KB_QWERTY = 0,  /**< QWERTY (UK/US) layout */
+    ORIC_KB_AZERTY       /**< AZERTY (French) layout */
+} oric_kb_layout_t;
+
 /**
  * @brief ORIC keyboard matrix (8 columns x 8 rows)
  * Active low: 0xFF = no keys, bit clear = key pressed.
  */
 typedef struct {
     uint8_t matrix[8];
+    oric_kb_layout_t layout;
 } oric_keyboard_t;
 
 void oric_keyboard_init(oric_keyboard_t* kb);
 void oric_keyboard_reset(oric_keyboard_t* kb);
+void oric_keyboard_set_layout(oric_keyboard_t* kb, oric_kb_layout_t layout);
 
 #ifdef HAS_SDL2
 /**
