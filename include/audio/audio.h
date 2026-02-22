@@ -10,7 +10,7 @@
 #include <stdbool.h>
 
 #define AY_NUM_CHANNELS  3
-#define AY_NUM_REGISTERS 14
+#define AY_NUM_REGISTERS 16  /* 14 sound + 2 I/O ports (Port A=14, Port B=15) */
 #define AUDIO_SAMPLE_RATE 44100
 #define AUDIO_BUFFER_SIZE 2048
 

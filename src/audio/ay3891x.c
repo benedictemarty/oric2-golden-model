@@ -13,6 +13,11 @@ void ay_init(ay3891x_t* ay, uint32_t clock_rate) {
     memset(ay, 0, sizeof(ay3891x_t));
     ay->clock_rate = clock_rate;
     ay->noise_shift = 1;
+    /* Port A (reg 14) and Port B (reg 15) default to 0xFF (no input active).
+     * On ORIC, PSG Port A is connected to the keyboard matrix (active low),
+     * so 0xFF = no keys pressed. Without this, the ROM sees ghost keypresses. */
+    ay->registers[14] = 0xFF;
+    ay->registers[15] = 0xFF;
 }
 
 void ay_reset(ay3891x_t* ay) {
@@ -20,6 +25,8 @@ void ay_reset(ay3891x_t* ay) {
     memset(ay, 0, sizeof(ay3891x_t));
     ay->clock_rate = clk;
     ay->noise_shift = 1;
+    ay->registers[14] = 0xFF;
+    ay->registers[15] = 0xFF;
 }
 
 void ay_write_address(ay3891x_t* ay, uint8_t addr) {

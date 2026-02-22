@@ -21,6 +21,7 @@
 #include "video/video.h"
 #include "video/export.h"
 #include "storage/tap.h"
+#include "audio/audio.h"
 #include "hostfs/hostfs.h"
 #include "utils/logging.h"
 
@@ -72,6 +73,7 @@ typedef struct {
     cpu6502_t cpu;
     memory_t memory;
     via6522_t via;
+    ay3891x_t psg;
     video_t video;
     hostfs_t hostfs;
 
@@ -96,9 +98,95 @@ static uint8_t io_read_callback(uint16_t address, void* userdata) {
     return via_read(&emu->via, (uint8_t)(address & 0x0F));
 }
 
+/**
+ * @brief Handle PSG bus operations driven by VIA Port B
+ *
+ * ORIC-1 PSG (AY-3-8912) is controlled via VIA:
+ * - VIA Port A = PSG data bus
+ * - VIA Port B bit 4 (CB2 directly mapped) = PSG BDIR
+ * - VIA PCR controls CB2 which acts as BC1
+ *
+ * The ROM uses a simpler scheme via ORB:
+ * - ORB bit 0 = PSG ~RESET (active low, but always high after boot)
+ * - Bits [7:4] of ORB drive BDIR/BC1 indirectly via 74LS00:
+ *   - 0xXC = Latch Address (BDIR=1, BC1=1): write ORA -> PSG address
+ *   - 0xX8 = Write Data (BDIR=1, BC1=0): write ORA -> PSG data
+ *   - 0xX4 = Read Data (BDIR=0, BC1=1): PSG data -> IRA
+ *   - 0xX0 = Inactive
+ */
+static uint8_t psg_porta_read(void* userdata) {
+    emulator_t* emu = (emulator_t*)userdata;
+    return ay_read_data(&emu->psg);
+}
+
 static void io_write_callback(uint16_t address, uint8_t value, void* userdata) {
     emulator_t* emu = (emulator_t*)userdata;
-    via_write(&emu->via, (uint8_t)(address & 0x0F), value);
+    uint8_t reg = (uint8_t)(address & 0x0F);
+
+    /* Intercept VIA Port A writes to forward to PSG data bus */
+    if (reg == VIA_ORA || reg == 0x0F) {
+        /* ORA write: data goes to PSG bus. The actual PSG operation
+         * depends on BDIR/BC1 which are set via ORB. */
+    }
+
+    via_write(&emu->via, reg, value);
+
+    /* After VIA write, check if ORB changed (PSG control lines) */
+    if (reg == VIA_ORB) {
+        /* ORIC PSG control via ORB:
+         * The ROM uses a specific protocol to talk to the PSG:
+         * 1. Set ORA = register number, set ORB to latch mode
+         * 2. Set ORB to inactive
+         * 3. Set ORA = data value, set ORB to write mode
+         * 4. Set ORB to inactive
+         *
+         * BDIR/BC1 are derived from ORB bits. On ORIC-1:
+         * - When ORB transitions to specific values, trigger PSG ops.
+         *
+         * Looking at basic10.rom disassembly at $F518:
+         * The ROM writes to $030F (ORA no-handshake) then $0300 (ORB).
+         * ORB value 0xBF = 10111111 -> inactive (BDIR=0, BC1=0 effectively)
+         * Other values trigger PSG operations.
+         *
+         * Practical approach: decode BDIR/BC1 from ORB bits 4 and CB2.
+         * On ORIC-1 (not Atmos), bit arrangement differs.
+         * Simplest reliable approach: mimic Oricutron's handling. */
+        uint8_t orb = emu->via.orb;
+        uint8_t ddrb = emu->via.ddrb;
+        uint8_t out = orb & ddrb;
+
+        /* On ORIC, the active-high signals are:
+         * BC1  = directly from a latch, active when specific bit pattern
+         * BDIR = directly from a latch
+         * The exact wiring varies but the ROM uses CB2 for BC1 output.
+         * For simplicity, we check the PCR for CB2 output mode. */
+
+        /* CB2 output state determines BC1 */
+        uint8_t cb2_mode = (emu->via.pcr >> 5) & 0x07;
+        bool bc1;
+        if (cb2_mode == 0x06) {
+            bc1 = false; /* CB2 low */
+        } else if (cb2_mode == 0x07) {
+            bc1 = true;  /* CB2 high */
+        } else {
+            bc1 = false; /* default inactive */
+        }
+
+        /* BDIR = ORB bit 4 (active when output and high) */
+        bool bdir = (out & 0x10) != 0;
+
+        if (bdir && bc1) {
+            /* Latch Address: PSG address = ORA */
+            ay_write_address(&emu->psg, emu->via.ora);
+        } else if (bdir && !bc1) {
+            /* Write Data: PSG data = ORA */
+            ay_write_data(&emu->psg, emu->via.ora);
+        } else if (!bdir && bc1) {
+            /* Read Data: put PSG data on VIA input */
+            emu->via.ira = ay_read_data(&emu->psg);
+        }
+        /* else: inactive */
+    }
 }
 
 /* VIA IRQ callback */
@@ -122,9 +210,16 @@ static bool emulator_init(emulator_t* emu) {
     via_init(&emu->via);
     via_reset(&emu->via);
 
+    /* Initialize PSG (AY-3-8912) */
+    ay_init(&emu->psg, ORIC_CLOCK_HZ);
+
     /* Wire up I/O callbacks */
     memory_set_io_callbacks(&emu->memory, io_read_callback, io_write_callback, emu);
     via_set_irq_callback(&emu->via, irq_callback, emu);
+
+    /* Connect VIA Port A read to PSG data read (for keyboard scan) */
+    emu->via.porta_read = psg_porta_read;
+    emu->via.userdata = emu;
 
     /* Initialize video - charset is read from RAM at $B400 by the renderer.
      * vid->charset is left NULL so the renderer uses the RAM copy
