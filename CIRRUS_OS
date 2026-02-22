@@ -2,197 +2,146 @@ CIRRUS_OS - ORIC-1 Emulator Build & Development Status
 ======================================================
 
 Project: ORIC-1 Cycle-Accurate Emulator
-Version: 0.1.0-alpha
-Build Status: INITIAL SETUP
-Last Updated: 2026-01-31 13:15:00 UTC
+Version: 1.0.0-alpha
+Build Status: ALPHA COMPLETE
+Last Updated: 2026-02-22 02:40:00 UTC
 
-════════════════════════════════════════════════════════════════════
+================================================================
 
 BUILD CONFIGURATION
 -------------------
-Build System: CMake (planned) / Makefile
-Compiler: GCC/Clang (C11/C++17)
+Build System: Makefile (primary) / CMake (planned)
+Compiler: GCC (C11)
 Target Platform: Linux x86_64
-Dependencies: SDL2, SDL2_mixer (planned)
+Dependencies: SDL2 (optional, for display/audio)
 
 BUILD STATUS
 ------------
-[○] CPU Core              - Not started
-[○] Memory System         - Not started
-[○] I/O System (VIA 6522) - Not started
-[○] Video System          - Not started
-[○] Audio System          - Not started
-[○] Storage System        - Not started
-[○] Host Filesystem       - Not started
-[○] Conversion Tools      - Not started
-[○] Test Suite            - Not started
-[○] Documentation         - In progress
+[V] CPU Core              - Complete (151 opcodes, 13 addressing modes)
+[V] Memory System         - Complete (64KB, ROM/RAM banking, I/O routing)
+[V] I/O System (VIA 6522) - Complete (timers, interrupts, ports)
+[V] Video System          - Complete (text + HIRES modes)
+[V] Audio System          - Complete (AY-3-8910 PSG)
+[V] Storage System        - Complete (TAP + Sedoric + FDC WD1793)
+[V] Host Filesystem       - Complete (HostFS + VFS)
+[V] Conversion Tools      - Complete (bas2tap, bin2tap, tap2sedoric)
+[V] Test Suite            - Complete (136 tests, 100% pass)
+[V] Documentation         - Complete
 
-Legend: [✓] Complete [●] In Progress [○] Not Started [✗] Failed
+Legend: [V] Complete [*] In Progress [ ] Not Started [X] Failed
 
-════════════════════════════════════════════════════════════════════
+================================================================
 
 TEST RESULTS
 ------------
-Unit Tests: 0/0 passed (0% coverage)
-Integration Tests: 0/0 passed
-Last Test Run: N/A
+Unit Tests: 136/136 passed (100%)
+Integration Tests: 7/7 passed (100%)
+Last Test Run: 2026-02-22
 
-CPU Tests:          N/A
-Memory Tests:       N/A
-I/O Tests:          N/A
-Video Tests:        N/A
-Audio Tests:        N/A
-Storage Tests:      N/A
-HostFS Tests:       N/A
-Conversion Tests:   N/A
+CPU Tests:          74/74 passed
+Memory Tests:       19/19 passed
+I/O Tests:          24/24 passed
+Storage Tests:      12/12 passed
+System Tests:        7/7  passed
 
-════════════════════════════════════════════════════════════════════
+================================================================
 
 CODE METRICS
 ------------
-Total Lines of Code: 0
-Code Coverage: 0%
-Static Analysis: Not run
-Memory Leaks: Not tested
-Performance: Not measured
+Total Source Files: 22 (.c) + 8 (.h)
+Total Test Files: 5
+Lines of Code: ~4500+ (source) + ~2000 (tests)
+Build Warnings: 0 critical, minor snprintf truncation warnings
+Memory Leaks: Not tested (Valgrind planned)
+Performance: Not benchmarked yet
 
-════════════════════════════════════════════════════════════════════
+================================================================
 
 QUALITY GATES
 -------------
-[○] All unit tests pass
-[○] Code coverage > 80%
-[○] No compiler warnings
-[○] No memory leaks
-[○] Static analysis clean
-[○] Documentation complete
-[○] Performance benchmarks pass
+[V] All unit tests pass (136/136)
+[V] No compiler errors
+[ ] Code coverage > 80% (measurement pending)
+[V] No critical warnings
+[ ] No memory leaks (Valgrind planned)
+[ ] Static analysis clean (planned)
+[V] Core documentation complete
+[ ] Performance benchmarks pass (planned)
 
-════════════════════════════════════════════════════════════════════
+================================================================
 
 SPRINT STATUS
 -------------
-Current Sprint: Sprint 0 (Initialization)
-Sprint Goal: Setup project infrastructure
-Sprint Progress: 30%
+Current Sprint: All sprints 0-13 completed
+Sprint Progress: 100% (core implementation)
 
-Completed:
-- [✓] Git repository initialization
-- [✓] Directory structure creation
-- [✓] Agile documentation setup
-- [✓] VERSION_TRACKING created
-- [✓] CHANGELOG created
-- [✓] ROADMAP created
-- [✓] CIRRUS_OS status file created
+Completed Sprints:
+- [V] Sprint 0: Infrastructure setup
+- [V] Sprint 1-2: CPU 6502 complete (151 opcodes)
+- [V] Sprint 3-4: Memory + VIA 6522 + Keyboard
+- [V] Sprint 5-6: Video system (text + HIRES)
+- [V] Sprint 7: Audio AY-3-8910
+- [V] Sprint 8-9: Storage (TAP + Sedoric + FDC)
+- [V] Sprint 10-11: HostFS + Tools
+- [V] Sprint 12: Build system + Tests (136 tests)
+- [V] Sprint 13: Main emulation loop + Documentation
 
-In Progress:
-- [●] CMake build system setup
-- [●] Initial source files creation
-- [●] Test framework setup
-- [●] Documentation structure
+Remaining (Beta phase):
+- [ ] SDL2 display integration testing
+- [ ] Real ORIC ROM compatibility testing
+- [ ] Performance profiling and optimization
+- [ ] Debugger with breakpoints
+- [ ] Save states
 
-Blocked:
-- None
+================================================================
 
-════════════════════════════════════════════════════════════════════
+COMPONENTS SUMMARY
+------------------
+src/cpu/addressing.c    - 13 addressing modes + stack helpers
+src/cpu/opcodes.c       - 256-entry opcode table + all implementations
+src/cpu/cpu6502.c       - Fetch/decode/execute, interrupts, disassembler
+src/memory/memory.c     - 64KB memory map with I/O routing
+src/memory/banking.c    - ROM enable/disable, charset bank
+src/io/via6522.c        - All 16 registers, 2 timers, interrupts
+src/io/keyboard.c       - 8x8 matrix scanning
+src/io/cassette.c       - Motor control, bit read/write
+src/video/video.c       - Text + HIRES rendering to framebuffer
+src/video/textmode.c    - Text mode helpers
+src/video/hires.c       - HIRES pixel helpers
+src/video/renderer.c    - SDL2/headless renderer
+src/audio/ay3891x.c     - 3 tone + noise + envelopes
+src/audio/audio_output.c - SDL2/headless audio output
+src/storage/tap.c       - TAP format read/write/convert
+src/storage/sedoric.c   - Disk filesystem
+src/storage/disk.c      - FDC WD1793 controller
+src/hostfs/hostfs.c     - Host filesystem operations
+src/hostfs/vfs.c        - Virtual filesystem abstraction
+src/utils/config.c      - INI configuration parser
+src/utils/logging.c     - Logging system
+src/main.c              - Emulation loop + CLI
 
-CONTINUOUS INTEGRATION
-----------------------
-CI/CD Platform: Not configured yet
-Build Frequency: On commit (planned)
-Deployment: Manual (planned: automatic)
-
-Pipeline Stages (Planned):
-1. Compile
-2. Unit Tests
-3. Static Analysis
-4. Integration Tests
-5. Performance Tests
-6. Documentation Build
-7. Package
-
-════════════════════════════════════════════════════════════════════
-
-DEPLOYMENT STATUS
------------------
-Environment: Development
-Last Deployment: N/A
-Deployment Branch: master
-Deployment Status: Not deployed
-
-Environments:
-- Development: Local
-- Testing: Not configured
-- Staging: Not configured
-- Production: Not configured
-
-════════════════════════════════════════════════════════════════════
-
-TECHNICAL DEBT
---------------
-Total Issues: 0
-Critical: 0
-High Priority: 0
-Medium Priority: 0
-Low Priority: 0
-
-════════════════════════════════════════════════════════════════════
+================================================================
 
 DEPENDENCIES
 ------------
 Runtime Dependencies:
-- SDL2 (planned): Display and input
-- SDL2_mixer (planned): Audio output
+- SDL2 (optional): Display and input
+- libm: Math library
 
 Build Dependencies:
-- CMake >= 3.15 (planned)
 - GCC >= 9.0 or Clang >= 10.0
-- pkg-config
+- Make
+- pkg-config (for SDL2 detection)
 
-Development Dependencies:
-- Git
-- Doxygen (planned): Documentation
-- Valgrind (planned): Memory testing
-- GDB: Debugging
-
-════════════════════════════════════════════════════════════════════
-
-SYSTEM REQUIREMENTS
--------------------
-Minimum:
-- CPU: x86_64, 1 GHz
-- RAM: 512 MB
-- OS: Linux (kernel 4.0+)
-- GPU: OpenGL 2.1 compatible
-
-Recommended:
-- CPU: x86_64, 2+ GHz multi-core
-- RAM: 2 GB
-- OS: Linux (kernel 5.0+)
-- GPU: OpenGL 3.0 compatible
-
-════════════════════════════════════════════════════════════════════
-
-NOTES
------
-- Project initialized with agile methodology
-- Cycle-accurate 6502 CPU emulation planned
-- Host filesystem sharing feature planned
-- Conversion tools for BASIC/machine code planned
-- Target compatibility: ORIC-1 hardware
-- Future support: ORIC Atmos, Telestrat
-
-════════════════════════════════════════════════════════════════════
+================================================================
 
 CONTACT & REPOSITORY
 --------------------
 Maintainer: bmarty <bmarty@mailo.com>
 Repository: /home/bmarty/Oric1 (local)
-Remote: Not configured
 License: Not specified yet
 
-════════════════════════════════════════════════════════════════════
+================================================================
 
 End of CIRRUS_OS Status Report
-Generated: 2026-01-31 13:15:00 UTC
+Generated: 2026-02-22 02:40:00 UTC

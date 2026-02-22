@@ -1,9 +1,18 @@
 /**
  * @file memory.c
- * @brief Memory management implementation (stub)
+ * @brief ORIC-1 Memory management - complete implementation
  * @author bmarty <bmarty@mailo.com>
- * @date 2026-01-31
- * @version 0.1.0-alpha
+ * @date 2026-02-22
+ * @version 0.3.0-alpha
+ *
+ * Memory Map:
+ * $0000-$00FF: Zero Page
+ * $0100-$01FF: Stack
+ * $0200-$02FF: System variables
+ * $0300-$03FF: I/O area (VIA at $0300-$030F)
+ * $0400-$BFFF: User RAM / Screen RAM
+ * $C000-$F7FF: BASIC ROM (or RAM overlay)
+ * $F800-$FFFF: Monitor ROM (always ROM for vectors)
  */
 
 #include "memory/memory.h"
@@ -18,15 +27,12 @@ bool memory_init(memory_t* mem) {
 }
 
 void memory_cleanup(memory_t* mem) {
-    /* Nothing to cleanup for now */
     (void)mem;
 }
 
 bool memory_load_rom(memory_t* mem, const char* filename, uint16_t offset) {
     FILE* fp = fopen(filename, "rb");
-    if (!fp) {
-        return false;
-    }
+    if (!fp) return false;
 
     fseek(fp, 0, SEEK_END);
     long size = ftell(fp);
@@ -37,79 +43,91 @@ bool memory_load_rom(memory_t* mem, const char* filename, uint16_t offset) {
         return false;
     }
 
-    size_t read = fread(mem->rom + offset, 1, size, fp);
+    size_t rd = fread(mem->rom + offset, 1, (size_t)size, fp);
     fclose(fp);
-
-    return read == (size_t)size;
+    return rd == (size_t)size;
 }
 
 bool memory_load_charset(memory_t* mem, const char* filename) {
     FILE* fp = fopen(filename, "rb");
-    if (!fp) {
-        return false;
-    }
+    if (!fp) return false;
 
-    size_t read = fread(mem->charset, 1, sizeof(mem->charset), fp);
+    size_t rd = fread(mem->charset, 1, sizeof(mem->charset), fp);
     fclose(fp);
-
-    return read > 0;
+    return rd > 0;
 }
 
 uint8_t memory_read(memory_t* mem, uint16_t address) {
-    /* Zero page and stack */
-    if (address < 0x0200) {
-        return mem->ram[address];
+    uint8_t val;
+
+    /* Tracing */
+    if (mem->trace_enabled && mem->trace_callback) {
+        /* Callback will be called after read */
     }
 
-    /* Main RAM */
-    if (address < 0xC000) {
-        /* TODO: Handle I/O space ($B400-$BFFF) */
-        if (address >= 0x0200 && address < 0xC000) {
-            return mem->ram[address];
+    /* I/O space: VIA 6522 at $0300-$030F (mirrored in $0300-$03FF) */
+    if (address >= 0x0300 && address <= 0x03FF) {
+        if (mem->io_read) {
+            val = mem->io_read(address, mem->io_userdata);
+            if (mem->trace_enabled && mem->trace_callback)
+                mem->trace_callback(address, val, MEM_READ);
+            return val;
         }
     }
 
-    /* ROM/Charset area */
-    if (address >= 0xC000 && address < 0xE000) {
-        return mem->charset[address - 0xC000];
+    /* RAM: $0000-$BFFF */
+    if (address < 0xC000) {
+        val = mem->ram[address];
+        if (mem->trace_enabled && mem->trace_callback)
+            mem->trace_callback(address, val, MEM_READ);
+        return val;
     }
 
-    /* ROM area */
-    if (address >= 0xE000) {
-        return mem->rom[address - 0xE000];
-    }
+    /* ROM area: $C000-$FFFF - always from rom[] array */
+    /* When rom_enabled=false, rom[] acts as RAM overlay.
+     * Interrupt vectors ($FFFA-$FFFF) always come from original ROM data. */
+    val = mem->rom[address - 0xC000];
 
-    return 0xFF;
+    if (mem->trace_enabled && mem->trace_callback)
+        mem->trace_callback(address, val, MEM_READ);
+    return val;
 }
 
 void memory_write(memory_t* mem, uint16_t address, uint8_t value) {
-    /* Zero page and stack */
-    if (address < 0x0200) {
+    if (mem->trace_enabled && mem->trace_callback)
+        mem->trace_callback(address, value, MEM_WRITE);
+
+    /* I/O space: VIA at $0300-$030F */
+    if (address >= 0x0300 && address <= 0x03FF) {
+        if (mem->io_write) {
+            mem->io_write(address, value, mem->io_userdata);
+        }
+        return;
+    }
+
+    /* RAM: $0000-$BFFF always writable */
+    if (address < 0xC000) {
         mem->ram[address] = value;
         return;
     }
 
-    /* Main RAM */
-    if (address < 0xC000) {
-        /* TODO: Handle I/O space ($B400-$BFFF) */
-        if (address >= 0x0200 && address < 0xC000) {
-            mem->ram[address] = value;
-        }
-        return;
+    /* ROM overlay area: $C000-$FFFF */
+    if (!mem->rom_enabled) {
+        /* Write to overlay (stored in rom array when ROM is disabled) */
+        mem->rom[address - 0xC000] = value;
     }
-
-    /* ROM area - writes ignored */
+    /* Writes to ROM area when ROM enabled are silently ignored */
 }
 
 uint16_t memory_read_word(memory_t* mem, uint16_t address) {
     uint8_t lo = memory_read(mem, address);
-    uint8_t hi = memory_read(mem, address + 1);
-    return (hi << 8) | lo;
+    uint8_t hi = memory_read(mem, (uint16_t)(address + 1));
+    return (uint16_t)((hi << 8) | lo);
 }
 
 void memory_write_word(memory_t* mem, uint16_t address, uint16_t value) {
-    memory_write(mem, address, value & 0xFF);
-    memory_write(mem, address + 1, value >> 8);
+    memory_write(mem, address, (uint8_t)(value & 0xFF));
+    memory_write(mem, (uint16_t)(address + 1), (uint8_t)(value >> 8));
 }
 
 void memory_set_io_callbacks(memory_t* mem,

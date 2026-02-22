@@ -5,17 +5,126 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.0.0-alpha] - 2026-02-22
 
-### Planned
-- 6502 CPU cycle-accurate implementation
-- Memory management system
-- VIA 6522 I/O controller
-- Video system (text and hires modes)
-- AY-3-8910 audio chip
-- Storage support (.TAP, Sedoric)
-- Host filesystem sharing
-- Conversion tools (BASIC/machine → .TAP/Sedoric)
+### Added - CPU 6502 (Sprint 1-2)
+- Complete MOS 6502 CPU emulation with all 151 official opcodes
+- All 13 addressing modes: Implicit, Accumulator, Immediate, Zero Page, Zero Page X/Y,
+  Absolute, Absolute X/Y, Indirect, Indexed Indirect, Indirect Indexed, Relative
+- Cycle-accurate instruction timing with page-crossing penalty
+- BCD arithmetic (ADC/SBC decimal mode) following NMOS 6502 behavior
+- 6502 JMP indirect page boundary bug emulation
+- NMI and IRQ interrupt handling with proper priority (NMI > IRQ)
+- Full disassembler with operand formatting
+- CPU state string output for debugging
+
+### Added - Memory System (Sprint 3)
+- 64KB addressable memory space ($0000-$FFFF)
+- RAM: $0000-$BFFF (48KB)
+- ROM: $C000-$FFFF (16KB) with ROM/RAM overlay banking
+- I/O space at $0300-$03FF with callback routing
+- Memory-mapped VIA 6522 at $0300-$030F
+- Memory access tracing for debugging
+- ROM loading from file, charset ROM loading
+- Interrupt vectors always read from ROM
+
+### Added - I/O System (Sprint 3-4)
+- Complete MOS 6522 VIA emulation (all 16 registers)
+- Timer 1: One-shot and free-running modes with latch reload
+- Timer 2: One-shot mode with counting
+- Interrupt generation (IFR/IER) with proper set/clear logic
+- Port A/B with data direction registers and callbacks
+- Shift register support
+- Keyboard matrix (8x8) with column select scanning
+- Cassette motor control and bit read interface
+- CA1/CA2/CB1/CB2 interrupt triggers
+
+### Added - Video System (Sprint 5-6)
+- ORIC text mode: 40x28 characters from charset ROM
+- ORIC HIRES mode: 240x200 pixel rendering
+- Serial color attributes (ink 0-7, paper 16-23)
+- Inverse video attribute support (codes 28/29)
+- Character rendering from 8-byte charset patterns
+- Framebuffer-based rendering (240x224 RGB)
+- SDL2 renderer with window creation (conditional compilation)
+- Headless mode fallback (no SDL2 dependency)
+- Text helper functions: clear, putchar, getchar, scroll
+- HIRES helper functions: clear, set_pixel, get_pixel
+
+### Added - Audio System (Sprint 7)
+- Complete AY-3-8910 PSG emulation
+- 3 independent tone generators with 12-bit period
+- Noise generator with 5-bit period and 17-bit LFSR
+- Mixer control (tone/noise enable per channel)
+- Per-channel volume with 4-bit level or envelope mode
+- 16 envelope shapes (attack, alternate, hold combinations)
+- Sample generation with clock-accurate counters
+- SDL2 audio output with callback (conditional compilation)
+- Headless audio mode
+
+### Added - Storage System (Sprint 8-9)
+- Complete .TAP cassette format support
+  - Read/write headers (sync, marker, type, addresses, name)
+  - Data block read/write with checksum
+  - Fast load support (entire file in memory)
+  - BASIC-to-TAP conversion (tap_from_basic)
+  - Binary-to-TAP conversion (tap_from_binary)
+- Sedoric disk filesystem
+  - Disk image create/load/save
+  - 42 tracks x 17 sectors x 256 bytes
+  - Sector-level read/write
+  - System sector initialization with SED signature
+- FDC WD1793 disk controller
+  - Type I commands: Restore, Seek, Step (in/out)
+  - Type II commands: Read Sector, Write Sector
+  - DRQ/IRQ generation
+  - Force Interrupt command
+  - 256-byte sector buffer with sequential access
+
+### Added - Host Filesystem (Sprint 10-11)
+- Host directory mounting with path validation
+- Read-only mount option
+- File operations: open, close, read, write, seek
+- File handle management (up to 8 simultaneous)
+- ORIC-to-host path translation
+- Host-to-ORIC name conversion (uppercase)
+- Directory listing
+- File delete and rename operations
+- VFS abstraction layer: TAPE, DISK, HOSTFS mount types
+
+### Added - Conversion Tools
+- `bas2tap`: Convert BASIC text files to .TAP format
+- `bin2tap`: Convert binary files to .TAP with load/exec address
+- `tap2sedoric`: TAP to Sedoric disk converter (framework)
+
+### Added - Configuration & Utilities
+- INI file configuration parser (key=value, comments, sections)
+- Configuration get/set with string, int, and bool types
+- Configuration save to file
+- Logging system with DEBUG/INFO/WARNING/ERROR levels
+- Timestamped log output
+
+### Added - Main Emulator
+- Full emulation loop: CPU + VIA timer sync per frame
+- I/O callback wiring (CPU <-> Memory <-> VIA)
+- VIA IRQ -> CPU IRQ callback chain
+- Headless mode with cycle limit for testing
+- Signal handling (SIGINT/SIGTERM for clean shutdown)
+- TAP file loading with memory injection
+- Command line options: tape, disk, rom, hostfs, fast-load, headless, cycles, verbose
+
+### Added - Build System
+- Updated Makefile with all source files
+- Individual test targets: test-cpu, test-memory, test-io, test-storage, test-system
+- SDL2 conditional compilation (SDL2=1)
+- Debug/Release build modes (DEBUG=1)
+
+### Added - Test Suite (136 tests, 100% pass)
+- CPU tests: 74 tests covering all opcodes, addressing modes, flags, interrupts
+- Memory tests: 19 tests covering RAM, ROM banking, I/O routing, tracing
+- VIA I/O tests: 24 tests covering registers, timers, interrupts, ports
+- Storage tests: 12 tests covering Sedoric disk and FDC WD1793
+- System integration tests: 7 tests including Fibonacci, multiply, CPU+VIA wiring
 
 ## [0.1.0-alpha] - 2026-01-31
 
@@ -27,21 +136,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CHANGELOG file
 - ROADMAP document
 - Git configuration (user: bmarty, email: bmarty@mailo.com)
-- Build system structure (CMake support planned)
+- Build system structure (CMake + Makefile)
 - Test framework structure
 - Documentation skeleton
 
-### Architecture
-- Modular design: CPU, Memory, I/O, Video, Audio, Storage, HostFS
-- Separation between emulator core and utilities
-- Test-driven development structure
-- Documentation-driven development approach
-
-### Development Setup
-- C/C++ project structure
-- Unit and integration test directories
-- API, specifications, and user guide documentation structure
-- Tools directory for conversion utilities
-
-[Unreleased]: https://github.com/bmarty/oric1-emulator/compare/v0.1.0-alpha...HEAD
+[1.0.0-alpha]: https://github.com/bmarty/oric1-emulator/compare/v0.1.0-alpha...v1.0.0-alpha
 [0.1.0-alpha]: https://github.com/bmarty/oric1-emulator/releases/tag/v0.1.0-alpha

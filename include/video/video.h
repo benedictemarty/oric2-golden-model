@@ -1,0 +1,47 @@
+/**
+ * @file video.h
+ * @brief ORIC-1 video system interface
+ */
+
+#ifndef VIDEO_H
+#define VIDEO_H
+
+#include <stdint.h>
+#include <stdbool.h>
+
+#define ORIC_SCREEN_W   240
+#define ORIC_SCREEN_H   224
+#define ORIC_TEXT_COLS   40
+#define ORIC_TEXT_ROWS   28
+#define ORIC_HIRES_W    240
+#define ORIC_HIRES_H    200
+#define ORIC_CHAR_W     6
+#define ORIC_CHAR_H     8
+#define ORIC_FPS         50
+
+/* ORIC colors */
+#define ORIC_BLACK   0
+#define ORIC_RED     1
+#define ORIC_GREEN   2
+#define ORIC_YELLOW  3
+#define ORIC_BLUE    4
+#define ORIC_MAGENTA 5
+#define ORIC_CYAN    6
+#define ORIC_WHITE   7
+
+typedef struct {
+    uint8_t framebuffer[ORIC_SCREEN_W * ORIC_SCREEN_H * 3]; /* RGB888 */
+    bool hires_mode;
+    bool need_refresh;
+    uint8_t* screen_ram;    /* Pointer into memory $BB80 (text) or $A000 (hires) */
+    uint8_t* charset;       /* Character set ROM */
+} video_t;
+
+bool video_init(video_t* vid);
+void video_cleanup(video_t* vid);
+void video_reset(video_t* vid);
+void video_set_mode(video_t* vid, bool hires);
+void video_render_frame(video_t* vid, uint8_t* memory);
+void video_get_rgb(uint8_t oric_color, uint8_t* r, uint8_t* g, uint8_t* b);
+
+#endif

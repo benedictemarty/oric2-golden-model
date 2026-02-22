@@ -1,12 +1,27 @@
 VERSION_TRACKING - ORIC-1 Emulator
 =====================================
 
-Current Version: 0.1.0-alpha
-Release Date: 2026-01-31
-Status: Initial Development
+Current Version: 1.0.0-alpha
+Release Date: 2026-02-22
+Status: Feature Complete (Alpha)
 
 Version History:
 ----------------
+- 1.0.0-alpha (2026-02-22): All core subsystems implemented
+  * Complete MOS 6502 CPU (151 opcodes, 13 addressing modes)
+  * Memory system with ROM/RAM banking and I/O routing
+  * MOS 6522 VIA with timers and interrupts
+  * Keyboard matrix (8x8), cassette interface
+  * Video system (text 40x28 + HIRES 240x200)
+  * AY-3-8910 PSG audio (3 channels + noise + envelopes)
+  * TAP cassette format support
+  * Sedoric disk filesystem + FDC WD1793
+  * Host filesystem sharing (HostFS + VFS)
+  * Conversion tools (bas2tap, bin2tap, tap2sedoric)
+  * Configuration system (.ini parser)
+  * 136 unit/integration tests (100% pass)
+  * Full emulation loop with I/O wiring
+
 - 0.1.0-alpha (2026-01-31): Project initialization
   * Repository structure created
   * Initial architecture defined
@@ -20,6 +35,10 @@ MAJOR.MINOR.PATCH-LABEL
 - PATCH: Bug fixes (backward compatible)
 - LABEL: alpha, beta, rc, stable
 
-Next Planned Version: 0.2.0-alpha
-Target Date: TBD
-Planned Features: 6502 CPU core implementation
+Next Planned Version: 1.0.0-beta
+Target Date: 2026-03-15
+Planned Features:
+  - SDL2 display integration testing
+  - Real ROM compatibility testing
+  - Performance optimization
+  - Bug fixes from alpha testing
