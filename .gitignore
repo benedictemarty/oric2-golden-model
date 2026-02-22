@@ -22,6 +22,8 @@ test_memory
 test_io
 test_storage
 test_system
+test_rom
+test_video
 
 # Coverage files
 *.gcda

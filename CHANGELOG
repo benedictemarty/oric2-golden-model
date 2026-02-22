@@ -5,6 +5,63 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0-beta.2] - 2026-02-22
+
+### Added - Video Integration & Debug Export (Sprint 15)
+- Video system (`video_t`) integrated into emulator main loop
+- Charset ROM connected to video renderer from memory subsystem
+- Video frame rendering after each CPU frame (20000 cycles)
+- New export module `src/video/export.c` with `include/video/export.h`
+- PPM export (P6 binary format): zero-dependency RGB888 screenshot
+- BMP export (24-bit uncompressed): BITMAPFILEHEADER + BITMAPINFOHEADER + bottom-up pixels
+- ASCII export (ANSI true-color): terminal display with `\x1b[48;2;R;G;Bm` escape codes
+- Auto-detect export format from file extension (.ppm/.bmp)
+- CLI option `--screenshot FILE`: take screenshot at exit
+- CLI option `--screenshot-at CYCLES:FILE`: screenshot after N cycles
+- CLI option `--frame-dump DIR`: export frames to directory
+- CLI option `--frame-dump-interval N`: dump every Nth frame (default: 50)
+- 11 new video tests in `tests/unit/test_video.c`
+- Tests cover: PPM/BMP/ASCII export, text/HIRES rendering, null params, ROM boot screenshot
+- `make test-video` target added to build system
+
+### Changed
+- `emulator_t` struct now includes `video_t video` member
+- `emulator_init()` initializes video and connects charset ROM
+- `emulator_run()` renders video frame and calls renderer after each CPU frame
+- `emulator_cleanup()` cleans up video and renderer
+- Version updated to 1.0.0-beta.2
+- Test suite expanded from 148 to 159 tests (148 + 11 video export)
+- Total test count: 159 tests, 100% pass rate
+
+## [1.0.0-beta] - 2026-02-22
+
+### Added - ROM Compatibility Tests (Sprint 14)
+- New test file `tests/unit/test_rom.c` with 12 tests validating real ORIC-1 ROM
+- ROM loading validation (16384 bytes, basic10.rom)
+- Reset vector verification ($FFFC-$FFFD = $F42D)
+- IRQ vector verification ($FFFE-$FFFF = $0228)
+- NMI vector verification ($FFFA-$FFFB = $022B)
+- CPU boot to correct PC after reset
+- ROM boot stability test (100K cycles without crash)
+- VIA initialization verification during boot (ROM writes to VIA after RAM test)
+- Screen RAM ($BB80-$BFDF) write verification during boot
+- Zero-page system variable initialization check
+- ROM checksum validation
+- Performance benchmark: 1M cycles in ~10ms (~90+ MHz equivalent, target <100ms)
+
+### Added - Build System Targets
+- `make test-rom` - Run ROM compatibility tests
+- `make valgrind` - Run all tests under Valgrind for memory leak detection
+- `make static-analysis` - Run static analysis with extra warning flags
+
+### Fixed
+- Memory map comment in `include/memory/memory.h`: VIA correctly at $0300-$030F (was incorrectly documented as $B400-$B4FF)
+- `strncpy` truncation warnings in `src/hostfs/hostfs.c` replaced with `snprintf`
+
+### Changed
+- Test suite expanded from 136 to 148 tests (136 unit + 12 ROM compatibility)
+- Total test count: 148 tests, 100% pass rate
+
 ## [1.0.0-alpha] - 2026-02-22
 
 ### Added - CPU 6502 (Sprint 1-2)
@@ -140,5 +197,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Test framework structure
 - Documentation skeleton
 
+[1.0.0-beta.2]: https://github.com/bmarty/oric1-emulator/compare/v1.0.0-beta...v1.0.0-beta.2
+[1.0.0-beta]: https://github.com/bmarty/oric1-emulator/compare/v1.0.0-alpha...v1.0.0-beta
 [1.0.0-alpha]: https://github.com/bmarty/oric1-emulator/compare/v0.1.0-alpha...v1.0.0-alpha
 [0.1.0-alpha]: https://github.com/bmarty/oric1-emulator/releases/tag/v0.1.0-alpha

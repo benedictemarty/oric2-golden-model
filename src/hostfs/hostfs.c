@@ -26,7 +26,7 @@ void hostfs_cleanup(hostfs_t* hfs) {
 bool hostfs_mount(hostfs_t* hfs, const char* path, bool read_only) {
     struct stat st;
     if (stat(path, &st) != 0 || !S_ISDIR(st.st_mode)) return false;
-    strncpy(hfs->mount_path, path, HOSTFS_MAX_PATH - 1);
+    snprintf(hfs->mount_path, HOSTFS_MAX_PATH, "%s", path);
     hfs->mounted = true;
     hfs->read_only = read_only;
     return true;
@@ -81,8 +81,8 @@ int hostfs_open(hostfs_t* hfs, const char* oric_name, bool writing) {
 
     hostfs_handle_t* h = &hfs->handles[handle];
     h->in_use = true;
-    strncpy(h->host_path, path, HOSTFS_MAX_PATH - 1);
-    strncpy(h->oric_name, oric_name, HOSTFS_MAX_NAME - 1);
+    snprintf(h->host_path, HOSTFS_MAX_PATH, "%s", path);
+    snprintf(h->oric_name, HOSTFS_MAX_NAME, "%s", oric_name);
     h->fp = fp;
     h->writing = writing;
     h->position = 0;

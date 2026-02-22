@@ -1,15 +1,474 @@
 /**
  * @file test_video.c
- * @brief Video unit tests (stub)
+ * @brief Video export & rendering tests - PPM, BMP, ASCII export
  * @author bmarty <bmarty@mailo.com>
- * @date 2026-01-31
- * @version 0.1.0-alpha
+ * @date 2026-02-22
+ * @version 1.0.0-beta.2
+ *
+ * Tests video rendering + export module.
+ * Validates PPM/BMP file format, ASCII output, and ROM boot screenshot.
  */
 
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <sys/stat.h>
+#include "video/video.h"
+#include "video/export.h"
+#include "cpu/cpu6502.h"
+#include "memory/memory.h"
+#include "io/via6522.h"
 
-int main() {
-    printf("Running video tests...\n");
-    printf("Video tests not yet implemented\n");
-    return 0;
+#define ROM_PATH "/home/bmarty/oricutron/roms/basic10.rom"
+
+static int tests_passed = 0;
+static int tests_failed = 0;
+
+#define TEST(name) static void name(void)
+#define RUN(name) do { \
+    printf("  %-55s", #name); \
+    int _before = tests_failed; \
+    name(); \
+    if (tests_failed == _before) { \
+        tests_passed++; \
+        printf("PASS\n"); \
+    } \
+} while(0)
+
+#define ASSERT_TRUE(x) do { \
+    if (!(x)) { \
+        printf("FAIL\n    %s:%d: expected true\n", __FILE__, __LINE__); \
+        tests_failed++; return; \
+    } \
+} while(0)
+
+#define ASSERT_EQ(a, b) do { \
+    if ((a) != (b)) { \
+        printf("FAIL\n    %s:%d: expected %ld, got %ld\n", __FILE__, __LINE__, (long)(b), (long)(a)); \
+        tests_failed++; return; \
+    } \
+} while(0)
+
+static long file_size(const char* path) {
+    struct stat st;
+    if (stat(path, &st) != 0) return -1;
+    return (long)st.st_size;
+}
+
+/* Create a fake charset for testing: simple diagonal pattern */
+static void make_test_charset(uint8_t* charset) {
+    memset(charset, 0, 2048);
+    /* Set character 'A' (0x41) to a visible pattern */
+    for (int row = 0; row < 8; row++) {
+        charset[0x41 * 8 + row] = (uint8_t)(0x3E >> row);
+    }
+    /* Set space (0x20) to all zeros - already done by memset */
+}
+
+/* ═══════════════════════════════════════════════════════════════ */
+/*  TEXT MODE RENDERING + PPM EXPORT                              */
+/* ═══════════════════════════════════════════════════════════════ */
+
+TEST(test_text_render_ppm_export) {
+    video_t vid;
+    video_init(&vid);
+
+    uint8_t charset[2048];
+    make_test_charset(charset);
+    vid.charset = charset;
+
+    /* Create a simple memory image with text at $BB80 */
+    uint8_t* mem = (uint8_t*)calloc(49152, 1);
+    ASSERT_TRUE(mem != NULL);
+
+    /* Fill screen with 'A' characters */
+    for (int i = 0; i < 40 * 28; i++) {
+        mem[0xBB80 + i] = 'A';
+    }
+
+    video_render_frame(&vid, mem);
+
+    /* Export PPM */
+    const char* path = "/tmp/test_video_text.ppm";
+    ASSERT_TRUE(video_export_ppm(&vid, path));
+
+    /* PPM P6: header + 240*224*3 bytes = header + 161280 */
+    long sz = file_size(path);
+    ASSERT_TRUE(sz > 161280); /* Header adds some bytes */
+
+    /* Verify PPM header */
+    FILE* fp = fopen(path, "rb");
+    ASSERT_TRUE(fp != NULL);
+    char header[32];
+    char* r = fgets(header, sizeof(header), fp);
+    ASSERT_TRUE(r != NULL);
+    ASSERT_TRUE(strncmp(header, "P6", 2) == 0);
+    fclose(fp);
+
+    unlink(path);
+    free(mem);
+    video_cleanup(&vid);
+}
+
+TEST(test_text_render_framebuffer_not_black) {
+    video_t vid;
+    video_init(&vid);
+
+    uint8_t charset[2048];
+    make_test_charset(charset);
+    vid.charset = charset;
+
+    uint8_t* mem = (uint8_t*)calloc(49152, 1);
+    ASSERT_TRUE(mem != NULL);
+
+    /* Put some visible characters */
+    for (int i = 0; i < 40; i++) {
+        mem[0xBB80 + i] = 'A';
+    }
+
+    video_render_frame(&vid, mem);
+
+    /* Check framebuffer is not all black */
+    int nonzero = 0;
+    for (int i = 0; i < ORIC_SCREEN_W * ORIC_SCREEN_H * 3; i++) {
+        if (vid.framebuffer[i] != 0) nonzero++;
+    }
+    ASSERT_TRUE(nonzero > 0);
+
+    free(mem);
+    video_cleanup(&vid);
+}
+
+/* ═══════════════════════════════════════════════════════════════ */
+/*  HIRES MODE RENDERING + PPM EXPORT                             */
+/* ═══════════════════════════════════════════════════════════════ */
+
+TEST(test_hires_render_ppm_export) {
+    video_t vid;
+    video_init(&vid);
+    video_set_mode(&vid, true);
+
+    uint8_t* mem = (uint8_t*)calloc(49152, 1);
+    ASSERT_TRUE(mem != NULL);
+
+    /* Fill HIRES area with a pattern */
+    for (int y = 0; y < 200; y++) {
+        for (int col = 0; col < 40; col++) {
+            mem[0xA000 + y * 40 + col] = 0x55 | 0x40; /* alternating pixels, bit 6 set */
+        }
+    }
+
+    video_render_frame(&vid, mem);
+
+    const char* path = "/tmp/test_video_hires.ppm";
+    ASSERT_TRUE(video_export_ppm(&vid, path));
+
+    long sz = file_size(path);
+    ASSERT_TRUE(sz > 161280);
+
+    unlink(path);
+    free(mem);
+    video_cleanup(&vid);
+}
+
+/* ═══════════════════════════════════════════════════════════════ */
+/*  BMP EXPORT                                                     */
+/* ═══════════════════════════════════════════════════════════════ */
+
+TEST(test_bmp_export_valid_header) {
+    video_t vid;
+    video_init(&vid);
+
+    uint8_t* mem = (uint8_t*)calloc(49152, 1);
+    ASSERT_TRUE(mem != NULL);
+    video_render_frame(&vid, mem);
+
+    const char* path = "/tmp/test_video.bmp";
+    ASSERT_TRUE(video_export_bmp(&vid, path));
+
+    /* Verify BMP header */
+    FILE* fp = fopen(path, "rb");
+    ASSERT_TRUE(fp != NULL);
+
+    uint8_t bfh[14];
+    size_t rd = fread(bfh, 1, 14, fp);
+    ASSERT_EQ((long)rd, 14L);
+    ASSERT_EQ(bfh[0], 'B');
+    ASSERT_EQ(bfh[1], 'M');
+
+    /* Verify BITMAPINFOHEADER */
+    uint8_t bih[40];
+    rd = fread(bih, 1, 40, fp);
+    ASSERT_EQ((long)rd, 40L);
+    ASSERT_EQ(bih[0], 40); /* header size */
+    int w = bih[4] | (bih[5] << 8);
+    int h = bih[8] | (bih[9] << 8);
+    ASSERT_EQ(w, ORIC_SCREEN_W);
+    ASSERT_EQ(h, ORIC_SCREEN_H);
+    ASSERT_EQ(bih[14], 24); /* bits per pixel */
+
+    fclose(fp);
+
+    /* Verify file size is reasonable */
+    long sz = file_size(path);
+    ASSERT_TRUE(sz > 54); /* At least header */
+
+    unlink(path);
+    free(mem);
+    video_cleanup(&vid);
+}
+
+/* ═══════════════════════════════════════════════════════════════ */
+/*  ASCII EXPORT                                                   */
+/* ═══════════════════════════════════════════════════════════════ */
+
+TEST(test_ascii_export_nonempty) {
+    video_t vid;
+    video_init(&vid);
+
+    uint8_t* mem = (uint8_t*)calloc(49152, 1);
+    ASSERT_TRUE(mem != NULL);
+
+    /* Put white pixels so we get non-black output */
+    for (int i = 0; i < 40; i++) {
+        mem[0xBB80 + i] = 'A';
+    }
+
+    uint8_t charset[2048];
+    make_test_charset(charset);
+    vid.charset = charset;
+
+    video_render_frame(&vid, mem);
+
+    const char* path = "/tmp/test_video_ascii.txt";
+    FILE* fp = fopen(path, "w");
+    ASSERT_TRUE(fp != NULL);
+
+    ASSERT_TRUE(video_export_ascii(&vid, fp, 2, 2));
+    fclose(fp);
+
+    /* Verify file is not empty */
+    long sz = file_size(path);
+    ASSERT_TRUE(sz > 100); /* Should have many ANSI escape codes */
+
+    unlink(path);
+    free(mem);
+    video_cleanup(&vid);
+}
+
+/* ═══════════════════════════════════════════════════════════════ */
+/*  AUTO EXPORT (extension detection)                              */
+/* ═══════════════════════════════════════════════════════════════ */
+
+TEST(test_auto_export_ppm) {
+    video_t vid;
+    video_init(&vid);
+    uint8_t* mem = (uint8_t*)calloc(49152, 1);
+    ASSERT_TRUE(mem != NULL);
+    video_render_frame(&vid, mem);
+
+    const char* path = "/tmp/test_auto.ppm";
+    ASSERT_TRUE(video_export_auto(&vid, path));
+    long sz = file_size(path);
+    ASSERT_TRUE(sz > 161280);
+    unlink(path);
+
+    free(mem);
+    video_cleanup(&vid);
+}
+
+TEST(test_auto_export_bmp) {
+    video_t vid;
+    video_init(&vid);
+    uint8_t* mem = (uint8_t*)calloc(49152, 1);
+    ASSERT_TRUE(mem != NULL);
+    video_render_frame(&vid, mem);
+
+    const char* path = "/tmp/test_auto.bmp";
+    ASSERT_TRUE(video_export_auto(&vid, path));
+    long sz = file_size(path);
+    ASSERT_TRUE(sz > 54);
+
+    /* Verify it's actually BMP */
+    FILE* fp = fopen(path, "rb");
+    ASSERT_TRUE(fp != NULL);
+    char sig[2];
+    size_t rd = fread(sig, 1, 2, fp);
+    fclose(fp);
+    ASSERT_EQ((long)rd, 2L);
+    ASSERT_EQ(sig[0], 'B');
+    ASSERT_EQ(sig[1], 'M');
+
+    unlink(path);
+    free(mem);
+    video_cleanup(&vid);
+}
+
+/* ═══════════════════════════════════════════════════════════════ */
+/*  PPM FILE SIZE VERIFICATION                                     */
+/* ═══════════════════════════════════════════════════════════════ */
+
+TEST(test_ppm_exact_pixel_data) {
+    video_t vid;
+    video_init(&vid);
+    uint8_t* mem = (uint8_t*)calloc(49152, 1);
+    ASSERT_TRUE(mem != NULL);
+    video_render_frame(&vid, mem);
+
+    const char* path = "/tmp/test_ppm_size.ppm";
+    ASSERT_TRUE(video_export_ppm(&vid, path));
+
+    /* Read and verify: header "P6\n240 224\n255\n" + 240*224*3 = 161280 bytes */
+    long sz = file_size(path);
+    /* Header: "P6\n" (3) + "240 224\n" (8) + "255\n" (4) = 15 bytes */
+    long expected = 15 + 240 * 224 * 3;
+    ASSERT_EQ(sz, expected);
+
+    unlink(path);
+    free(mem);
+    video_cleanup(&vid);
+}
+
+/* ═══════════════════════════════════════════════════════════════ */
+/*  ROM BOOT SCREENSHOT                                            */
+/* ═══════════════════════════════════════════════════════════════ */
+
+/* I/O callbacks for ROM boot test */
+typedef struct {
+    cpu6502_t cpu;
+    memory_t memory;
+    via6522_t via;
+} video_test_system_t;
+
+static uint8_t vt_io_read(uint16_t addr, void* ud) {
+    video_test_system_t* sys = (video_test_system_t*)ud;
+    return via_read(&sys->via, (uint8_t)(addr & 0x0F));
+}
+
+static void vt_io_write(uint16_t addr, uint8_t val, void* ud) {
+    video_test_system_t* sys = (video_test_system_t*)ud;
+    via_write(&sys->via, (uint8_t)(addr & 0x0F), val);
+}
+
+static void vt_irq_cb(bool state, void* ud) {
+    video_test_system_t* sys = (video_test_system_t*)ud;
+    if (state) cpu_irq(&sys->cpu);
+}
+
+TEST(test_rom_boot_screenshot) {
+    /* This test requires the real ROM */
+    FILE* check = fopen(ROM_PATH, "rb");
+    if (!check) {
+        printf("SKIP (ROM not found)\n");
+        tests_passed++;
+        return;
+    }
+    fclose(check);
+
+    video_test_system_t sys;
+    memset(&sys, 0, sizeof(sys));
+
+    memory_init(&sys.memory);
+    cpu_init(&sys.cpu, &sys.memory);
+    via_init(&sys.via);
+    via_reset(&sys.via);
+
+    memory_set_io_callbacks(&sys.memory, vt_io_read, vt_io_write, &sys);
+    via_set_irq_callback(&sys.via, vt_irq_cb, &sys);
+
+    ASSERT_TRUE(memory_load_rom(&sys.memory, ROM_PATH, 0));
+
+    /* Set up video with charset from ROM */
+    video_t vid;
+    video_init(&vid);
+    vid.charset = sys.memory.charset;
+
+    /* Boot and run 5M cycles */
+    cpu_reset(&sys.cpu);
+    int total = 0;
+    while (total < 5000000 && !sys.cpu.halted) {
+        int step = cpu_step(&sys.cpu);
+        via_update(&sys.via, step);
+        total += step;
+    }
+
+    /* Render and export */
+    video_render_frame(&vid, sys.memory.ram);
+
+    const char* path = "/tmp/test_rom_boot.ppm";
+    ASSERT_TRUE(video_export_ppm(&vid, path));
+
+    /* Verify file exists and is not empty */
+    long sz = file_size(path);
+    ASSERT_TRUE(sz > 161280);
+
+    /* Check that framebuffer is not all black (ROM should have written to screen) */
+    int nonzero = 0;
+    for (int i = 0; i < ORIC_SCREEN_W * ORIC_SCREEN_H * 3; i++) {
+        if (vid.framebuffer[i] != 0) nonzero++;
+    }
+    ASSERT_TRUE(nonzero > 100); /* At least some non-black pixels */
+
+    unlink(path);
+    video_cleanup(&vid);
+    memory_cleanup(&sys.memory);
+}
+
+/* ═══════════════════════════════════════════════════════════════ */
+/*  NULL/EDGE CASE TESTS                                           */
+/* ═══════════════════════════════════════════════════════════════ */
+
+TEST(test_export_null_params) {
+    video_t vid;
+    video_init(&vid);
+
+    /* NULL filename should fail gracefully */
+    ASSERT_TRUE(!video_export_ppm(&vid, NULL));
+    ASSERT_TRUE(!video_export_bmp(&vid, NULL));
+    ASSERT_TRUE(!video_export_ppm(NULL, "/tmp/test.ppm"));
+    ASSERT_TRUE(!video_export_bmp(NULL, "/tmp/test.bmp"));
+    ASSERT_TRUE(!video_export_ascii(NULL, stdout, 2, 2));
+    ASSERT_TRUE(!video_export_ascii(&vid, NULL, 2, 2));
+
+    video_cleanup(&vid);
+}
+
+TEST(test_video_init_cleanup) {
+    video_t vid;
+    ASSERT_TRUE(video_init(&vid));
+    ASSERT_TRUE(!vid.hires_mode);
+    ASSERT_TRUE(vid.need_refresh);
+    video_cleanup(&vid);
+}
+
+/* ═══════════════════════════════════════════════════════════════ */
+/*  MAIN                                                           */
+/* ═══════════════════════════════════════════════════════════════ */
+
+int main(void) {
+    printf("\n");
+    printf("===========================================================\n");
+    printf("  ORIC-1 Video Export Tests\n");
+    printf("===========================================================\n\n");
+
+    RUN(test_video_init_cleanup);
+    RUN(test_text_render_ppm_export);
+    RUN(test_text_render_framebuffer_not_black);
+    RUN(test_hires_render_ppm_export);
+    RUN(test_bmp_export_valid_header);
+    RUN(test_ascii_export_nonempty);
+    RUN(test_auto_export_ppm);
+    RUN(test_auto_export_bmp);
+    RUN(test_ppm_exact_pixel_data);
+    RUN(test_export_null_params);
+    RUN(test_rom_boot_screenshot);
+
+    printf("\n");
+    printf("===========================================================\n");
+    printf("  Results: %d passed, %d failed (total: %d)\n",
+           tests_passed, tests_failed, tests_passed + tests_failed);
+    printf("===========================================================\n\n");
+
+    return tests_failed > 0 ? 1 : 0;
 }

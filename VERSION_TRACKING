@@ -1,12 +1,31 @@
 VERSION_TRACKING - ORIC-1 Emulator
 =====================================
 
-Current Version: 1.0.0-alpha
+Current Version: 1.0.0-beta.2
 Release Date: 2026-02-22
-Status: Feature Complete (Alpha)
+Status: Beta (Video Integrated, Debug Export Available)
 
 Version History:
 ----------------
+- 1.0.0-beta.2 (2026-02-22): Video Integration & Debug Export (Sprint 15)
+  * Video system integrated into emulator main loop
+  * Charset ROM connected to video renderer
+  * PPM/BMP/ASCII framebuffer export module
+  * CLI: --screenshot, --screenshot-at, --frame-dump, --frame-dump-interval
+  * 11 new video tests (PPM/BMP/ASCII export, text/HIRES render, ROM boot)
+  * Test suite expanded to 159 tests (100% pass)
+
+- 1.0.0-beta (2026-02-22): Testing & Optimization (Sprint 14)
+  * ROM compatibility validated with real ORIC-1 BASIC 1.0 ROM
+  * Reset vector ($F42D), IRQ ($0228), NMI ($022B) verified
+  * ROM boot sequence validated: VIA init, screen RAM, zero-page setup
+  * Performance benchmark: ~90+ MHz equivalent (target <100ms/1M cycles met)
+  * Static analysis run with strict warning flags
+  * Fixed memory map comment in memory.h (VIA at $0300-$030F)
+  * Fixed strncpy truncation warnings in hostfs.c
+  * Makefile targets: test-rom, valgrind, static-analysis
+  * Test suite expanded to 148 tests (100% pass)
+
 - 1.0.0-alpha (2026-02-22): All core subsystems implemented
   * Complete MOS 6502 CPU (151 opcodes, 13 addressing modes)
   * Memory system with ROM/RAM banking and I/O routing
@@ -35,10 +54,11 @@ MAJOR.MINOR.PATCH-LABEL
 - PATCH: Bug fixes (backward compatible)
 - LABEL: alpha, beta, rc, stable
 
-Next Planned Version: 1.0.0-beta
-Target Date: 2026-03-15
+Next Planned Version: 1.0.0-rc
+Target Date: TBD
 Planned Features:
   - SDL2 display integration testing
-  - Real ROM compatibility testing
-  - Performance optimization
-  - Bug fixes from alpha testing
+  - Debugger with breakpoints
+  - Save states
+  - Game compatibility testing
+  - Release packaging

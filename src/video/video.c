@@ -3,7 +3,7 @@
  * @brief ORIC-1 video system - text mode 40x28 + HIRES 240x200
  * @author bmarty <bmarty@mailo.com>
  * @date 2026-02-22
- * @version 0.4.0-alpha
+ * @version 1.0.0-beta.2
  */
 
 #include "video/video.h"
@@ -45,6 +45,12 @@ static void set_pixel(video_t* vid, int x, int y, uint8_t r, uint8_t g, uint8_t 
     vid->framebuffer[off] = r; vid->framebuffer[off+1] = g; vid->framebuffer[off+2] = b;
 }
 
+/* Get charset byte: use vid->charset override, or RAM charset at $B400 */
+static uint8_t get_charset_byte(video_t* vid, uint8_t* mem, int char_idx, int row) {
+    if (vid->charset) return vid->charset[char_idx * 8 + row];
+    return mem[0xB400 + char_idx * 8 + row];
+}
+
 static void render_text(video_t* vid, uint8_t* mem) {
     for (int row = 0; row < ORIC_TEXT_ROWS; row++) {
         uint8_t ink = ORIC_WHITE, paper = ORIC_BLACK;
@@ -68,7 +74,7 @@ static void render_text(video_t* vid, uint8_t* mem) {
                 video_get_rgb(fg, &ir, &ig, &ib);
                 video_get_rgb(bg, &pr, &pg, &pb);
                 for (int cy = 0; cy < 8; cy++) {
-                    uint8_t bits = vid->charset ? vid->charset[(byte & 0x7F)*8+cy] : 0;
+                    uint8_t bits = get_charset_byte(vid, mem, byte & 0x7F, cy);
                     bool char_inv = (byte & 0x80) != 0;
                     for (int bx = 5; bx >= 0; bx--) {
                         bool on = (bits & (1 << bx)) != 0;
@@ -114,7 +120,7 @@ static void render_hires(video_t* vid, uint8_t* mem) {
         for (int col = 0; col < 40; col++) {
             uint8_t ch = mem[0xBB80 + row*40 + col];
             for (int cy = 0; cy < 8; cy++) {
-                uint8_t bits = vid->charset ? vid->charset[(ch & 0x7F)*8+cy] : 0;
+                uint8_t bits = get_charset_byte(vid, mem, ch & 0x7F, cy);
                 int sy = 200 + (row-25)*8 + cy;
                 for (int bx = 5; bx >= 0; bx--) {
                     if (bits & (1 << bx))

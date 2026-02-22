@@ -9,13 +9,10 @@
  * $0000-$00FF: Zero Page
  * $0100-$01FF: Stack
  * $0200-$02FF: System variables
- * $0300-$03FF: Keyboard buffer
- * $0400-$B3FF: User RAM (48KB on ORIC-1)
- * $B400-$B4FF: VIA 6522 (repeated)
- * $B500-$BFFF: I/O space
- * $C000-$DFFF: Character ROM / RAM overlay
- * $E000-$F7FF: BASIC ROM
- * $F800-$FFFF: Monitor ROM
+ * $0300-$030F: VIA 6522 (mirrored in $0300-$03FF)
+ * $0400-$BFFF: User RAM / Screen RAM ($BB80-$BFDF)
+ * $C000-$F7FF: BASIC ROM (or RAM overlay)
+ * $F800-$FFFF: Monitor ROM (always ROM for vectors)
  */
 
 #ifndef MEMORY_H
