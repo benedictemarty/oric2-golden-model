@@ -1,12 +1,19 @@
 VERSION_TRACKING - ORIC-1 Emulator
 =====================================
 
-Current Version: 1.0.0-beta.2
+Current Version: 1.0.0-beta.3
 Release Date: 2026-02-22
-Status: Beta (Video Integrated, Debug Export Available)
+Status: Beta (PSG Fixed, Keyboard Mapped, No Ghost Keypresses)
 
 Version History:
 ----------------
+- 1.0.0-beta.3 (2026-02-22): PSG Bus Fix & Keyboard Mapping (Sprint 15b)
+  * Fixed PSG bus protocol: CA2=BC1, CB2=BDIR (was swapped)
+  * Fixed ghost keypresses: VIA PB3 keyboard scan feedback implemented
+  * SDL2 keyboard mapping: 64 keys QWERTY layout (from Oricutron)
+  * SDL2 event handling: keyboard input, F5/F10/F11/F12 function keys
+  * Clean boot screen: no more stars ('*') on startup
+
 - 1.0.0-beta.2 (2026-02-22): Video Integration & Debug Export (Sprint 15)
   * Video system integrated into emulator main loop
   * Charset ROM connected to video renderer

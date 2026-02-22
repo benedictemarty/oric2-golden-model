@@ -39,6 +39,10 @@ typedef struct {
 
     /* Clock */
     uint32_t clock_rate;    /* 1 MHz for ORIC */
+
+    /* Port A external input callback (for keyboard on ORIC) */
+    uint8_t (*porta_input)(void* userdata);
+    void* userdata;
 } ay3891x_t;
 
 void ay_init(ay3891x_t* ay, uint32_t clock_rate);

@@ -64,6 +64,14 @@ void ay_write_data(ay3891x_t* ay, uint8_t data) {
 
 uint8_t ay_read_data(ay3891x_t* ay) {
     if (ay->selected_reg >= AY_NUM_REGISTERS) return 0xFF;
+
+    /* Port A (reg 14): when configured as input (mixer bit 6 = 0),
+     * return external input from callback (keyboard on ORIC) */
+    if (ay->selected_reg == 14 && !(ay->registers[7] & 0x40)) {
+        if (ay->porta_input) return ay->porta_input(ay->userdata);
+        return 0xFF; /* No input = no keys pressed */
+    }
+
     return ay->registers[ay->selected_reg];
 }
 

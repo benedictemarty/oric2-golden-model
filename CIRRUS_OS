@@ -2,7 +2,7 @@ CIRRUS_OS - ORIC-1 Emulator Build & Development Status
 ======================================================
 
 Project: ORIC-1 Cycle-Accurate Emulator
-Version: 1.0.0-beta.2
+Version: 1.0.0-beta.3
 Build Status: BETA
 Last Updated: 2026-02-22
 
@@ -26,6 +26,8 @@ BUILD STATUS
 [V] Host Filesystem       - Complete (HostFS + VFS)
 [V] Conversion Tools      - Complete (bas2tap, bin2tap, tap2sedoric)
 [V] Video Export          - Complete (PPM, BMP, ASCII export)
+[V] PSG Bus Protocol      - Fixed (CA2=BC1, CB2=BDIR, keyboard PB3)
+[V] SDL2 Keyboard         - Complete (64 keys QWERTY mapping)
 [V] Test Suite            - Complete (159 tests, 100% pass)
 [V] ROM Compatibility     - Validated (ORIC-1 BASIC 1.0 ROM)
 [V] Performance           - Benchmarked (~90+ MHz, target met)
@@ -81,8 +83,8 @@ QUALITY GATES
 
 SPRINT STATUS
 -------------
-Current Sprint: Sprint 15 completed
-Sprint Progress: 100% (video integration & debug export)
+Current Sprint: Sprint 15b completed
+Sprint Progress: 100% (PSG fix + keyboard mapping)
 
 Completed Sprints:
 - [V] Sprint 0: Infrastructure setup
@@ -96,9 +98,10 @@ Completed Sprints:
 - [V] Sprint 13: Main emulation loop + Documentation
 - [V] Sprint 14: ROM compatibility + Performance + Static analysis (148 tests)
 - [V] Sprint 15: Video integration + Debug export (159 tests)
+- [V] Sprint 15b: PSG bus fix + SDL2 keyboard mapping
 
 Remaining (Release phase):
-- [ ] SDL2 display integration testing
+- [V] SDL2 display integration testing
 - [ ] Debugger with breakpoints
 - [ ] Save states
 - [ ] Release packaging
@@ -113,7 +116,7 @@ src/cpu/cpu6502.c       - Fetch/decode/execute, interrupts, disassembler
 src/memory/memory.c     - 64KB memory map with I/O routing
 src/memory/banking.c    - ROM enable/disable, charset bank
 src/io/via6522.c        - All 16 registers, 2 timers, interrupts
-src/io/keyboard.c       - 8x8 matrix scanning
+src/io/keyboard.c       - 8x8 matrix scanning + SDL2 key mapping (64 keys)
 src/io/cassette.c       - Motor control, bit read/write
 src/video/video.c       - Text + HIRES rendering to framebuffer
 src/video/textmode.c    - Text mode helpers

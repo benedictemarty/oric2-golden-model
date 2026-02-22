@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0-beta.3] - 2026-02-22
+
+### Fixed - PSG Bus Protocol & Keyboard (Sprint 15b)
+- Fixed PSG bus decode: CA2=BC1, CB2=BDIR (was incorrectly swapped)
+- Fixed ghost keypresses (stars on screen): VIA PB3 keyboard scan feedback
+- PSG Port A input callback returns keyboard matrix state (active low)
+- PSG registers 14-15 (I/O ports) initialized to 0xFF (no keys pressed)
+- AY_NUM_REGISTERS expanded from 14 to 16 to include I/O ports
+
+### Added - SDL2 Keyboard Mapping
+- ORIC keyboard matrix header `include/io/keyboard.h`
+- SDL2 keycode → ORIC matrix mapping (64 keys, QWERTY layout from Oricutron)
+- `oric_keyboard_t` struct with init/reset/event handling
+- SDL2 event polling in main loop: keyboard input, F5=reset, F10=quit, F11=fullscreen, F12=screenshot
+- VIA Port B read callback for PB3 keyboard scan result
+- PSG Port A input callback for keyboard row data
+
+### Changed
+- `emulator_t` now uses `oric_keyboard_t` struct instead of raw array
+- PSG bus decode triggered on PCR, ORA, and ORB writes (was ORB only)
+- Version updated to 1.0.0-beta.3
+- `keyboard.c` rewritten with SDL2 mapping table and oric_keyboard_t API
+
 ## [1.0.0-beta.2] - 2026-02-22
 
 ### Added - Video Integration & Debug Export (Sprint 15)

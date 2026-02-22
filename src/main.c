@@ -22,10 +22,14 @@
 #include "video/export.h"
 #include "storage/tap.h"
 #include "audio/audio.h"
+#include "io/keyboard.h"
+#ifdef HAS_SDL2
+#include <SDL2/SDL.h>
+#endif
 #include "hostfs/hostfs.h"
 #include "utils/logging.h"
 
-#define VERSION "1.0.0-beta.2"
+#define VERSION "1.0.0-beta.3"
 #define ORIC_CLOCK_HZ   1000000
 #define ORIC_FRAME_RATE  50
 #define CYCLES_PER_FRAME (ORIC_CLOCK_HZ / ORIC_FRAME_RATE)
@@ -34,6 +38,7 @@
 bool renderer_init(int scale);
 void renderer_cleanup(void);
 void renderer_present(video_t* vid);
+void renderer_toggle_fullscreen(void);
 
 static volatile bool g_running = true;
 
@@ -77,6 +82,9 @@ typedef struct {
     video_t video;
     hostfs_t hostfs;
 
+    /* Keyboard */
+    oric_keyboard_t keyboard;
+
     bool running;
     bool fast_load;
     bool headless;
@@ -99,24 +107,87 @@ static uint8_t io_read_callback(uint16_t address, void* userdata) {
 }
 
 /**
- * @brief Handle PSG bus operations driven by VIA Port B
+ * @brief Decode PSG bus state and execute operation
  *
- * ORIC-1 PSG (AY-3-8912) is controlled via VIA:
- * - VIA Port A = PSG data bus
- * - VIA Port B bit 4 (CB2 directly mapped) = PSG BDIR
- * - VIA PCR controls CB2 which acts as BC1
+ * ORIC-1 PSG (AY-3-8912) is controlled via VIA (from Oricutron):
+ * - VIA Port A (ORA) = PSG data bus
+ * - VIA CA2 output = PSG BC1 (PCR bits 1-3: mode 6=low, mode 7=high)
+ * - VIA CB2 output = PSG BDIR (PCR bits 5-7: mode 6=low, mode 7=high)
  *
- * The ROM uses a simpler scheme via ORB:
- * - ORB bit 0 = PSG ~RESET (active low, but always high after boot)
- * - Bits [7:4] of ORB drive BDIR/BC1 indirectly via 74LS00:
- *   - 0xXC = Latch Address (BDIR=1, BC1=1): write ORA -> PSG address
- *   - 0xX8 = Write Data (BDIR=1, BC1=0): write ORA -> PSG data
- *   - 0xX4 = Read Data (BDIR=0, BC1=1): PSG data -> IRA
- *   - 0xX0 = Inactive
+ * PSG operations:
+ * - BDIR=1, BC1=1 → Latch Address (ORA → PSG address register)
+ * - BDIR=1, BC1=0 → Write Data (ORA → selected PSG register)
+ * - BDIR=0, BC1=1 → Read Data (selected PSG register → VIA IRA)
+ * - BDIR=0, BC1=0 → Inactive
+ *
+ * The ROM toggles CA2/CB2 via PCR writes, so this function must
+ * be called when PCR, ORA, or ORB change.
+ */
+static void psg_decode(emulator_t* emu) {
+    /* BC1 = CA2 output state (PCR bits 1-3) */
+    uint8_t ca2_mode = (emu->via.pcr >> 1) & 0x07;
+    bool bc1 = (ca2_mode == 0x07); /* Mode 7 = CA2 high */
+
+    /* BDIR = CB2 output state (PCR bits 5-7) */
+    uint8_t cb2_mode = (emu->via.pcr >> 5) & 0x07;
+    bool bdir = (cb2_mode == 0x07); /* Mode 7 = CB2 high */
+
+    if (bdir && bc1) {
+        /* Latch Address */
+        ay_write_address(&emu->psg, emu->via.ora);
+    } else if (bdir && !bc1) {
+        /* Write Data */
+        ay_write_data(&emu->psg, emu->via.ora);
+    } else if (!bdir && bc1) {
+        /* Read Data - PSG data goes onto VIA input for Port A reads */
+        emu->via.ira = ay_read_data(&emu->psg);
+    }
+}
+
+/**
+ * @brief PSG Port A input callback - returns keyboard matrix row data
+ *
+ * VIA ORB bits 0-2 select the keyboard column (active via 74LS138 decoder).
+ * Returns row data: 0xFF = no keys, bit cleared = key pressed (active low).
+ */
+static uint8_t keyboard_matrix_read(void* userdata) {
+    emulator_t* emu = (emulator_t*)userdata;
+    uint8_t col = emu->via.orb & 0x07;
+    return emu->keyboard.matrix[col];
+}
+
+/**
+ * @brief VIA Port A read callback - returns PSG data bus value
  */
 static uint8_t psg_porta_read(void* userdata) {
     emulator_t* emu = (emulator_t*)userdata;
     return ay_read_data(&emu->psg);
+}
+
+/**
+ * @brief VIA Port B read callback - keyboard scan result on PB3
+ *
+ * On the ORIC, the keyboard scan works as follows (from Oricutron):
+ * - ROM writes a mask to PSG register 14 (which rows to test)
+ * - ROM selects column via VIA ORB bits 0-2
+ * - Hardware checks if any key matches: keystates[col] & (~reg14)
+ * - Result appears on VIA PB3 (bit 3): 1 = key pressed, 0 = no key
+ *
+ * key_matrix[] uses active-low (0 = pressed), so ~key_matrix gives
+ * 1 = pressed (matching Oricutron's keystates convention).
+ */
+static uint8_t portb_read_callback(void* userdata) {
+    emulator_t* emu = (emulator_t*)userdata;
+    uint8_t col = emu->via.orb & 0x07;
+    uint8_t reg14 = emu->psg.registers[14];
+
+    /* Check: any pressed key in column matches the inverted mask?
+     * ~key_matrix = pressed keys (1=pressed), ~reg14 = rows to test */
+    uint8_t pressed = (~emu->keyboard.matrix[col]) & (~reg14) & 0xFF;
+
+    /* PB3 = 1 if any key matches, 0 otherwise.
+     * Other input bits default to 1 (no external input). */
+    return pressed ? 0xFF : 0xF7;
 }
 
 static void io_write_callback(uint16_t address, uint8_t value, void* userdata) {
@@ -131,61 +202,11 @@ static void io_write_callback(uint16_t address, uint8_t value, void* userdata) {
 
     via_write(&emu->via, reg, value);
 
-    /* After VIA write, check if ORB changed (PSG control lines) */
-    if (reg == VIA_ORB) {
-        /* ORIC PSG control via ORB:
-         * The ROM uses a specific protocol to talk to the PSG:
-         * 1. Set ORA = register number, set ORB to latch mode
-         * 2. Set ORB to inactive
-         * 3. Set ORA = data value, set ORB to write mode
-         * 4. Set ORB to inactive
-         *
-         * BDIR/BC1 are derived from ORB bits. On ORIC-1:
-         * - When ORB transitions to specific values, trigger PSG ops.
-         *
-         * Looking at basic10.rom disassembly at $F518:
-         * The ROM writes to $030F (ORA no-handshake) then $0300 (ORB).
-         * ORB value 0xBF = 10111111 -> inactive (BDIR=0, BC1=0 effectively)
-         * Other values trigger PSG operations.
-         *
-         * Practical approach: decode BDIR/BC1 from ORB bits 4 and CB2.
-         * On ORIC-1 (not Atmos), bit arrangement differs.
-         * Simplest reliable approach: mimic Oricutron's handling. */
-        uint8_t orb = emu->via.orb;
-        uint8_t ddrb = emu->via.ddrb;
-        uint8_t out = orb & ddrb;
-
-        /* On ORIC, the active-high signals are:
-         * BC1  = directly from a latch, active when specific bit pattern
-         * BDIR = directly from a latch
-         * The exact wiring varies but the ROM uses CB2 for BC1 output.
-         * For simplicity, we check the PCR for CB2 output mode. */
-
-        /* CB2 output state determines BC1 */
-        uint8_t cb2_mode = (emu->via.pcr >> 5) & 0x07;
-        bool bc1;
-        if (cb2_mode == 0x06) {
-            bc1 = false; /* CB2 low */
-        } else if (cb2_mode == 0x07) {
-            bc1 = true;  /* CB2 high */
-        } else {
-            bc1 = false; /* default inactive */
-        }
-
-        /* BDIR = ORB bit 4 (active when output and high) */
-        bool bdir = (out & 0x10) != 0;
-
-        if (bdir && bc1) {
-            /* Latch Address: PSG address = ORA */
-            ay_write_address(&emu->psg, emu->via.ora);
-        } else if (bdir && !bc1) {
-            /* Write Data: PSG data = ORA */
-            ay_write_data(&emu->psg, emu->via.ora);
-        } else if (!bdir && bc1) {
-            /* Read Data: put PSG data on VIA input */
-            emu->via.ira = ay_read_data(&emu->psg);
-        }
-        /* else: inactive */
+    /* Decode PSG bus state when control lines change:
+     * - PCR write changes CA2 (BC1) and/or CB2 (BDIR)
+     * - ORA/ORB writes may trigger PSG operations via handshake modes */
+    if (reg == VIA_PCR || reg == VIA_ORB || reg == VIA_ORA || reg == 0x0F) {
+        psg_decode(emu);
     }
 }
 
@@ -210,8 +231,13 @@ static bool emulator_init(emulator_t* emu) {
     via_init(&emu->via);
     via_reset(&emu->via);
 
-    /* Initialize PSG (AY-3-8912) */
+    /* Initialize keyboard */
+    oric_keyboard_init(&emu->keyboard);
+
+    /* Initialize PSG (AY-3-8912) with keyboard input callback */
     ay_init(&emu->psg, ORIC_CLOCK_HZ);
+    emu->psg.porta_input = keyboard_matrix_read;
+    emu->psg.userdata = emu;
 
     /* Wire up I/O callbacks */
     memory_set_io_callbacks(&emu->memory, io_read_callback, io_write_callback, emu);
@@ -219,6 +245,7 @@ static bool emulator_init(emulator_t* emu) {
 
     /* Connect VIA Port A read to PSG data read (for keyboard scan) */
     emu->via.porta_read = psg_porta_read;
+    emu->via.portb_read = portb_read_callback;
     emu->via.userdata = emu;
 
     /* Initialize video - charset is read from RAM at $B400 by the renderer.
@@ -286,9 +313,47 @@ static void emulator_run(emulator_t* emu) {
         /* Render video frame */
         video_render_frame(&emu->video, emu->memory.ram);
 
-        /* Present to screen if not headless */
+        /* Present to screen and handle events if not headless */
         if (!emu->headless) {
             renderer_present(&emu->video);
+#ifdef HAS_SDL2
+            /* Poll SDL events (keyboard, window close, etc.) */
+            SDL_Event event;
+            while (SDL_PollEvent(&event)) {
+                switch (event.type) {
+                case SDL_QUIT:
+                    emu->running = false;
+                    break;
+                case SDL_KEYDOWN:
+                case SDL_KEYUP:
+                    /* F5 = Reset, F10 = Quit, F11 = Fullscreen, F12 = Screenshot */
+                    if (event.type == SDL_KEYDOWN) {
+                        switch (event.key.keysym.sym) {
+                        case SDLK_F5:
+                            cpu_reset(&emu->cpu);
+                            break;
+                        case SDLK_F10:
+                            emu->running = false;
+                            break;
+                        case SDLK_F11:
+                            renderer_toggle_fullscreen();
+                            break;
+                        case SDLK_F12:
+                            video_export_ppm(&emu->video, "screenshot.ppm");
+                            log_info("Screenshot saved to screenshot.ppm");
+                            break;
+                        default:
+                            break;
+                        }
+                    }
+                    /* Map to ORIC keyboard matrix */
+                    oric_keyboard_handle_sdl_event(&emu->keyboard, &event);
+                    break;
+                default:
+                    break;
+                }
+            }
+#endif
         }
 
         /* Screenshot at specific cycle count */
