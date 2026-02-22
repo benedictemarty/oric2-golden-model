@@ -22,9 +22,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added - SDL2 Keyboard Mapping
 - ORIC keyboard matrix header `include/io/keyboard.h`
 - SDL2 keycode → ORIC matrix mapping (64 keys, QWERTY layout from Oricutron)
-- AZERTY (French) keyboard layout support (`--keyboard azerty` or `-k azerty`)
+- Symbolic keyboard mapping via SDL_TEXTINPUT (`--keyboard azerty` or `-k azerty`)
+- Character → ORIC key combo table derived from ROM tables at $FF70/$FFB0
+- Works with any PC keyboard layout (AZERTY, QWERTZ, etc.)
 - `oric_keyboard_t` struct with init/reset/event handling and layout selection
 - `oric_keyboard_set_layout()` function for runtime layout switching
+- Pressed key tracking with automatic ORIC Shift management
 - SDL2 event polling in main loop: keyboard input, F5=reset, F10=quit, F11=fullscreen, F12=screenshot
 - VIA Port B read callback for PB3 keyboard scan result
 - PSG Port A input callback for keyboard row data

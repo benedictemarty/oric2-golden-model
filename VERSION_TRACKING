@@ -15,7 +15,8 @@ Version History:
   * Clean boot screen: no more stars ('*') on startup
   * Fixed HIRES bottom 3 text rows: serial attributes (ink/paper/inverse)
   * Added HIRES mode auto-detection from RAM $26A bit 2
-  * Added AZERTY keyboard layout support (--keyboard azerty)
+  * Symbolic keyboard mapping via SDL_TEXTINPUT (--keyboard azerty)
+  * Character→ORIC key combo table from ROM decode tables ($FF70/$FFB0)
 
 - 1.0.0-beta.2 (2026-02-22): Video Integration & Debug Export (Sprint 15)
   * Video system integrated into emulator main loop

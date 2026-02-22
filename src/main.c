@@ -258,6 +258,9 @@ static bool emulator_init(emulator_t* emu) {
     /* Initialize renderer if not headless */
     if (!emu->headless) {
         renderer_init(3);
+#ifdef HAS_SDL2
+        SDL_StartTextInput();  /* Enable TEXTINPUT events for symbolic keyboard */
+#endif
     }
 
     if (!hostfs_init(&emu->hostfs)) {
@@ -327,28 +330,32 @@ static void emulator_run(emulator_t* emu) {
                     emu->running = false;
                     break;
                 case SDL_KEYDOWN:
-                case SDL_KEYUP:
                     /* F5 = Reset, F10 = Quit, F11 = Fullscreen, F12 = Screenshot */
-                    if (event.type == SDL_KEYDOWN) {
-                        switch (event.key.keysym.sym) {
-                        case SDLK_F5:
-                            cpu_reset(&emu->cpu);
-                            break;
-                        case SDLK_F10:
-                            emu->running = false;
-                            break;
-                        case SDLK_F11:
-                            renderer_toggle_fullscreen();
-                            break;
-                        case SDLK_F12:
-                            video_export_ppm(&emu->video, "screenshot.ppm");
-                            log_info("Screenshot saved to screenshot.ppm");
-                            break;
-                        default:
-                            break;
-                        }
+                    switch (event.key.keysym.sym) {
+                    case SDLK_F5:
+                        cpu_reset(&emu->cpu);
+                        break;
+                    case SDLK_F10:
+                        emu->running = false;
+                        break;
+                    case SDLK_F11:
+                        renderer_toggle_fullscreen();
+                        break;
+                    case SDLK_F12:
+                        video_export_ppm(&emu->video, "screenshot.ppm");
+                        log_info("Screenshot saved to screenshot.ppm");
+                        break;
+                    default:
+                        break;
                     }
-                    /* Map to ORIC keyboard matrix */
+                    /* Fall through to keyboard handler */
+                    oric_keyboard_handle_sdl_event(&emu->keyboard, &event);
+                    break;
+                case SDL_KEYUP:
+                    oric_keyboard_handle_sdl_event(&emu->keyboard, &event);
+                    break;
+                case SDL_TEXTINPUT:
+                    /* Symbolic mode: character -> ORIC key mapping */
                     oric_keyboard_handle_sdl_event(&emu->keyboard, &event);
                     break;
                 default:
