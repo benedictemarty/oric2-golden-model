@@ -16,6 +16,13 @@ bas2tap
 bin2tap
 tap2sedoric
 
+# Test binaries
+test_cpu
+test_memory
+test_io
+test_storage
+test_system
+
 # Coverage files
 *.gcda
 *.gcno
