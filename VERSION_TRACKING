@@ -1,12 +1,18 @@
 VERSION_TRACKING - ORIC-1 Emulator
 =====================================
 
-Current Version: 1.0.0-beta.3
+Current Version: 1.0.0-beta.4
 Release Date: 2026-02-22
-Status: Beta (PSG Fixed, Keyboard Mapped, No Ghost Keypresses)
+Status: Beta (CLOAD Support via ROM Patching)
 
 Version History:
 ----------------
+- 1.0.0-beta.4 (2026-02-22): CLOAD via ROM Patching (Sprint 16a)
+  * CLOAD command support: type CLOAD in BASIC to load tape programs
+  * ROM patching intercepts getsync ($E696) and readbyte ($E630)
+  * TAP buffered for sequential reading, sync byte detection (0x16)
+  * -t file.tap: buffered for CLOAD; -t file.tap -f: direct injection
+
 - 1.0.0-beta.3 (2026-02-22): PSG Bus Fix & Keyboard Mapping (Sprint 15b)
   * Fixed PSG bus protocol: CA2=BC1, CB2=BDIR (was swapped)
   * Fixed ghost keypresses: VIA PB3 keyboard scan feedback implemented

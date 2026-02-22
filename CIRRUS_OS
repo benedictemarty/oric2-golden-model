@@ -2,7 +2,7 @@ CIRRUS_OS - ORIC-1 Emulator Build & Development Status
 ======================================================
 
 Project: ORIC-1 Cycle-Accurate Emulator
-Version: 1.0.0-beta.3
+Version: 1.0.0-beta.4
 Build Status: BETA
 Last Updated: 2026-02-22
 
@@ -29,6 +29,7 @@ BUILD STATUS
 [V] PSG Bus Protocol      - Fixed (CA2=BC1, CB2=BDIR, keyboard PB3)
 [V] HIRES Text Rows       - Fixed (serial attributes in bottom 3 rows)
 [V] SDL2 Keyboard         - Complete (64 keys, QWERTY + AZERTY layouts)
+[V] CLOAD ROM Patching    - Complete (getsync + readbyte interception)
 [V] Test Suite            - Complete (159 tests, 100% pass)
 [V] ROM Compatibility     - Validated (ORIC-1 BASIC 1.0 ROM)
 [V] Performance           - Benchmarked (~90+ MHz, target met)
@@ -84,8 +85,8 @@ QUALITY GATES
 
 SPRINT STATUS
 -------------
-Current Sprint: Sprint 15b completed
-Sprint Progress: 100% (PSG fix + keyboard mapping)
+Current Sprint: Sprint 16a completed
+Sprint Progress: 100% (CLOAD via ROM patching)
 
 Completed Sprints:
 - [V] Sprint 0: Infrastructure setup
@@ -100,6 +101,7 @@ Completed Sprints:
 - [V] Sprint 14: ROM compatibility + Performance + Static analysis (148 tests)
 - [V] Sprint 15: Video integration + Debug export (159 tests)
 - [V] Sprint 15b: PSG bus fix + SDL2 keyboard mapping
+- [V] Sprint 16a: CLOAD via ROM patching
 
 Remaining (Release phase):
 - [V] SDL2 display integration testing

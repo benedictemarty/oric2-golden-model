@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0-beta.4] - 2026-02-22
+
+### Added - CLOAD via ROM Patching (Sprint 16a)
+- CLOAD command support: tape programs load when user types CLOAD in BASIC
+- ROM patching intercepts getsync ($E696) and readbyte ($E630) routines
+- TAP file buffered in memory for sequential reading by ROM routines
+- Sync byte detection (0x16) and byte-by-byte tape reading
+- CPU register injection (A register, Z flag, $002F store)
+- `-t file.tap` without `-f`: tape available for CLOAD (ROM patching mode)
+- `-t file.tap -f`: fast load with direct memory injection (no CLOAD needed)
+
+### Changed
+- `emulator_t` struct: added tapebuf, tapelen, tapeoffs, tape_loaded fields
+- `tape_patches()` called after each CPU instruction in emulation loop
+- Tape loading split: buffered mode (default) vs fast-load injection (`-f`)
+- Help text updated to clarify `-f` fast-load behavior
+- `emulator_cleanup()` frees tape buffer
+- Version updated to 1.0.0-beta.4
+
 ## [1.0.0-beta.3] - 2026-02-22
 
 ### Fixed - PSG Bus Protocol & Keyboard (Sprint 15b)

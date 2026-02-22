@@ -111,7 +111,14 @@ host filesystem sharing and conversion tools for legacy BASIC/machine code progr
 - [x] SDL2 event polling: keyboard input, F5/F10/F11/F12
 - [x] Clean boot screen validated (no more stars)
 
-### Sprint 16: Release Preparation (v1.0.0) - PLANNED
+### Sprint 16a: CLOAD ROM Patching (v1.0.0-beta.4) - DONE
+- [x] CLOAD command support via ROM patching (getsync + readbyte interception)
+- [x] TAP buffering for sequential reading by ROM routines
+- [x] Sync byte detection (0x16) and byte-by-byte tape reading
+- [x] -t without -f: buffered for CLOAD; -t -f: direct memory injection
+- [x] CPU register injection (A, Z flag, $002F store)
+
+### Sprint 16b: Release Preparation (v1.0.0) - PLANNED
 - [ ] Complete user guide
 - [ ] Create example programs
 - [ ] Package for Linux distributions
@@ -156,5 +163,5 @@ host filesystem sharing and conversion tools for legacy BASIC/machine code progr
 ---
 
 **Last Updated**: 2026-02-22
-**Current Version**: 1.0.0-beta.3
+**Current Version**: 1.0.0-beta.4
 **Next Milestone**: 1.0.0-rc (Release preparation)

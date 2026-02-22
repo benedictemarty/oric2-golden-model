@@ -30,7 +30,7 @@
 #include "hostfs/hostfs.h"
 #include "utils/logging.h"
 
-#define VERSION "1.0.0-beta.3"
+#define VERSION "1.0.0-beta.4"
 #define ORIC_CLOCK_HZ   1000000
 #define ORIC_FRAME_RATE  50
 #define CYCLES_PER_FRAME (ORIC_CLOCK_HZ / ORIC_FRAME_RATE)
@@ -56,7 +56,7 @@ static void print_usage(const char* program_name) {
     printf("  -d, --disk FILE            Load .DSK disk file\n");
     printf("  -r, --rom FILE             Load custom ROM file\n");
     printf("  -h, --hostfs PATH          Mount host directory\n");
-    printf("  -f, --fast-load            Enable fast tape loading\n");
+    printf("  -f, --fast-load            Fast tape loading (inject directly, no CLOAD needed)\n");
     printf("  -n, --headless             Run without display (headless mode)\n");
     printf("  -c, --cycles NUM           Run for N cycles then exit\n");
     printf("  -v, --verbose              Verbose logging\n");
@@ -86,6 +86,13 @@ typedef struct {
 
     /* Keyboard */
     oric_keyboard_t keyboard;
+
+    /* Tape buffer for ROM patching (CLOAD support) */
+    uint8_t* tapebuf;       /* TAP file data loaded in memory */
+    int tapelen;             /* Total length of tape data */
+    int tapeoffs;            /* Current read offset */
+    bool tape_loaded;        /* A tape is loaded and available */
+    int tape_syncstack;     /* Saved SP for sync loop recovery (-1 = none) */
 
     bool running;
     bool fast_load;
@@ -290,7 +297,102 @@ static void emulator_cleanup(emulator_t* emu) {
     video_cleanup(&emu->video);
     hostfs_cleanup(&emu->hostfs);
     memory_cleanup(&emu->memory);
+    if (emu->tapebuf) {
+        free(emu->tapebuf);
+        emu->tapebuf = NULL;
+    }
     log_info("Emulator cleanup complete");
+}
+
+/**
+ * @brief ROM patching for CLOAD support
+ *
+ * Intercepts ROM cassette routines by checking CPU PC after each instruction.
+ * When PC hits known ROM entry points (getsync, readbyte), we inject tape
+ * data directly into CPU registers and skip to the routine's RTS.
+ * This is the same approach used by Oricutron.
+ *
+ * ROM addresses (ORIC-1 BASIC 1.0):
+ *   getsync:      $E696 (entry) -> $E6B9 (RTS)
+ *   readbyte:     $E630 (entry) -> $E65B (RTS)
+ *   readbyte_store: $002F (RAM byte store location)
+ */
+/**
+ * ROM patching approach (matching Oricutron):
+ *
+ * getsync ($E696): Scan forward to first 0x16 byte, leave tapeoffs
+ *   pointing AT the 0x16. The ROM's getsync confirmation loop will
+ *   then call readbyte to read the remaining sync bytes + marker.
+ *   Jump PC to $E6B9 (getsync RTS).
+ *
+ * readbyte ($E630): Read tapebuf[tapeoffs++] into A, store at $002F,
+ *   set Z flag, clear carry (success). Jump PC to $E65B which does
+ *   LDA $2F then RTS — this is what Oricutron uses as readbyte_end.
+ *
+ * getsync_loop ($E681): If CPU gets stuck polling CB1 in wait_edge,
+ *   recover by restoring SP and forcing a getsync patch.
+ */
+static void tape_patches(emulator_t* emu) {
+    if (!emu->tape_loaded)
+        return;
+
+    uint16_t pc = emu->cpu.PC;
+
+    if (pc == 0xE696) {
+        /* getsync: scan forward to first 0x16 sync byte.
+         * Leave tapeoffs pointing AT the 0x16 so readbyte will
+         * read the sync bytes (ROM confirmation loop needs them). */
+        if (emu->tapebuf[emu->tapeoffs] != 0x16) {
+            while (emu->tapeoffs < emu->tapelen &&
+                   emu->tapebuf[emu->tapeoffs] != 0x16) {
+                emu->tapeoffs++;
+            }
+            if (emu->tapeoffs >= emu->tapelen)
+                return; /* No sync found - let ROM timeout */
+        }
+        /* Save stack pointer for sync loop recovery */
+        emu->tape_syncstack = emu->cpu.SP;
+        /* Jump to end of getsync */
+        emu->cpu.PC = 0xE6B9;
+    } else if (pc == 0xE630) {
+        /* readbyte: read next byte from tape buffer */
+        if (emu->tapeoffs < emu->tapelen) {
+            uint8_t byte = emu->tapebuf[emu->tapeoffs++];
+            emu->cpu.A = byte;
+            /* Set Z flag (like Oricutron: f_z = a == 0) */
+            if (byte == 0)
+                emu->cpu.P |= FLAG_ZERO;
+            else
+                emu->cpu.P &= ~FLAG_ZERO;
+            /* Clear carry = success */
+            emu->cpu.P &= ~FLAG_CARRY;
+            /* Store byte at $002F (ROM side effect) */
+            memory_write(&emu->memory, 0x002F, byte);
+            /* Jump to $E65B (LDA $2F; RTS) — matches Oricutron readbyte_end */
+            emu->cpu.PC = 0xE65B;
+        }
+        /* If tape exhausted, let ROM handle (will timeout) */
+    } else if (pc == 0xE681) {
+        /* Sync loop recovery: CPU is stuck polling VIA CB1 in wait_edge.
+         * This happens if getsync's confirmation readbyte calls enter
+         * the real ROM code. Recover by restoring SP and forcing getsync. */
+        if (emu->tape_syncstack >= 0) {
+            emu->cpu.SP = (uint8_t)emu->tape_syncstack;
+            emu->tape_syncstack = -1;
+            /* Force getsync patch */
+            if (emu->tapebuf[emu->tapeoffs] != 0x16) {
+                while (emu->tapeoffs < emu->tapelen &&
+                       emu->tapebuf[emu->tapeoffs] != 0x16) {
+                    emu->tapeoffs++;
+                }
+                if (emu->tapeoffs >= emu->tapelen) {
+                    emu->tape_loaded = false;
+                    return;
+                }
+            }
+            emu->cpu.PC = 0xE6B9;
+        }
+    }
 }
 
 static void emulator_run(emulator_t* emu) {
@@ -306,6 +408,7 @@ static void emulator_run(emulator_t* emu) {
         /* Execute one frame worth of CPU cycles */
         int frame_cycles = 0;
         while (frame_cycles < CYCLES_PER_FRAME && !emu->cpu.halted) {
+            tape_patches(emu);
             int step = cpu_step(&emu->cpu);
             frame_cycles += step;
 
@@ -543,28 +646,56 @@ int main(int argc, char* argv[]) {
     /* Load tape */
     if (tape_file) {
         log_info("Loading tape: %s", tape_file);
-        tap_file_t* tap = tap_open_read(tape_file, fast_load);
-        if (tap) {
-            tap_header_t header;
-            if (tap_read_header(tap, &header)) {
-                log_info("Tape: '%s' type=%02X start=$%04X end=$%04X",
-                         header.name, header.type, header.start_addr, header.end_addr);
-                uint16_t size = header.end_addr - header.start_addr + 1;
-                uint8_t* buf = (uint8_t*)malloc(size);
-                if (buf) {
-                    int rd = tap_read_data(tap, buf, size);
-                    if (rd > 0) {
-                        for (int i = 0; i < rd; i++) {
-                            memory_write(&emu.memory, header.start_addr + i, buf[i]);
+        if (fast_load) {
+            /* Fast load: inject directly into memory (no CLOAD needed) */
+            tap_file_t* tap = tap_open_read(tape_file, true);
+            if (tap) {
+                tap_header_t header;
+                if (tap_read_header(tap, &header)) {
+                    log_info("Fast load: '%s' type=%02X start=$%04X end=$%04X",
+                             header.name, header.type, header.start_addr, header.end_addr);
+                    uint16_t size = header.end_addr - header.start_addr + 1;
+                    uint8_t* buf = (uint8_t*)malloc(size);
+                    if (buf) {
+                        int rd = tap_read_data(tap, buf, size);
+                        if (rd > 0) {
+                            for (int i = 0; i < rd; i++) {
+                                memory_write(&emu.memory, header.start_addr + i, buf[i]);
+                            }
+                            log_info("Loaded %d bytes to $%04X-$%04X", rd, header.start_addr, header.start_addr + rd - 1);
                         }
-                        log_info("Loaded %d bytes to $%04X-$%04X", rd, header.start_addr, header.start_addr + rd - 1);
+                        free(buf);
                     }
-                    free(buf);
                 }
+                tap_close(tap);
+            } else {
+                log_warning("Failed to open tape: %s", tape_file);
             }
-            tap_close(tap);
         } else {
-            log_warning("Failed to open tape: %s", tape_file);
+            /* Normal load: buffer TAP for CLOAD via ROM patching */
+            FILE* f = fopen(tape_file, "rb");
+            if (f) {
+                fseek(f, 0, SEEK_END);
+                emu.tapelen = ftell(f);
+                fseek(f, 0, SEEK_SET);
+                emu.tapebuf = (uint8_t*)malloc(emu.tapelen);
+                if (emu.tapebuf) {
+                    size_t rd = fread(emu.tapebuf, 1, emu.tapelen, f);
+                    if ((int)rd == emu.tapelen) {
+                        emu.tapeoffs = 0;
+                        emu.tape_loaded = true;
+                        emu.tape_syncstack = -1;
+                        log_info("Tape buffered for CLOAD: %d bytes", emu.tapelen);
+                    } else {
+                        log_warning("Tape read incomplete: %zu/%d bytes", rd, emu.tapelen);
+                        free(emu.tapebuf);
+                        emu.tapebuf = NULL;
+                    }
+                }
+                fclose(f);
+            } else {
+                log_warning("Failed to open tape: %s", tape_file);
+            }
         }
     }
 
