@@ -14,6 +14,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - PSG registers 14-15 (I/O ports) initialized to 0xFF (no keys pressed)
 - AY_NUM_REGISTERS expanded from 14 to 16 to include I/O ports
 
+### Fixed - HIRES Video Rendering
+- Fixed HIRES bottom 3 text rows: serial attribute processing (ink/paper/inverse) was missing, rendered white-on-black only
+- Added character bit 7 inversion support in HIRES text rows
+- Added auto-detection of HIRES mode from RAM $26A bit 2 (HTEFLAG)
+
 ### Added - SDL2 Keyboard Mapping
 - ORIC keyboard matrix header `include/io/keyboard.h`
 - SDL2 keycode → ORIC matrix mapping (64 keys, QWERTY layout from Oricutron)

@@ -27,6 +27,7 @@ BUILD STATUS
 [V] Conversion Tools      - Complete (bas2tap, bin2tap, tap2sedoric)
 [V] Video Export          - Complete (PPM, BMP, ASCII export)
 [V] PSG Bus Protocol      - Fixed (CA2=BC1, CB2=BDIR, keyboard PB3)
+[V] HIRES Text Rows       - Fixed (serial attributes in bottom 3 rows)
 [V] SDL2 Keyboard         - Complete (64 keys QWERTY mapping)
 [V] Test Suite            - Complete (159 tests, 100% pass)
 [V] ROM Compatibility     - Validated (ORIC-1 BASIC 1.0 ROM)

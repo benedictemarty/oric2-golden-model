@@ -115,18 +115,39 @@ static void render_hires(video_t* vid, uint8_t* mem) {
             }
         }
     }
-    /* Bottom 24 lines: text area */
+    /* Bottom 3 text rows (rows 25-27): rendered with serial attributes like text mode */
     for (int row = 25; row < 28; row++) {
+        uint8_t ink = ORIC_WHITE, paper = ORIC_BLACK;
+        bool inverse = false;
         for (int col = 0; col < 40; col++) {
-            uint8_t ch = mem[0xBB80 + row*40 + col];
-            for (int cy = 0; cy < 8; cy++) {
-                uint8_t bits = get_charset_byte(vid, mem, ch & 0x7F, cy);
-                int sy = 200 + (row-25)*8 + cy;
-                for (int bx = 5; bx >= 0; bx--) {
-                    if (bits & (1 << bx))
-                        set_pixel(vid, col*6+(5-bx), sy, 0xFF, 0xFF, 0xFF);
-                    else
-                        set_pixel(vid, col*6+(5-bx), sy, 0, 0, 0);
+            uint8_t byte = mem[0xBB80 + row*40 + col];
+            int sy = 200 + (row - 25) * 8;
+            if (byte < 32) {
+                /* Serial attribute */
+                if (byte < 8) ink = byte;
+                else if (byte >= 16 && byte < 24) paper = byte - 16;
+                else if (byte == 28) inverse = false;
+                else if (byte == 29) inverse = true;
+                uint8_t pr, pg, pb;
+                video_get_rgb(paper, &pr, &pg, &pb);
+                for (int cy = 0; cy < 8; cy++)
+                    for (int bx = 0; bx < 6; bx++)
+                        set_pixel(vid, col*6+bx, sy+cy, pr, pg, pb);
+            } else {
+                uint8_t fg = inverse ? paper : ink;
+                uint8_t bg = inverse ? ink : paper;
+                uint8_t ir, ig, ib, pr, pg, pb;
+                video_get_rgb(fg, &ir, &ig, &ib);
+                video_get_rgb(bg, &pr, &pg, &pb);
+                for (int cy = 0; cy < 8; cy++) {
+                    uint8_t bits = get_charset_byte(vid, mem, byte & 0x7F, cy);
+                    bool char_inv = (byte & 0x80) != 0;
+                    for (int bx = 5; bx >= 0; bx--) {
+                        bool on = (bits & (1 << bx)) != 0;
+                        if (char_inv) on = !on;
+                        if (on) set_pixel(vid, col*6+(5-bx), sy+cy, ir, ig, ib);
+                        else    set_pixel(vid, col*6+(5-bx), sy+cy, pr, pg, pb);
+                    }
                 }
             }
         }
@@ -135,6 +156,10 @@ static void render_hires(video_t* vid, uint8_t* mem) {
 
 void video_render_frame(video_t* vid, uint8_t* memory) {
     if (!memory) return;
+    /* Auto-detect video mode from system variable $26A (HTEFLAG):
+     * bit 2 set = HIRES mode, clear = TEXT mode.
+     * This is set by the ROM HIRES/TEXT commands. */
+    vid->hires_mode = (memory[0x26A] & 0x04) != 0;
     if (vid->hires_mode) render_hires(vid, memory);
     else render_text(vid, memory);
     vid->need_refresh = false;
