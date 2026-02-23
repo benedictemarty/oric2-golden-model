@@ -118,7 +118,16 @@ host filesystem sharing and conversion tools for legacy BASIC/machine code progr
 - [x] -t without -f: buffered for CLOAD; -t -f: direct memory injection
 - [x] CPU register injection (A, Z flag, $002F store)
 
-### Sprint 16b: Release Preparation (v1.0.0) - PLANNED
+### Sprint 16b: HIRES Fix & Keyboard Automation (v1.0.0-beta.5) - DONE
+- [x] Fix HIRES mode detection ($26A bit 1, confirmed by ROM disassembly)
+- [x] Fix HIRES attribute detection: (byte & 0x60)==0 (match Oricutron ULA)
+- [x] Fix HIRES bit 7 inversion: ink/paper XOR 7
+- [x] Fix HIRES charset address: $9800 in HIRES mode
+- [x] Keyboard automation: oric_keyboard_press_char() / release_all()
+- [x] --type-keys CYCLES:TEXT CLI option (supports \n, \pN pause)
+- [x] Poker game compatibility validated (poker-asn.tap)
+
+### Sprint 17: Release Preparation (v1.0.0) - PLANNED
 - [ ] Complete user guide
 - [ ] Create example programs
 - [ ] Package for Linux distributions

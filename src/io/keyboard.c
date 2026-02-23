@@ -44,6 +44,114 @@ void oric_keyboard_set_layout(oric_keyboard_t* kb, oric_kb_layout_t layout) {
     kb->layout = layout;
 }
 
+/* ================================================================
+ * Character -> ORIC matrix mapping (used by both SDL and press_char)
+ * ================================================================
+ *
+ * Derived from ROM keyboard tables at $FF70 (unshifted) and $FFB0 (shifted).
+ * Each entry: { row, col, need_oric_shift }
+ */
+
+typedef struct {
+    int8_t row, col;
+    bool shift;
+} char_entry_t;
+
+#define U(r,c) {r, c, false}    /* Unshifted: just press this key */
+#define S(r,c) {r, c, true}     /* Shifted: press this key + ORIC Shift */
+#define X      {-1, -1, false}  /* Unmapped */
+
+static const char_entry_t char_map[128] = {
+    /* 0x00-0x1F: control characters - unmapped */
+    X,X,X,X,X,X,X,X, X,X,X,X,X,X,X,X,
+    X,X,X,X,X,X,X,X, X,X,X,X,X,X,X,X,
+    /* 0x20 ' ' */ U(4,0),
+    /* 0x21 '!' */ S(0,5),   /* Shift + 1 */
+    /* 0x22 '"' */ S(3,7),   /* Shift + ' (apostrophe key) */
+    /* 0x23 '#' */ S(0,7),   /* Shift + 3 */
+    /* 0x24 '$' */ S(2,3),   /* Shift + 4 */
+    /* 0x25 '%' */ S(0,2),   /* Shift + 5 */
+    /* 0x26 '&' */ S(0,0),   /* Shift + 7 */
+    /* 0x27 '\''*/ U(3,7),   /* ' (apostrophe key) */
+    /* 0x28 '(' */ S(3,1),   /* Shift + 9 */
+    /* 0x29 ')' */ S(7,2),   /* Shift + 0 */
+    /* 0x2A '*' */ S(7,0),   /* Shift + 8 */
+    /* 0x2B '+' */ S(7,7),   /* Shift + = */
+    /* 0x2C ',' */ U(4,1),
+    /* 0x2D '-' */ U(3,3),
+    /* 0x2E '.' */ U(4,2),
+    /* 0x2F '/' */ U(7,3),
+    /* 0x30 '0' */ U(7,2),
+    /* 0x31 '1' */ U(0,5),
+    /* 0x32 '2' */ U(2,6),
+    /* 0x33 '3' */ U(0,7),
+    /* 0x34 '4' */ U(2,3),
+    /* 0x35 '5' */ U(0,2),
+    /* 0x36 '6' */ U(2,1),
+    /* 0x37 '7' */ U(0,0),
+    /* 0x38 '8' */ U(7,0),
+    /* 0x39 '9' */ U(3,1),
+    /* 0x3A ':' */ S(3,2),   /* Shift + ; */
+    /* 0x3B ';' */ U(3,2),
+    /* 0x3C '<' */ S(4,1),   /* Shift + , */
+    /* 0x3D '=' */ U(7,7),
+    /* 0x3E '>' */ S(4,2),   /* Shift + . */
+    /* 0x3F '?' */ S(7,3),   /* Shift + / */
+    /* 0x40 '@' */ S(2,6),   /* Shift + 2 */
+    /* 0x41-0x5A: uppercase letters */
+    U(6,5),U(2,2),U(2,7),U(1,7),U(6,3),U(1,3),U(6,2),U(6,1),
+    U(5,1),U(1,0),U(3,0),U(7,1),U(2,0),U(0,1),U(5,2),U(5,3),
+    U(1,6),U(1,2),U(6,6),U(1,1),U(5,0),U(0,3),U(6,7),U(0,6),
+    U(6,0),U(2,5),
+    /* 0x5B '[' */ U(5,7),
+    /* 0x5C '\\'*/ U(3,6),
+    /* 0x5D ']' */ U(5,6),
+    /* 0x5E '^' */ S(2,1),   /* Shift + 6 */
+    /* 0x5F '_' */ S(3,3),   /* Shift + - */
+    /* 0x60 '`' */ X,
+    /* 0x61-0x7A: lowercase letters -> same as uppercase (ORIC has no case distinction in matrix) */
+    U(6,5),U(2,2),U(2,7),U(1,7),U(6,3),U(1,3),U(6,2),U(6,1),
+    U(5,1),U(1,0),U(3,0),U(7,1),U(2,0),U(0,1),U(5,2),U(5,3),
+    U(1,6),U(1,2),U(6,6),U(1,1),U(5,0),U(0,3),U(6,7),U(0,6),
+    U(6,0),U(2,5),
+    /* 0x7B '{' */ S(5,7),
+    /* 0x7C '|' */ S(3,6),
+    /* 0x7D '}' */ S(5,6),
+    /* 0x7E '~' */ X,
+    /* 0x7F DEL */ X
+};
+
+/* ORIC Left Shift position in matrix */
+#define ORIC_LSHIFT_ROW 4
+#define ORIC_LSHIFT_COL 4
+/* RETURN key position */
+#define ORIC_RETURN_ROW 7
+#define ORIC_RETURN_COL 5
+
+#undef U
+#undef S
+#undef X
+
+bool oric_keyboard_press_char(oric_keyboard_t* kb, char c) {
+    if (c == '\n' || c == '\r') {
+        /* RETURN key */
+        kb->matrix[ORIC_RETURN_ROW] &= ~(1 << ORIC_RETURN_COL);
+        return true;
+    }
+    unsigned char uc = (unsigned char)c;
+    if (uc > 127) return false;
+    const char_entry_t* entry = &char_map[uc];
+    if (entry->row < 0) return false;
+    kb->matrix[entry->row] &= ~(1 << entry->col);
+    if (entry->shift)
+        kb->matrix[ORIC_LSHIFT_ROW] &= ~(1 << ORIC_LSHIFT_COL);
+    return true;
+}
+
+void oric_keyboard_release_all(oric_keyboard_t* kb) {
+    memset(kb->matrix, 0xFF, sizeof(kb->matrix));
+}
+
 #ifdef HAS_SDL2
 
 /* ================================================================
@@ -93,132 +201,6 @@ static bool handle_qwerty(oric_keyboard_t* kb, const SDL_Event* event) {
     return false;
 }
 
-/* ================================================================
- * AZERTY symbolic mapping (character-based, for any keyboard layout)
- * ================================================================
- *
- * Character -> ORIC key mapping derived from ROM keyboard tables:
- *   Unshifted table at $FF70, Shifted table at $FFB0
- *
- * Each entry: { row, col, need_oric_shift }
- * row/col = -1 means unmapped.
- */
-
-typedef struct {
-    int8_t row, col;
-    bool shift;
-} char_entry_t;
-
-#define U(r,c) {r, c, false}    /* Unshifted: just press this key */
-#define S(r,c) {r, c, true}     /* Shifted: press this key + ORIC Shift */
-#define X      {-1, -1, false}  /* Unmapped */
-
-static const char_entry_t char_map[128] = {
-    /* 0x00-0x1F: control characters - unmapped */
-    X,X,X,X,X,X,X,X, X,X,X,X,X,X,X,X,
-    X,X,X,X,X,X,X,X, X,X,X,X,X,X,X,X,
-    /* 0x20 ' ' */ U(4,0),
-    /* 0x21 '!' */ S(0,5),   /* Shift + 1 */
-    /* 0x22 '"' */ S(3,7),   /* Shift + ' (apostrophe key) */
-    /* 0x23 '#' */ S(0,7),   /* Shift + 3 */
-    /* 0x24 '$' */ S(2,3),   /* Shift + 4 */
-    /* 0x25 '%' */ S(0,2),   /* Shift + 5 */
-    /* 0x26 '&' */ S(0,0),   /* Shift + 7 */
-    /* 0x27 '\''*/ U(3,7),   /* ' (apostrophe key) */
-    /* 0x28 '(' */ S(3,1),   /* Shift + 9 */
-    /* 0x29 ')' */ S(7,2),   /* Shift + 0 */
-    /* 0x2A '*' */ S(7,0),   /* Shift + 8 */
-    /* 0x2B '+' */ S(7,7),   /* Shift + = */
-    /* 0x2C ',' */ U(4,1),
-    /* 0x2D '-' */ U(3,3),
-    /* 0x2E '.' */ U(4,2),
-    /* 0x2F '/' */ U(7,3),
-    /* 0x30 '0' */ U(7,2),
-    /* 0x31 '1' */ U(0,5),
-    /* 0x32 '2' */ U(2,6),
-    /* 0x33 '3' */ U(0,7),
-    /* 0x34 '4' */ U(2,3),
-    /* 0x35 '5' */ U(0,2),
-    /* 0x36 '6' */ U(2,1),
-    /* 0x37 '7' */ U(0,0),
-    /* 0x38 '8' */ U(7,0),
-    /* 0x39 '9' */ U(3,1),
-    /* 0x3A ':' */ S(3,2),   /* Shift + ; */
-    /* 0x3B ';' */ U(3,2),
-    /* 0x3C '<' */ S(4,1),   /* Shift + , */
-    /* 0x3D '=' */ U(7,7),
-    /* 0x3E '>' */ S(4,2),   /* Shift + . */
-    /* 0x3F '?' */ S(7,3),   /* Shift + / */
-    /* 0x40 '@' */ S(2,6),   /* Shift + 2 */
-    /* 0x41 'A' */ U(6,5),   /* Letters: no ORIC shift (ROM CAPS ON by default) */
-    /* 0x42 'B' */ U(2,2),
-    /* 0x43 'C' */ U(2,7),
-    /* 0x44 'D' */ U(1,7),
-    /* 0x45 'E' */ U(6,3),
-    /* 0x46 'F' */ U(1,3),
-    /* 0x47 'G' */ U(6,2),
-    /* 0x48 'H' */ U(6,1),
-    /* 0x49 'I' */ U(5,1),
-    /* 0x4A 'J' */ U(1,0),
-    /* 0x4B 'K' */ U(3,0),
-    /* 0x4C 'L' */ U(7,1),
-    /* 0x4D 'M' */ U(2,0),
-    /* 0x4E 'N' */ U(0,1),
-    /* 0x4F 'O' */ U(5,2),
-    /* 0x50 'P' */ U(5,3),
-    /* 0x51 'Q' */ U(1,6),
-    /* 0x52 'R' */ U(1,2),
-    /* 0x53 'S' */ U(6,6),
-    /* 0x54 'T' */ U(1,1),
-    /* 0x55 'U' */ U(5,0),
-    /* 0x56 'V' */ U(0,3),
-    /* 0x57 'W' */ U(6,7),
-    /* 0x58 'X' */ U(0,6),
-    /* 0x59 'Y' */ U(6,0),
-    /* 0x5A 'Z' */ U(2,5),
-    /* 0x5B '[' */ U(5,7),
-    /* 0x5C '\\'*/ U(3,6),
-    /* 0x5D ']' */ U(5,6),
-    /* 0x5E '^' */ S(2,1),   /* Shift + 6 */
-    /* 0x5F '_' */ S(3,3),   /* Shift + - */
-    /* 0x60 '`' */ X,         /* Not on ORIC-1 keyboard */
-    /* 0x61 'a' */ U(6,5),
-    /* 0x62 'b' */ U(2,2),
-    /* 0x63 'c' */ U(2,7),
-    /* 0x64 'd' */ U(1,7),
-    /* 0x65 'e' */ U(6,3),
-    /* 0x66 'f' */ U(1,3),
-    /* 0x67 'g' */ U(6,2),
-    /* 0x68 'h' */ U(6,1),
-    /* 0x69 'i' */ U(5,1),
-    /* 0x6A 'j' */ U(1,0),
-    /* 0x6B 'k' */ U(3,0),
-    /* 0x6C 'l' */ U(7,1),
-    /* 0x6D 'm' */ U(2,0),
-    /* 0x6E 'n' */ U(0,1),
-    /* 0x6F 'o' */ U(5,2),
-    /* 0x70 'p' */ U(5,3),
-    /* 0x71 'q' */ U(1,6),
-    /* 0x72 'r' */ U(1,2),
-    /* 0x73 's' */ U(6,6),
-    /* 0x74 't' */ U(1,1),
-    /* 0x75 'u' */ U(5,0),
-    /* 0x76 'v' */ U(0,3),
-    /* 0x77 'w' */ U(6,7),
-    /* 0x78 'x' */ U(0,6),
-    /* 0x79 'y' */ U(6,0),
-    /* 0x7A 'z' */ U(2,5),
-    /* 0x7B '{' */ S(5,7),   /* Shift + [ */
-    /* 0x7C '|' */ S(3,6),   /* Shift + \ */
-    /* 0x7D '}' */ S(5,6),   /* Shift + ] */
-    /* 0x7E '~' */ X,         /* Not on standard ORIC-1 */
-    /* 0x7F DEL */ X
-};
-
-#undef U
-#undef S
-#undef X
-
 /**
  * Non-printable keys handled via SDL scancode (not TEXTINPUT).
  * These produce control codes or have special matrix positions.
@@ -237,10 +219,6 @@ static const struct { SDL_Scancode sc; int8_t row, col; } special_keys[] = {
     { SDL_SCANCODE_TAB,       3, 4 },  /* FUNCT */
     { 0, -1, -1 }  /* sentinel */
 };
-
-/* ORIC Left Shift position in matrix */
-#define ORIC_LSHIFT_ROW 4
-#define ORIC_LSHIFT_COL 4
 
 /* --- Pressed key tracking --- */
 

@@ -45,10 +45,21 @@ static void set_pixel(video_t* vid, int x, int y, uint8_t r, uint8_t g, uint8_t 
     vid->framebuffer[off] = r; vid->framebuffer[off+1] = g; vid->framebuffer[off+2] = b;
 }
 
-/* Get charset byte: use vid->charset override, or RAM charset at $B400 */
+/**
+ * Get charset byte from RAM.
+ *
+ * ORIC charset addresses:
+ *   TEXT mode:  $B400-$B7FF (standard charset, 128 chars × 8 bytes)
+ *   HIRES mode: $9800-$9BFF (charset relocated because $B400 is in HIRES bitmap)
+ *
+ * Characters with bit 7 set (128-255) use the alternate charset:
+ *   TEXT mode:  $B800-$BBFF
+ *   HIRES mode: $9C00-$9FFF
+ */
 static uint8_t get_charset_byte(video_t* vid, uint8_t* mem, int char_idx, int row) {
     if (vid->charset) return vid->charset[char_idx * 8 + row];
-    return mem[0xB400 + char_idx * 8 + row];
+    uint16_t base = vid->hires_mode ? 0x9800 : 0xB400;
+    return mem[base + char_idx * 8 + row];
 }
 
 static void render_text(video_t* vid, uint8_t* mem) {
@@ -93,19 +104,27 @@ static void render_hires(video_t* vid, uint8_t* mem) {
         uint8_t ink = ORIC_WHITE, paper = ORIC_BLACK;
         for (int col = 0; col < 40; col++) {
             uint8_t byte = mem[0xA000 + y*40 + col];
-            if (!(byte & 0x40)) {
-                /* Attribute byte */
-                uint8_t attr = byte & 0x3F;
-                if (attr < 8) ink = attr;
-                else if (attr >= 16 && attr < 24) paper = attr - 16;
+            /* Serial attribute: bits 6 AND 5 both zero (values 0-31) */
+            if ((byte & 0x60) == 0) {
+                uint8_t attr = byte & 0x1F;
+                switch (attr & 0x18) {
+                    case 0x00: ink = attr & 0x07; break;     /* 0-7: foreground */
+                    case 0x08: break;                         /* 8-15: text attrs */
+                    case 0x10: paper = attr & 0x07; break;   /* 16-23: background */
+                    case 0x18: break;                         /* 24-31: video mode */
+                }
                 uint8_t pr, pg, pb;
                 video_get_rgb(paper, &pr, &pg, &pb);
                 for (int bx = 0; bx < 6; bx++)
                     set_pixel(vid, col*6+bx, y, pr, pg, pb);
             } else {
+                /* Pixel data: bit 7 inverts colors */
+                bool inv = (byte & 0x80) != 0;
+                uint8_t fg = inv ? (ink ^ 7) : ink;
+                uint8_t bg = inv ? (paper ^ 7) : paper;
                 uint8_t ir, ig, ib, pr, pg, pb;
-                video_get_rgb(ink, &ir, &ig, &ib);
-                video_get_rgb(paper, &pr, &pg, &pb);
+                video_get_rgb(fg, &ir, &ig, &ib);
+                video_get_rgb(bg, &pr, &pg, &pb);
                 for (int bx = 5; bx >= 0; bx--) {
                     if (byte & (1 << bx))
                         set_pixel(vid, col*6+(5-bx), y, ir, ig, ib);
@@ -157,9 +176,9 @@ static void render_hires(video_t* vid, uint8_t* mem) {
 void video_render_frame(video_t* vid, uint8_t* memory) {
     if (!memory) return;
     /* Auto-detect video mode from system variable $26A (HTEFLAG):
-     * bit 2 set = HIRES mode, clear = TEXT mode.
-     * This is set by the ROM HIRES/TEXT commands. */
-    vid->hires_mode = (memory[0x26A] & 0x04) != 0;
+     * bit 1 set = HIRES mode, clear = TEXT mode.
+     * ROM HIRES routine writes $03 (bits 0+1) to $26A. */
+    vid->hires_mode = (memory[0x26A] & 0x02) != 0;
     if (vid->hires_mode) render_hires(vid, memory);
     else render_text(vid, memory);
     vid->need_refresh = false;

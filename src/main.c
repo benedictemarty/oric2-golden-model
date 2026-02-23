@@ -30,7 +30,7 @@
 #include "hostfs/hostfs.h"
 #include "utils/logging.h"
 
-#define VERSION "1.0.0-beta.4"
+#define VERSION "1.0.0-beta.5"
 #define ORIC_CLOCK_HZ   1000000
 #define ORIC_FRAME_RATE  50
 #define CYCLES_PER_FRAME (ORIC_CLOCK_HZ / ORIC_FRAME_RATE)
@@ -65,6 +65,7 @@ static void print_usage(const char* program_name) {
     printf("      --frame-dump DIR       Dump frames to directory\n");
     printf("      --frame-dump-interval N  Dump every Nth frame (default: 50)\n");
     printf("  -k, --keyboard LAYOUT      Keyboard layout: qwerty (default) or azerty\n");
+    printf("      --type-keys C:TEXT     Auto-type TEXT after C cycles (\\n=Return, \\pN=pause N sec)\n");
     printf("  -?, --help                 Show this help\n");
     printf("\n");
     printf("Controls:\n");
@@ -107,6 +108,14 @@ typedef struct {
     /* Frame dump options */
     const char* frame_dump_dir;
     int frame_dump_interval;
+
+    /* Auto-type: inject keystrokes at specified cycle count
+     * Format: "CYCLES:TEXT" e.g. "3000000:CLOAD\"\"\n" */
+    const char* type_keys_text;    /* Text to type */
+    int64_t type_keys_at;          /* Cycle count to start typing */
+    int type_keys_idx;             /* Current character index */
+    int64_t type_keys_next_cycle;  /* Next cycle to type a char */
+    bool type_keys_done;           /* All characters typed */
 } emulator_t;
 
 /* I/O callback: route VIA register access */
@@ -418,6 +427,42 @@ static void emulator_run(emulator_t* emu) {
 
         total_executed += (uint64_t)frame_cycles;
 
+        /* Auto-type: inject keystrokes at specified cycle count.
+         * Each key is pressed for ~2 frames (40ms) then released for ~2 frames.
+         * This simulates realistic typing speed for the ROM keyboard scanner. */
+        if (emu->type_keys_text && !emu->type_keys_done &&
+            (int64_t)total_executed >= emu->type_keys_at) {
+            if ((int64_t)total_executed >= emu->type_keys_next_cycle) {
+                int idx = emu->type_keys_idx;
+                char c = emu->type_keys_text[idx];
+                if (c == '\0') {
+                    /* Done typing */
+                    oric_keyboard_release_all(&emu->keyboard);
+                    emu->type_keys_done = true;
+                } else if (c == '\\' && emu->type_keys_text[idx+1] == 'n') {
+                    /* \n = RETURN */
+                    oric_keyboard_release_all(&emu->keyboard);
+                    oric_keyboard_press_char(&emu->keyboard, '\n');
+                    emu->type_keys_idx += 2;
+                    emu->type_keys_next_cycle = (int64_t)total_executed + CYCLES_PER_FRAME * 4;
+                } else if (c == '\\' && emu->type_keys_text[idx+1] == 'p') {
+                    /* \pN = pause N seconds (N = single digit) */
+                    int secs = emu->type_keys_text[idx+2] - '0';
+                    if (secs < 1) secs = 1;
+                    if (secs > 9) secs = 9;
+                    oric_keyboard_release_all(&emu->keyboard);
+                    emu->type_keys_idx += 3;
+                    emu->type_keys_next_cycle = (int64_t)total_executed + ORIC_CLOCK_HZ * secs;
+                } else {
+                    /* Regular character */
+                    oric_keyboard_release_all(&emu->keyboard);
+                    oric_keyboard_press_char(&emu->keyboard, c);
+                    emu->type_keys_idx++;
+                    emu->type_keys_next_cycle = (int64_t)total_executed + CYCLES_PER_FRAME * 4;
+                }
+            }
+        }
+
         /* Render video frame */
         video_render_frame(&emu->video, emu->memory.ram);
 
@@ -532,8 +577,10 @@ int main(int argc, char* argv[]) {
     int frame_dump_interval = 50;
     const char* keyboard_layout = NULL;
 
+    const char* type_keys_arg = NULL;
+
     /* Long option codes for options without short equivalents */
-    enum { OPT_SCREENSHOT = 256, OPT_SCREENSHOT_AT, OPT_FRAME_DUMP, OPT_FRAME_DUMP_INTERVAL };
+    enum { OPT_SCREENSHOT = 256, OPT_SCREENSHOT_AT, OPT_FRAME_DUMP, OPT_FRAME_DUMP_INTERVAL, OPT_TYPE_KEYS };
 
     static struct option long_options[] = {
         {"tape",                required_argument, 0, 't'},
@@ -549,6 +596,7 @@ int main(int argc, char* argv[]) {
         {"frame-dump",          required_argument, 0, OPT_FRAME_DUMP},
         {"frame-dump-interval", required_argument, 0, OPT_FRAME_DUMP_INTERVAL},
         {"keyboard",            required_argument, 0, 'k'},
+        {"type-keys",           required_argument, 0, OPT_TYPE_KEYS},
         {"help",                no_argument,       0, '?'},
         {0, 0, 0, 0}
     };
@@ -571,6 +619,7 @@ int main(int argc, char* argv[]) {
             case OPT_FRAME_DUMP: frame_dump_dir = optarg; break;
             case OPT_FRAME_DUMP_INTERVAL: frame_dump_interval = atoi(optarg); break;
             case 'k': keyboard_layout = optarg; break;
+            case OPT_TYPE_KEYS: type_keys_arg = optarg; break;
             case '?':
             default:
                 print_usage(argv[0]);
@@ -613,6 +662,24 @@ int main(int argc, char* argv[]) {
             emu.screenshot_at_file = colon + 1;
         } else {
             log_error("Invalid --screenshot-at format. Use CYCLES:FILE");
+            emulator_cleanup(&emu);
+            return 1;
+        }
+    }
+
+    /* Parse --type-keys CYCLES:TEXT */
+    if (type_keys_arg) {
+        const char* colon = strchr(type_keys_arg, ':');
+        if (colon) {
+            emu.type_keys_at = atoll(type_keys_arg);
+            emu.type_keys_text = colon + 1;
+            emu.type_keys_idx = 0;
+            emu.type_keys_next_cycle = emu.type_keys_at;
+            emu.type_keys_done = false;
+            log_info("Auto-type at %lld cycles: \"%s\"",
+                     (long long)emu.type_keys_at, emu.type_keys_text);
+        } else {
+            log_error("Invalid --type-keys format. Use CYCLES:TEXT (e.g. 3000000:CLOAD\"\"\\n)");
             emulator_cleanup(&emu);
             return 1;
         }

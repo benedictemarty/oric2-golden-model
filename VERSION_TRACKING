@@ -1,12 +1,21 @@
 VERSION_TRACKING - ORIC-1 Emulator
 =====================================
 
-Current Version: 1.0.0-beta.4
-Release Date: 2026-02-22
-Status: Beta (CLOAD Support via ROM Patching)
+Current Version: 1.0.0-beta.5
+Release Date: 2026-02-23
+Status: Beta (HIRES Rendering Fix & Keyboard Automation)
 
 Version History:
 ----------------
+- 1.0.0-beta.5 (2026-02-23): HIRES Rendering Fix & Keyboard Automation (Sprint 16b)
+  * Fixed HIRES mode detection: $26A bit 1 (not bit 2)
+  * Fixed HIRES attribute detection: (byte & 0x60)==0 (matches Oricutron ULA)
+  * Fixed HIRES bit 7 inversion: colors XOR 7 when bit 7 set
+  * Fixed HIRES charset address: $9800 in HIRES mode (not $B400)
+  * Added --type-keys for automated keyboard input testing
+  * Added oric_keyboard_press_char() / release_all() API
+  * Poker game renders correctly
+
 - 1.0.0-beta.4 (2026-02-22): CLOAD via ROM Patching (Sprint 16a)
   * CLOAD command support: type CLOAD in BASIC to load tape programs
   * ROM patching intercepts getsync ($E696) and readbyte ($E630)

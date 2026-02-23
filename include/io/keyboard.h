@@ -58,6 +58,21 @@ void oric_keyboard_init(oric_keyboard_t* kb);
 void oric_keyboard_reset(oric_keyboard_t* kb);
 void oric_keyboard_set_layout(oric_keyboard_t* kb, oric_kb_layout_t layout);
 
+/**
+ * @brief Press a key by ASCII character (for automated input / --type-keys)
+ *
+ * Sets the appropriate matrix bits for the given character.
+ * Call oric_keyboard_release_all() after a delay to release.
+ *
+ * @return true if the character was mapped
+ */
+bool oric_keyboard_press_char(oric_keyboard_t* kb, char c);
+
+/**
+ * @brief Release all keys (clear matrix to 0xFF)
+ */
+void oric_keyboard_release_all(oric_keyboard_t* kb);
+
 #ifdef HAS_SDL2
 /**
  * @brief Handle SDL2 event and update ORIC keyboard matrix

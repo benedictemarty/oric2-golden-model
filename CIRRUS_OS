@@ -2,9 +2,9 @@ CIRRUS_OS - ORIC-1 Emulator Build & Development Status
 ======================================================
 
 Project: ORIC-1 Cycle-Accurate Emulator
-Version: 1.0.0-beta.4
+Version: 1.0.0-beta.5
 Build Status: BETA
-Last Updated: 2026-02-22
+Last Updated: 2026-02-23
 
 ================================================================
 
@@ -30,7 +30,10 @@ BUILD STATUS
 [V] HIRES Text Rows       - Fixed (serial attributes in bottom 3 rows)
 [V] SDL2 Keyboard         - Complete (64 keys, QWERTY + AZERTY layouts)
 [V] CLOAD ROM Patching    - Complete (getsync + readbyte interception)
-[V] Test Suite            - Complete (159 tests, 100% pass)
+[V] HIRES Rendering       - Fixed (attribute detection, bit 7 inversion, $9800 charset)
+[V] HIRES Mode Detection  - Fixed ($26A bit 1, not bit 2)
+[V] Keyboard Automation   - Complete (--type-keys, press_char/release_all API)
+[V] Test Suite            - Complete (147 tests, 100% pass)
 [V] ROM Compatibility     - Validated (ORIC-1 BASIC 1.0 ROM)
 [V] Performance           - Benchmarked (~90+ MHz, target met)
 [V] Static Analysis       - Run (no critical issues)
@@ -42,7 +45,7 @@ Legend: [V] Complete [*] In Progress [ ] Not Started [X] Failed
 
 TEST RESULTS
 ------------
-Unit Tests: 159/159 passed (100%)
+Unit Tests: 147/147 passed (100%)
 Integration Tests: 7/7 passed (100%)
 ROM Compatibility: 12/12 passed (100%)
 Video Export Tests: 11/11 passed (100%)

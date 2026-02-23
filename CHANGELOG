@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0-beta.5] - 2026-02-23
+
+### Fixed - HIRES Rendering & Keyboard Automation (Sprint 16b)
+- **HIRES mode detection**: fixed bit check in $26A (bit 1, not bit 2)
+  ROM HIRES routine writes $03 to $26A; was checking wrong bit
+- **HIRES attribute detection**: use `(byte & 0x60) == 0` instead of `!(byte & 0x40)`
+  Bytes 0x20-0x3F are pixel data, not serial attributes (matches Oricutron ULA)
+- **HIRES bit 7 inversion**: when bit 7 set, ink/paper colors XOR with 7
+  Enables proper rendering of inverted pixel blocks
+- **HIRES charset address**: use $9800 in HIRES mode (not $B400, which is
+  overwritten by HIRES bitmap at $A000-$BF3F)
+
+### Added
+- `oric_keyboard_press_char()`: press a key by ASCII character (for automation)
+- `oric_keyboard_release_all()`: release all keys (clear matrix to 0xFF)
+- `--type-keys CYCLES:TEXT` CLI option: simulate keyboard input at given cycle
+  Supports `\n` for Return, `\pN` for N-second pause
+- Poker game (poker-asn.tap) now renders correctly in HIRES mode
+
+### Changed
+- Refactored keyboard.c: shared `char_map[128]` between SDL and non-SDL builds
+- Version updated to 1.0.0-beta.5
+
 ## [1.0.0-beta.4] - 2026-02-22
 
 ### Added - CLOAD via ROM Patching (Sprint 16a)
