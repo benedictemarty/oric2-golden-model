@@ -20,18 +20,18 @@ typedef struct {
 
     /* Tone generators */
     uint16_t tone_period[3];
-    uint16_t tone_counter[3];
+    uint32_t tone_counter[3];   /* Fractional accumulator for clock rate conversion */
     uint8_t  tone_output[3];
 
     /* Noise generator */
     uint16_t noise_period;
-    uint16_t noise_counter;
+    uint32_t noise_counter;     /* Fractional accumulator for clock rate conversion */
     uint32_t noise_shift;
     uint8_t  noise_output;
 
     /* Envelope */
     uint16_t env_period;
-    uint16_t env_counter;
+    uint32_t env_counter;       /* Fractional accumulator for clock rate conversion */
     uint8_t  env_shape;
     uint8_t  env_step;
     uint8_t  env_volume;
@@ -51,5 +51,10 @@ void ay_write_address(ay3891x_t* ay, uint8_t addr);
 void ay_write_data(ay3891x_t* ay, uint8_t data);
 uint8_t ay_read_data(ay3891x_t* ay);
 void ay_generate(ay3891x_t* ay, int16_t* buffer, int num_samples);
+
+/* Audio output (SDL2 or headless stub) */
+bool audio_init(ay3891x_t* psg);
+void audio_cleanup(void);
+void audio_pause(bool pause);
 
 #endif

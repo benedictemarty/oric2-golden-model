@@ -33,7 +33,7 @@
 #include "hostfs/hostfs.h"
 #include "utils/logging.h"
 
-#define VERSION "1.0.0-beta.8"
+#define VERSION "1.0.0-beta.9"
 #define ORIC_CLOCK_HZ   1000000
 #define ORIC_FRAME_RATE  50
 #define CYCLES_PER_FRAME (ORIC_CLOCK_HZ / ORIC_FRAME_RATE)
@@ -253,10 +253,15 @@ static void io_write_callback(uint16_t address, uint8_t value, void* userdata) {
 
     via_write(&emu->via, reg, value);
 
-    /* Decode PSG bus state when control lines change:
-     * - PCR write changes CA2 (BC1) and/or CB2 (BDIR)
-     * - ORA/ORB writes may trigger PSG operations via handshake modes */
-    if (reg == VIA_PCR || reg == VIA_ORB || reg == VIA_ORA || reg == 0x0F) {
+    /* Decode PSG bus state ONLY when control lines change.
+     * BC1 = CA2, BDIR = CB2, both controlled by PCR bits.
+     * Matching Oricutron: PSG bus decode is triggered only on PCR writes,
+     * NOT on ORB writes (which select keyboard columns) or ORA writes
+     * (which just change data bus). The ROM sequence is:
+     *   1. Write ORA with address/data value
+     *   2. Write PCR to set BDIR/BC1 → PSG operation happens HERE
+     *   3. Write PCR to clear BDIR/BC1 */
+    if (reg == VIA_PCR) {
         psg_decode(emu);
     }
 }
@@ -325,6 +330,13 @@ static bool emulator_init(emulator_t* emu) {
 #endif
     }
 
+    /* Initialize audio output (connects PSG to SDL2 audio callback) */
+    if (!emu->headless) {
+        if (!audio_init(&emu->psg)) {
+            log_warning("Failed to initialize audio output");
+        }
+    }
+
     if (!hostfs_init(&emu->hostfs)) {
         log_error("Failed to initialize host filesystem");
         return false;
@@ -347,6 +359,7 @@ static bool emulator_init(emulator_t* emu) {
 static void emulator_cleanup(emulator_t* emu) {
     log_info("Shutting down emulator");
     if (!emu->headless) {
+        audio_cleanup();
         renderer_cleanup();
     }
     video_cleanup(&emu->video);

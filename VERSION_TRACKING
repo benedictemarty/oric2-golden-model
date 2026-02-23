@@ -1,12 +1,20 @@
 VERSION_TRACKING - ORIC-1 Emulator
 =====================================
 
-Current Version: 1.0.0-beta.8
+Current Version: 1.0.0-beta.9
 Release Date: 2026-02-23
-Status: Beta (Sedoric Boot + Keyboard Working)
+Status: Beta (Sedoric Boot + Keyboard + Audio Working)
 
 Version History:
 ----------------
+- 1.0.0-beta.9 (2026-02-23): Audio Output Integration (Sprint 18a)
+  * Fixed SDL_Init: added SDL_INIT_AUDIO flag
+  * Connected audio_init()/audio_cleanup() to emulation loop
+  * Exported audio API functions in audio.h header
+  * SDL2 audio callback now generates PSG samples
+  * Fixed AY clock rate conversion (62.5KHz → 44.1KHz)
+  * Sound now plays during emulation
+
 - 1.0.0-beta.8 (2026-02-23): Level-Triggered IRQ Model Fix (Sprint 17c)
   * CPU IRQ changed from edge-triggered (bool) to level-triggered (bitfield)
   * VIA IRQ callback handles assertion and deassertion

@@ -152,6 +152,12 @@ host filesystem sharing and conversion tools for legacy BASIC/machine code progr
 - [x] Root cause: old model consumed IRQ flag on service, preventing reassertion
   when VIA IER was re-enabled by ROM code after Sedoric init
 
+### Sprint 18a: Audio Output Integration (v1.0.0-beta.9) - DONE
+- [x] Connect audio_init()/audio_cleanup() to emulation loop
+- [x] Export audio API functions in audio.h header
+- [x] SDL2 audio callback generates PSG samples (44100Hz stereo)
+- [x] Sound now plays during emulation
+
 ### Sprint 18: Release Preparation (v1.0.0) - PLANNED
 - [ ] Complete user guide
 - [ ] Create example programs

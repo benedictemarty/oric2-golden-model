@@ -107,35 +107,55 @@ static uint8_t envelope_volume(uint8_t shape, uint8_t step) {
     return attack ? pos : (15 - pos);
 }
 
+/* Logarithmic volume table from Oricutron (matches real AY-3-8912 DAC curve) */
+static const int32_t voltab[16] = {
+    0, 513/4, 828/4, 1239/4, 1923/4, 3238/4, 4926/4, 9110/4,
+    10344/4, 17876/4, 24682/4, 30442/4, 38844/4, 47270/4, 56402/4, 65535/4
+};
+
 void ay_generate(ay3891x_t* ay, int16_t* buffer, int num_samples) {
     uint8_t mixer = ay->registers[7];
 
+    /* AY-3-8912 clock dividers (matching Oricutron):
+     * - Tone/Noise: master clock / 8  (TONETIME=8, NOISETIME=8)
+     * - Envelope:   master clock / 16 (ENVTIME=16)
+     * This gives fT = fMASTER / (16 * TP) for tone frequency. */
+    uint32_t tone_rate  = ay->clock_rate / 8;   /* 125000 Hz for 1 MHz clock */
+    uint32_t env_rate   = ay->clock_rate / 16;  /* 62500 Hz for 1 MHz clock */
+
     for (int i = 0; i < num_samples; i++) {
-        /* Update tone generators (at clock/16 rate, we step per sample) */
+        /* Update tone generators using fractional accumulator.
+         * Each sample: accumulate tone_rate, toggle when reaching
+         * period * AUDIO_SAMPLE_RATE threshold. */
         for (int ch = 0; ch < 3; ch++) {
-            ay->tone_counter[ch]++;
-            if (ay->tone_counter[ch] >= ay->tone_period[ch]) {
-                ay->tone_counter[ch] = 0;
+            uint32_t period = ay->tone_period[ch];
+            if (period == 0) period = 1;
+            ay->tone_counter[ch] += tone_rate;
+            while (ay->tone_counter[ch] >= period * AUDIO_SAMPLE_RATE) {
+                ay->tone_counter[ch] -= period * AUDIO_SAMPLE_RATE;
                 ay->tone_output[ch] ^= 1;
             }
         }
 
-        /* Update noise */
-        ay->noise_counter++;
-        uint16_t np = ay->noise_period ? ay->noise_period : 1;
-        if (ay->noise_counter >= np) {
-            ay->noise_counter = 0;
-            /* 17-bit LFSR */
-            uint32_t bit = ((ay->noise_shift >> 0) ^ (ay->noise_shift >> 3)) & 1;
-            ay->noise_shift = (ay->noise_shift >> 1) | (bit << 16);
-            ay->noise_output = ay->noise_shift & 1;
+        /* Update noise (same rate as tone) */
+        {
+            uint32_t np = ay->noise_period ? ay->noise_period : 1;
+            ay->noise_counter += tone_rate;
+            while (ay->noise_counter >= np * AUDIO_SAMPLE_RATE) {
+                ay->noise_counter -= np * AUDIO_SAMPLE_RATE;
+                /* 17-bit LFSR */
+                uint32_t bit = ((ay->noise_shift >> 0) ^ (ay->noise_shift >> 3)) & 1;
+                ay->noise_shift = (ay->noise_shift >> 1) | (bit << 16);
+                ay->noise_output = ay->noise_shift & 1;
+            }
         }
 
-        /* Update envelope */
+        /* Update envelope (slower rate: clock/16) */
         if (ay->env_period && !ay->env_holding) {
-            ay->env_counter++;
-            if (ay->env_counter >= ay->env_period) {
-                ay->env_counter = 0;
+            uint32_t ep = (uint32_t)ay->env_period;
+            ay->env_counter += env_rate;
+            while (ay->env_counter >= ep * AUDIO_SAMPLE_RATE) {
+                ay->env_counter -= ep * AUDIO_SAMPLE_RATE;
                 ay->env_step++;
                 if (ay->env_step >= 32) {
                     if ((ay->env_shape & 0x08) && (ay->env_shape & 0x01)) {
@@ -147,20 +167,23 @@ void ay_generate(ay3891x_t* ay, int16_t* buffer, int num_samples) {
         }
         ay->env_volume = envelope_volume(ay->env_shape, ay->env_step);
 
-        /* Mix channels */
+        /* Mix channels (matching Oricutron mixer logic) */
         int32_t output = 0;
         for (int ch = 0; ch < 3; ch++) {
-            bool tone_en = !(mixer & (1 << ch));
-            bool noise_en = !(mixer & (1 << (ch + 3)));
-            bool tone_on = ay->tone_output[ch] || !tone_en;
-            bool noise_on = ay->noise_output || !noise_en;
+            bool tone_dis = (mixer >> ch) & 1;       /* 1 = tone disabled */
+            bool noise_dis = (mixer >> (ch + 3)) & 1; /* 1 = noise disabled */
 
-            if (tone_on && noise_on) {
+            /* Output is high when: (tone output OR tone disabled) AND
+             * (noise output OR noise disabled). Matches Oricutron. */
+            bool out = (ay->tone_output[ch] | tone_dis) &
+                       (ay->noise_output | noise_dis);
+
+            if (out) {
                 uint8_t vol_reg = ay->registers[8 + ch];
-                uint8_t vol;
-                if (vol_reg & 0x10) vol = ay->env_volume;
-                else vol = vol_reg & 0x0F;
-                output += (int32_t)vol * 546; /* Scale to ~16-bit range */
+                uint8_t vol_idx;
+                if (vol_reg & 0x10) vol_idx = ay->env_volume;
+                else vol_idx = vol_reg & 0x0F;
+                output += voltab[vol_idx];
             }
         }
 

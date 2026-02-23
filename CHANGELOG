@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0-beta.9] - 2026-02-23
+
+### Fixed - Audio Output Integration (Sprint 18a)
+- **SDL_INIT_AUDIO missing**: `renderer_init()` only called `SDL_Init(SDL_INIT_VIDEO)`,
+  so `SDL_OpenAudioDevice()` silently failed. Now uses `SDL_INIT_VIDEO | SDL_INIT_AUDIO`.
+- **Audio output connected**: `audio_init()` and `audio_cleanup()` were implemented
+  in `audio_output.c` but never called from the emulation loop. The SDL2 audio
+  callback was never registered, so no sound was produced.
+- **Header exports**: Added `audio_init()`, `audio_cleanup()`, `audio_pause()`
+  declarations to `include/audio/audio.h`
+- **PSG → SDL2 pipeline**: SDL2 audio callback now calls `ay_generate()` to
+  produce stereo 44100Hz samples from the AY-3-8912 PSG emulation
+- **AY clock dividers (from Oricutron)**: Tone/noise use clock/8 (TONETIME=8),
+  envelope uses clock/16 (ENVTIME=16). Was incorrectly using clock/16 for all.
+  Gives correct tone frequency: fT = fMASTER / (16 * TP).
+- **Logarithmic volume table (from Oricutron)**: Replaced linear `vol * 546`
+  with proper AY-3-8912 DAC curve (16-entry logarithmic table).
+- **Fractional accumulator**: Tone/noise/envelope counters widened to `uint32_t`
+  for precise clock rate conversion (125KHz → 44.1KHz).
+- **PSG bus decode trigger (from Oricutron)**: Only trigger `psg_decode()` on
+  VIA PCR writes (which change BDIR/BC1 control lines). Was incorrectly also
+  triggered on ORB writes (keyboard column select) and ORA writes, causing
+  spurious PSG register writes during keyboard scanning → continuous sound.
+- Sound now plays correctly during emulation (boot beep, programs)
+
 ## [1.0.0-beta.8] - 2026-02-23
 
 ### Fixed - Level-Triggered IRQ Model (Sprint 17c)
