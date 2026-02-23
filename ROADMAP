@@ -158,6 +158,13 @@ host filesystem sharing and conversion tools for legacy BASIC/machine code progr
 - [x] SDL2 audio callback generates PSG samples (44100Hz stereo)
 - [x] Sound now plays during emulation
 
+### Sprint 18b: PSG Envelope Fix (v1.0.0-beta.10) - DONE
+- [x] Fix envelope shapes 0-7: single decay/attack played once then silent (was cycling)
+- [x] Fix envelope HOLD shapes (9,11,13,15): hold at final value
+- [x] Fix emulator_init: headless/fast_load fields preserved from CLI args
+- [x] Boot beep and Sedoric ding sound work correctly
+- [x] Root cause: env_step reset to 0 at cycle end instead of holding at 31
+
 ### Sprint 18: Release Preparation (v1.0.0) - PLANNED
 - [ ] Complete user guide
 - [ ] Create example programs

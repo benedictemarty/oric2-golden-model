@@ -33,7 +33,7 @@
 #include "hostfs/hostfs.h"
 #include "utils/logging.h"
 
-#define VERSION "1.0.0-beta.9"
+#define VERSION "1.0.0-beta.10"
 #define ORIC_CLOCK_HZ   1000000
 #define ORIC_FRAME_RATE  50
 #define CYCLES_PER_FRAME (ORIC_CLOCK_HZ / ORIC_FRAME_RATE)
@@ -343,9 +343,7 @@ static bool emulator_init(emulator_t* emu) {
     }
 
     emu->running = true;
-    emu->fast_load = false;
-    emu->headless = false;
-    emu->max_cycles = -1;
+    /* Note: fast_load, headless, max_cycles are set by caller before init */
     emu->screenshot_file = NULL;
     emu->screenshot_at_cycles = -1;
     emu->screenshot_at_file = NULL;

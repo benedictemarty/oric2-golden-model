@@ -1,12 +1,19 @@
 VERSION_TRACKING - ORIC-1 Emulator
 =====================================
 
-Current Version: 1.0.0-beta.9
+Current Version: 1.0.0-beta.10
 Release Date: 2026-02-23
 Status: Beta (Sedoric Boot + Keyboard + Audio Working)
 
 Version History:
 ----------------
+- 1.0.0-beta.10 (2026-02-23): PSG Envelope Fix (Sprint 18b)
+  * Fixed envelope shapes 0-7 cycling: single decay now plays once and holds silent
+  * Envelope shapes with HOLD bit (9,11,13,15) hold at final value
+  * Envelope shapes without HOLD (8,10,12,14) cycle continuously
+  * Fixed emulator_init: headless/fast_load no longer reset after init
+  * Boot beep and Sedoric ding sound correctly (no more continuous sound)
+
 - 1.0.0-beta.9 (2026-02-23): Audio Output Integration (Sprint 18a)
   * Fixed SDL_Init: added SDL_INIT_AUDIO flag
   * Connected audio_init()/audio_cleanup() to emulation loop

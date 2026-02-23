@@ -158,10 +158,19 @@ void ay_generate(ay3891x_t* ay, int16_t* buffer, int num_samples) {
                 ay->env_counter -= ep * AUDIO_SAMPLE_RATE;
                 ay->env_step++;
                 if (ay->env_step >= 32) {
-                    if ((ay->env_shape & 0x08) && (ay->env_shape & 0x01)) {
+                    if (!(ay->env_shape & 0x08)) {
+                        /* Shapes 0-7: single cycle then off.
+                         * Hold at step 31 so envelope_volume returns 0. */
                         ay->env_holding = true;
+                        ay->env_step = 31;
+                    } else if (ay->env_shape & 0x01) {
+                        /* Shapes with HOLD bit (9,11,13,15): hold at final value */
+                        ay->env_holding = true;
+                        ay->env_step &= 0x1F;
+                    } else {
+                        /* Shapes without HOLD (8,10,12,14): cycle continuously */
+                        ay->env_step &= 0x1F;
                     }
-                    ay->env_step = (ay->env_shape & 0x08) ? (ay->env_step & 0x1F) : 0;
                 }
             }
         }

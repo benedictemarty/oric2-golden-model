@@ -2,7 +2,7 @@ CIRRUS_OS - ORIC-1 Emulator Build & Development Status
 ======================================================
 
 Project: ORIC-1 Cycle-Accurate Emulator
-Version: 1.0.0-beta.9
+Version: 1.0.0-beta.10
 Build Status: BETA
 Last Updated: 2026-02-23
 
@@ -39,6 +39,7 @@ BUILD STATUS
 [V] IRQ Model             - Fixed (level-triggered bitfield, matches real 6502)
 [V] Sedoric Keyboard      - Fixed (T1 IRQ reasserts after Sedoric init)
 [V] Audio Output          - Connected (PSG → SDL2 audio callback)
+[V] PSG Envelopes         - Fixed (shapes 0-7 single cycle, HOLD shapes, continuous shapes)
 [V] Test Suite            - Complete (147 tests, 100% pass)
 [V] ROM Compatibility     - Validated (ORIC-1 BASIC 1.0 ROM)
 [V] Performance           - Benchmarked (~90+ MHz, target met)
