@@ -35,6 +35,8 @@ typedef struct {
     bool need_refresh;
     uint8_t* screen_ram;    /* Pointer into memory $BB80 (text) or $A000 (hires) */
     uint8_t* charset;       /* Character set ROM */
+    uint8_t vid_mode;       /* ULA video mode (persistent, set by serial attrs 24-31).
+                             * Bit 2: HIRES when set. Initialized to 2 (TEXT/PAL50). */
 } video_t;
 
 bool video_init(video_t* vid);

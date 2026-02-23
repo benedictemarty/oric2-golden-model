@@ -2,8 +2,12 @@
  * @file video.c
  * @brief ORIC-1 video system - text mode 40x28 + HIRES 240x200
  * @author bmarty <bmarty@mailo.com>
- * @date 2026-02-22
- * @version 1.0.0-beta.2
+ * @date 2026-02-23
+ * @version 1.0.0-beta.5
+ *
+ * Video mode is tracked via vid_mode (persistent across frames),
+ * set by serial attributes 24-31 in video data.
+ * This matches Oricutron's ULA behavior.
  */
 
 #include "video/video.h"
@@ -18,6 +22,7 @@ bool video_init(video_t* vid) {
     memset(vid, 0, sizeof(video_t));
     vid->hires_mode = false;
     vid->need_refresh = true;
+    vid->vid_mode = 0x02;  /* Powerup default: TEXT, PAL50 (same as Oricutron) */
     return true;
 }
 
@@ -26,6 +31,7 @@ void video_cleanup(video_t* vid) { (void)vid; }
 void video_reset(video_t* vid) {
     vid->hires_mode = false;
     vid->need_refresh = true;
+    vid->vid_mode = 0x02;
     memset(vid->framebuffer, 0, sizeof(vid->framebuffer));
 }
 
@@ -49,12 +55,8 @@ static void set_pixel(video_t* vid, int x, int y, uint8_t r, uint8_t g, uint8_t 
  * Get charset byte from RAM.
  *
  * ORIC charset addresses:
- *   TEXT mode:  $B400-$B7FF (standard charset, 128 chars × 8 bytes)
+ *   TEXT mode:  $B400-$B7FF (standard charset, 128 chars x 8 bytes)
  *   HIRES mode: $9800-$9BFF (charset relocated because $B400 is in HIRES bitmap)
- *
- * Characters with bit 7 set (128-255) use the alternate charset:
- *   TEXT mode:  $B800-$BBFF
- *   HIRES mode: $9C00-$9FFF
  */
 static uint8_t get_charset_byte(video_t* vid, uint8_t* mem, int char_idx, int row) {
     if (vid->charset) return vid->charset[char_idx * 8 + row];
@@ -62,124 +64,185 @@ static uint8_t get_charset_byte(video_t* vid, uint8_t* mem, int char_idx, int ro
     return mem[base + char_idx * 8 + row];
 }
 
-static void render_text(video_t* vid, uint8_t* mem) {
-    for (int row = 0; row < ORIC_TEXT_ROWS; row++) {
+/**
+ * Decode a serial attribute (bits 6+5 both zero) and update ULA state.
+ * Returns true if the attribute changed the video mode.
+ */
+static bool decode_attr(video_t* vid, uint8_t attr,
+                        uint8_t* ink, uint8_t* paper, bool* inverse) {
+    uint8_t val = attr & 0x1F;
+    switch (val & 0x18) {
+        case 0x00: *ink = val & 0x07; break;       /* 0-7: foreground */
+        case 0x08: break;                           /* 8-15: text attrs (charset, blink) */
+        case 0x10: *paper = val & 0x07; break;      /* 16-23: background */
+        case 0x18:                                   /* 24-31: video mode */
+            vid->vid_mode = val & 0x07;
+            return true;
+    }
+    /* Also handle inverse for text-like rendering */
+    if (val == 28 && inverse) *inverse = false;
+    if (val == 29 && inverse) *inverse = true;
+    return false;
+}
+
+/**
+ * Render a single pixel block (6 pixels) for a HIRES data byte.
+ */
+static void render_hires_block(video_t* vid, int x, int y,
+                               uint8_t byte, uint8_t ink, uint8_t paper) {
+    bool inv = (byte & 0x80) != 0;
+    uint8_t fg = inv ? (ink ^ 7) : ink;
+    uint8_t bg = inv ? (paper ^ 7) : paper;
+    uint8_t ir, ig, ib, pr, pg, pb;
+    video_get_rgb(fg, &ir, &ig, &ib);
+    video_get_rgb(bg, &pr, &pg, &pb);
+    for (int bx = 5; bx >= 0; bx--) {
+        if (byte & (1 << bx))
+            set_pixel(vid, x + (5 - bx), y, ir, ig, ib);
+        else
+            set_pixel(vid, x + (5 - bx), y, pr, pg, pb);
+    }
+}
+
+/**
+ * Render a single text character block (6x8 pixels).
+ */
+static void render_text_char(video_t* vid, uint8_t* mem, int x, int sy,
+                             uint8_t byte, uint8_t ink, uint8_t paper, bool inverse) {
+    uint8_t fg = inverse ? paper : ink;
+    uint8_t bg = inverse ? ink : paper;
+    uint8_t ir, ig, ib, pr, pg, pb;
+    video_get_rgb(fg, &ir, &ig, &ib);
+    video_get_rgb(bg, &pr, &pg, &pb);
+    for (int cy = 0; cy < 8; cy++) {
+        uint8_t bits = get_charset_byte(vid, mem, byte & 0x7F, cy);
+        bool char_inv = (byte & 0x80) != 0;
+        for (int bx = 5; bx >= 0; bx--) {
+            bool on = (bits & (1 << bx)) != 0;
+            if (char_inv) on = !on;
+            if (on) set_pixel(vid, x + (5 - bx), sy + cy, ir, ig, ib);
+            else    set_pixel(vid, x + (5 - bx), sy + cy, pr, pg, pb);
+        }
+    }
+}
+
+/**
+ * Render an attribute block (6 pixels wide, filled with paper color).
+ * For text mode, renders 6x8; for HIRES, renders 6x1.
+ */
+static void render_attr_block(video_t* vid, int x, int y,
+                              uint8_t paper, int height) {
+    uint8_t pr, pg, pb;
+    video_get_rgb(paper, &pr, &pg, &pb);
+    for (int cy = 0; cy < height; cy++)
+        for (int bx = 0; bx < 6; bx++)
+            set_pixel(vid, x + bx, y + cy, pr, pg, pb);
+}
+
+/**
+ * Render the full frame, line by line.
+ *
+ * ULA behavior (matching Oricutron):
+ * - vid_mode persists across frames, set by serial attributes 24-31
+ * - At start of each scanline: reset ink=white, paper=black
+ * - Lines 0-199: if vid_mode & 4 → HIRES (read $A000+y*40), else TEXT ($BB80)
+ * - Lines 200-223: always TEXT from $BB80 (rows 25-27)
+ * - Serial attributes can change vid_mode mid-frame
+ */
+void video_render_frame(video_t* vid, uint8_t* memory) {
+    if (!memory) return;
+
+    /* Render lines 0-199: HIRES or TEXT depending on vid_mode */
+    for (int y = 0; y < 200; y++) {
         uint8_t ink = ORIC_WHITE, paper = ORIC_BLACK;
-        bool inverse = false;
-        for (int col = 0; col < ORIC_TEXT_COLS; col++) {
-            uint8_t byte = mem[0xBB80 + row * 40 + col];
-            if (byte < 32) {
-                if (byte < 8) ink = byte;
-                else if (byte >= 16 && byte < 24) paper = byte - 16;
-                else if (byte == 28) inverse = false;
-                else if (byte == 29) inverse = true;
-                uint8_t pr, pg, pb;
-                video_get_rgb(paper, &pr, &pg, &pb);
-                for (int cy = 0; cy < 8; cy++)
-                    for (int bx = 0; bx < 6; bx++)
-                        set_pixel(vid, col*6+bx, row*8+cy, pr, pg, pb);
-            } else {
-                uint8_t fg = inverse ? paper : ink;
-                uint8_t bg = inverse ? ink : paper;
-                uint8_t ir, ig, ib, pr, pg, pb;
-                video_get_rgb(fg, &ir, &ig, &ib);
-                video_get_rgb(bg, &pr, &pg, &pb);
-                for (int cy = 0; cy < 8; cy++) {
-                    uint8_t bits = get_charset_byte(vid, mem, byte & 0x7F, cy);
+        bool hires = (vid->vid_mode & 0x04) != 0;
+
+        if (hires) {
+            /* HIRES mode: read pixel data from $A000 + y*40 */
+            for (int col = 0; col < 40; col++) {
+                uint8_t byte = memory[0xA000 + y * 40 + col];
+                if ((byte & 0x60) == 0) {
+                    /* Serial attribute */
+                    decode_attr(vid, byte, &ink, &paper, NULL);
+                    hires = (vid->vid_mode & 0x04) != 0;
+                    render_attr_block(vid, col * 6, y, paper, 1);
+                } else {
+                    render_hires_block(vid, col * 6, y, byte, ink, paper);
+                }
+            }
+        } else {
+            /* TEXT mode: read character from $BB80 + (y/8)*40 */
+            int row = y / 8;
+            int chline = y & 7;
+            for (int col = 0; col < 40; col++) {
+                uint8_t byte = memory[0xBB80 + row * 40 + col];
+                if ((byte & 0x60) == 0) {
+                    /* Serial attribute */
+                    bool inverse = false;
+                    decode_attr(vid, byte, &ink, &paper, &inverse);
+                    if (vid->vid_mode & 0x04) {
+                        /* Mode switched to HIRES mid-line */
+                        hires = true;
+                        render_attr_block(vid, col * 6, y, paper, 1);
+                        /* Continue rest of line as HIRES from current position */
+                        for (col++; col < 40; col++) {
+                            byte = memory[0xA000 + y * 40 + col];
+                            if ((byte & 0x60) == 0) {
+                                decode_attr(vid, byte, &ink, &paper, NULL);
+                                render_attr_block(vid, col * 6, y, paper, 1);
+                            } else {
+                                render_hires_block(vid, col * 6, y, byte, ink, paper);
+                            }
+                        }
+                        break;
+                    }
+                    uint8_t pr, pg, pb;
+                    video_get_rgb(paper, &pr, &pg, &pb);
+                    set_pixel(vid, col * 6 + 0, y, pr, pg, pb);
+                    set_pixel(vid, col * 6 + 1, y, pr, pg, pb);
+                    set_pixel(vid, col * 6 + 2, y, pr, pg, pb);
+                    set_pixel(vid, col * 6 + 3, y, pr, pg, pb);
+                    set_pixel(vid, col * 6 + 4, y, pr, pg, pb);
+                    set_pixel(vid, col * 6 + 5, y, pr, pg, pb);
+                } else {
+                    bool inverse = false;
+                    uint8_t fg = inverse ? paper : ink;
+                    uint8_t bg = inverse ? ink : paper;
+                    uint8_t ir, ig, ib, pr, pg, pb;
+                    video_get_rgb(fg, &ir, &ig, &ib);
+                    video_get_rgb(bg, &pr, &pg, &pb);
+                    uint8_t bits = get_charset_byte(vid, memory, byte & 0x7F, chline);
                     bool char_inv = (byte & 0x80) != 0;
                     for (int bx = 5; bx >= 0; bx--) {
                         bool on = (bits & (1 << bx)) != 0;
                         if (char_inv) on = !on;
-                        if (on) set_pixel(vid, col*6+(5-bx), row*8+cy, ir, ig, ib);
-                        else    set_pixel(vid, col*6+(5-bx), row*8+cy, pr, pg, pb);
+                        if (on) set_pixel(vid, col * 6 + (5 - bx), y, ir, ig, ib);
+                        else    set_pixel(vid, col * 6 + (5 - bx), y, pr, pg, pb);
                     }
                 }
             }
         }
     }
-}
 
-static void render_hires(video_t* vid, uint8_t* mem) {
-    for (int y = 0; y < 200; y++) {
-        uint8_t ink = ORIC_WHITE, paper = ORIC_BLACK;
-        for (int col = 0; col < 40; col++) {
-            uint8_t byte = mem[0xA000 + y*40 + col];
-            /* Serial attribute: bits 6 AND 5 both zero (values 0-31) */
-            if ((byte & 0x60) == 0) {
-                uint8_t attr = byte & 0x1F;
-                switch (attr & 0x18) {
-                    case 0x00: ink = attr & 0x07; break;     /* 0-7: foreground */
-                    case 0x08: break;                         /* 8-15: text attrs */
-                    case 0x10: paper = attr & 0x07; break;   /* 16-23: background */
-                    case 0x18: break;                         /* 24-31: video mode */
-                }
-                uint8_t pr, pg, pb;
-                video_get_rgb(paper, &pr, &pg, &pb);
-                for (int bx = 0; bx < 6; bx++)
-                    set_pixel(vid, col*6+bx, y, pr, pg, pb);
-            } else {
-                /* Pixel data: bit 7 inverts colors */
-                bool inv = (byte & 0x80) != 0;
-                uint8_t fg = inv ? (ink ^ 7) : ink;
-                uint8_t bg = inv ? (paper ^ 7) : paper;
-                uint8_t ir, ig, ib, pr, pg, pb;
-                video_get_rgb(fg, &ir, &ig, &ib);
-                video_get_rgb(bg, &pr, &pg, &pb);
-                for (int bx = 5; bx >= 0; bx--) {
-                    if (byte & (1 << bx))
-                        set_pixel(vid, col*6+(5-bx), y, ir, ig, ib);
-                    else
-                        set_pixel(vid, col*6+(5-bx), y, pr, pg, pb);
-                }
-            }
-        }
-    }
-    /* Bottom 3 text rows (rows 25-27): rendered with serial attributes like text mode */
+    /* Update hires_mode flag for charset address selection */
+    vid->hires_mode = (vid->vid_mode & 0x04) != 0;
+
+    /* Lines 200-223: always TEXT from $BB80 (rows 25-27) */
     for (int row = 25; row < 28; row++) {
         uint8_t ink = ORIC_WHITE, paper = ORIC_BLACK;
         bool inverse = false;
         for (int col = 0; col < 40; col++) {
-            uint8_t byte = mem[0xBB80 + row*40 + col];
+            uint8_t byte = memory[0xBB80 + row * 40 + col];
             int sy = 200 + (row - 25) * 8;
-            if (byte < 32) {
-                /* Serial attribute */
-                if (byte < 8) ink = byte;
-                else if (byte >= 16 && byte < 24) paper = byte - 16;
-                else if (byte == 28) inverse = false;
-                else if (byte == 29) inverse = true;
-                uint8_t pr, pg, pb;
-                video_get_rgb(paper, &pr, &pg, &pb);
-                for (int cy = 0; cy < 8; cy++)
-                    for (int bx = 0; bx < 6; bx++)
-                        set_pixel(vid, col*6+bx, sy+cy, pr, pg, pb);
+            if ((byte & 0x60) == 0) {
+                decode_attr(vid, byte, &ink, &paper, &inverse);
+                render_attr_block(vid, col * 6, sy, paper, 8);
             } else {
-                uint8_t fg = inverse ? paper : ink;
-                uint8_t bg = inverse ? ink : paper;
-                uint8_t ir, ig, ib, pr, pg, pb;
-                video_get_rgb(fg, &ir, &ig, &ib);
-                video_get_rgb(bg, &pr, &pg, &pb);
-                for (int cy = 0; cy < 8; cy++) {
-                    uint8_t bits = get_charset_byte(vid, mem, byte & 0x7F, cy);
-                    bool char_inv = (byte & 0x80) != 0;
-                    for (int bx = 5; bx >= 0; bx--) {
-                        bool on = (bits & (1 << bx)) != 0;
-                        if (char_inv) on = !on;
-                        if (on) set_pixel(vid, col*6+(5-bx), sy+cy, ir, ig, ib);
-                        else    set_pixel(vid, col*6+(5-bx), sy+cy, pr, pg, pb);
-                    }
-                }
+                render_text_char(vid, memory, col * 6, sy,
+                                 byte, ink, paper, inverse);
             }
         }
     }
-}
 
-void video_render_frame(video_t* vid, uint8_t* memory) {
-    if (!memory) return;
-    /* Auto-detect video mode from system variable $26A (HTEFLAG):
-     * bit 1 set = HIRES mode, clear = TEXT mode.
-     * ROM HIRES routine writes $03 (bits 0+1) to $26A. */
-    vid->hires_mode = (memory[0x26A] & 0x02) != 0;
-    if (vid->hires_mode) render_hires(vid, memory);
-    else render_text(vid, memory);
     vid->need_refresh = false;
 }
