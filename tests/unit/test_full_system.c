@@ -56,7 +56,8 @@ static void sys_io_write(uint16_t addr, uint8_t val, void* ud) {
 
 static void sys_irq_cb(bool state, void* ud) {
     test_system_t* sys = (test_system_t*)ud;
-    if (state) cpu_irq(&sys->cpu);
+    if (state) cpu_irq_set(&sys->cpu, IRQF_VIA);
+    else cpu_irq_clear(&sys->cpu, IRQF_VIA);
 }
 
 static void sys_init(test_system_t* sys) {

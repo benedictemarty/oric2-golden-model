@@ -2,7 +2,7 @@ CIRRUS_OS - ORIC-1 Emulator Build & Development Status
 ======================================================
 
 Project: ORIC-1 Cycle-Accurate Emulator
-Version: 1.0.0-beta.7
+Version: 1.0.0-beta.8
 Build Status: BETA
 Last Updated: 2026-02-23
 
@@ -36,6 +36,8 @@ BUILD STATUS
 [V] Microdisc Controller  - Complete (I/O $0310-$031F, overlay ROM, IRQ routing)
 [V] Disk Boot (Sedoric)   - Working (-d .dsk + --disk-rom microdis.rom, boots to SEDORIC V4.0)
 [V] RAM Init Pattern      - Fixed (Oricutron-compatible: 128x00+128xFF per page)
+[V] IRQ Model             - Fixed (level-triggered bitfield, matches real 6502)
+[V] Sedoric Keyboard      - Fixed (T1 IRQ reasserts after Sedoric init)
 [V] Test Suite            - Complete (147 tests, 100% pass)
 [V] ROM Compatibility     - Validated (ORIC-1 BASIC 1.0 ROM)
 [V] Performance           - Benchmarked (~90+ MHz, target met)

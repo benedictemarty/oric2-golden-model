@@ -5,6 +5,36 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0-beta.8] - 2026-02-23
+
+### Fixed - Level-Triggered IRQ Model (Sprint 17c)
+- **CPU IRQ architecture**: Changed from edge-triggered (boolean `irq_pending`)
+  to level-triggered (bitfield `irq` with source flags `IRQF_VIA`, `IRQF_DISK`).
+  This matches the real 6502 hardware and Oricutron's implementation.
+- **VIA IRQ callback**: Now handles both assertion (state=true) and deassertion
+  (state=false), properly setting/clearing the IRQF_VIA bit.
+- **Microdisc IRQ clear**: `microdisc_cpu_irq_clr()` now properly clears the
+  IRQF_DISK bit instead of being a no-op.
+- **Root cause fix**: After Sedoric boot, the VIA T1 timer interrupt was never
+  re-enabled because the old edge-triggered model consumed the IRQ flag during
+  the first interrupt service and could not reassert it when VIA IER was later
+  re-enabled by the ROM code. With the level-triggered model, the VIA callback
+  continuously drives the IRQ line based on `(IFR & IER)` state, allowing the
+  keyboard scanner (100Hz T1 interrupt) to work correctly after Sedoric init.
+- **Keyboard now works after Sedoric boot**: The T1 timer IRQ properly fires
+  for keyboard matrix scanning after Sedoric initialization completes.
+
+### Added
+- `cpu_irq_set(cpu, source)` / `cpu_irq_clear(cpu, source)` API functions
+- `cpu_irq_source_t` enum: IRQF_VIA, IRQF_DISK
+- `cpu_irq()` retained as legacy wrapper (sets IRQF_VIA)
+
+### Changed
+- `cpu6502_t.irq_pending` (bool) replaced by `cpu6502_t.irq` (uint8_t bitfield)
+- `handle_irq()` no longer clears `irq` (source must deassert via callback)
+- All test VIA IRQ callbacks updated to use `cpu_irq_set`/`cpu_irq_clear`
+- Version updated to 1.0.0-beta.8
+
 ## [1.0.0-beta.7] - 2026-02-23
 
 ### Fixed - RAM Initialization for Sedoric Boot (Sprint 17b)

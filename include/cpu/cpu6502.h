@@ -31,6 +31,18 @@ typedef enum {
 } cpu_flags_t;
 
 /**
+ * @brief IRQ source flags (bitfield for level-triggered IRQ model)
+ *
+ * The real 6502 IRQ line is level-triggered: the CPU takes an interrupt
+ * whenever IRQ is asserted AND the I flag is clear. Multiple sources
+ * can assert IRQ simultaneously. Each source sets/clears its own bit.
+ */
+typedef enum {
+    IRQF_VIA  = 0x01,  /**< VIA 6522 IRQ (T1 timer, CB1/CB2, etc.) */
+    IRQF_DISK = 0x02   /**< Microdisc FDC INTRQ */
+} cpu_irq_source_t;
+
+/**
  * @brief CPU state structure
  */
 typedef struct {
@@ -46,7 +58,7 @@ typedef struct {
 
     bool     halted;        /**< CPU halted flag */
     bool     nmi_pending;   /**< Non-Maskable Interrupt pending */
-    bool     irq_pending;   /**< Interrupt Request pending */
+    uint8_t  irq;           /**< IRQ source bitfield (level-triggered) */
 
     void*    memory;        /**< Pointer to memory subsystem */
 } cpu6502_t;
@@ -110,9 +122,32 @@ int cpu_execute_cycles(cpu6502_t* cpu, int cycles);
 void cpu_nmi(cpu6502_t* cpu);
 
 /**
- * @brief Trigger IRQ (Interrupt Request)
+ * @brief Assert IRQ source (level-triggered)
+ *
+ * Sets the specified IRQ source bit. The CPU will take an interrupt
+ * whenever any IRQ bit is set and the I flag is clear.
  *
  * @param cpu Pointer to CPU structure
+ * @param source IRQ source flag (IRQF_VIA, IRQF_DISK, etc.)
+ */
+void cpu_irq_set(cpu6502_t* cpu, cpu_irq_source_t source);
+
+/**
+ * @brief Deassert IRQ source (level-triggered)
+ *
+ * Clears the specified IRQ source bit. If no other IRQ sources
+ * remain asserted, the CPU will not take further interrupts.
+ *
+ * @param cpu Pointer to CPU structure
+ * @param source IRQ source flag to clear
+ */
+void cpu_irq_clear(cpu6502_t* cpu, cpu_irq_source_t source);
+
+/**
+ * @brief Trigger IRQ (legacy edge-triggered, deprecated)
+ *
+ * @param cpu Pointer to CPU structure
+ * @deprecated Use cpu_irq_set() / cpu_irq_clear() instead
  */
 void cpu_irq(cpu6502_t* cpu);
 

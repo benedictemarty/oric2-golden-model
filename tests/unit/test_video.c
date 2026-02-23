@@ -353,7 +353,8 @@ static void vt_io_write(uint16_t addr, uint8_t val, void* ud) {
 
 static void vt_irq_cb(bool state, void* ud) {
     video_test_system_t* sys = (video_test_system_t*)ud;
-    if (state) cpu_irq(&sys->cpu);
+    if (state) cpu_irq_set(&sys->cpu, IRQF_VIA);
+    else cpu_irq_clear(&sys->cpu, IRQF_VIA);
 }
 
 TEST(test_rom_boot_screenshot) {

@@ -78,7 +78,8 @@ static void rom_io_write(uint16_t addr, uint8_t val, void* ud) {
 
 static void rom_irq_cb(bool state, void* ud) {
     rom_test_system_t* sys = (rom_test_system_t*)ud;
-    if (state) cpu_irq(&sys->cpu);
+    if (state) cpu_irq_set(&sys->cpu, IRQF_VIA);
+    else cpu_irq_clear(&sys->cpu, IRQF_VIA);
 }
 
 /* Memory write trace to count screen writes */

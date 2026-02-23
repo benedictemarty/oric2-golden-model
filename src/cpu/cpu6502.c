@@ -25,7 +25,7 @@ void cpu_reset(cpu6502_t* cpu) {
     cpu->cycles = 0;
     cpu->halted = false;
     cpu->nmi_pending = false;
-    cpu->irq_pending = false;
+    cpu->irq = 0;
 }
 
 static void handle_nmi(cpu6502_t* cpu) {
@@ -42,7 +42,9 @@ static void handle_irq(cpu6502_t* cpu) {
     cpu_push(cpu, (cpu->P & ~FLAG_BREAK) | FLAG_UNUSED);
     cpu_set_flag(cpu, FLAG_INTERRUPT, true);
     cpu->PC = cpu_mem_read(cpu, 0xFFFE) | ((uint16_t)cpu_mem_read(cpu, 0xFFFF) << 8);
-    cpu->irq_pending = false;
+    /* Level-triggered: do NOT clear cpu->irq here.
+     * The I flag prevents re-entry. The source must deassert
+     * its IRQ bit when the CPU acknowledges it (e.g. reading VIA IFR). */
     cpu->cycles += 7;
 }
 
@@ -54,7 +56,7 @@ int cpu_step(cpu6502_t* cpu) {
         handle_nmi(cpu);
         return 7;
     }
-    if (cpu->irq_pending && !cpu_get_flag(cpu, FLAG_INTERRUPT)) {
+    if (cpu->irq && !cpu_get_flag(cpu, FLAG_INTERRUPT)) {
         handle_irq(cpu);
         return 7;
     }
@@ -81,8 +83,17 @@ void cpu_nmi(cpu6502_t* cpu) {
     cpu->nmi_pending = true;
 }
 
+void cpu_irq_set(cpu6502_t* cpu, cpu_irq_source_t source) {
+    cpu->irq |= (uint8_t)source;
+}
+
+void cpu_irq_clear(cpu6502_t* cpu, cpu_irq_source_t source) {
+    cpu->irq &= ~(uint8_t)source;
+}
+
 void cpu_irq(cpu6502_t* cpu) {
-    cpu->irq_pending = true;
+    /* Legacy: assert VIA IRQ source for backward compatibility */
+    cpu->irq |= IRQF_VIA;
 }
 
 void cpu_set_flag(cpu6502_t* cpu, cpu_flags_t flag, bool value) {

@@ -143,6 +143,15 @@ host filesystem sharing and conversion tools for legacy BASIC/machine code progr
 - [x] Boot completes to "SEDORIC V4.0" prompt
 - [x] Root cause: Sedoric boot checksum at $B932 needs non-zero upper_ram
 
+### Sprint 17c: Level-Triggered IRQ Fix (v1.0.0-beta.8) - DONE
+- [x] Fix CPU IRQ model: edge-triggered boolean → level-triggered bitfield
+- [x] New API: cpu_irq_set()/cpu_irq_clear() with IRQF_VIA/IRQF_DISK sources
+- [x] VIA IRQ callback handles both assertion and deassertion
+- [x] Microdisc IRQ clear now functional (was no-op)
+- [x] Keyboard works after Sedoric boot (T1 timer IRQ reasserts correctly)
+- [x] Root cause: old model consumed IRQ flag on service, preventing reassertion
+  when VIA IER was re-enabled by ROM code after Sedoric init
+
 ### Sprint 18: Release Preparation (v1.0.0) - PLANNED
 - [ ] Complete user guide
 - [ ] Create example programs

@@ -33,7 +33,7 @@
 #include "hostfs/hostfs.h"
 #include "utils/logging.h"
 
-#define VERSION "1.0.0-beta.7"
+#define VERSION "1.0.0-beta.8"
 #define ORIC_CLOCK_HZ   1000000
 #define ORIC_FRAME_RATE  50
 #define CYCLES_PER_FRAME (ORIC_CLOCK_HZ / ORIC_FRAME_RATE)
@@ -73,6 +73,7 @@ static void print_usage(const char* program_name) {
     printf("      --frame-dump-interval N  Dump every Nth frame (default: 50)\n");
     printf("  -k, --keyboard LAYOUT      Keyboard layout: qwerty (default) or azerty\n");
     printf("      --type-keys C:TEXT     Auto-type TEXT after C cycles (\\n=Return, \\pN=pause N sec)\n");
+    printf("  -b, --breakpoint ADDR      Break when PC reaches address (hex, e.g. ED8A)\n");
     printf("  -?, --help                 Show this help\n");
     printf("\n");
     printf("Controls:\n");
@@ -128,6 +129,9 @@ typedef struct {
     int type_keys_idx;             /* Current character index */
     int64_t type_keys_next_cycle;  /* Next cycle to type a char */
     bool type_keys_done;           /* All characters typed */
+
+    /* Breakpoint */
+    int32_t breakpoint;            /* PC address to break at (-1 = none) */
 } emulator_t;
 
 /* I/O callback: route VIA and Microdisc register access */
@@ -257,24 +261,25 @@ static void io_write_callback(uint16_t address, uint8_t value, void* userdata) {
     }
 }
 
-/* VIA IRQ callback */
+/* VIA IRQ callback - level-triggered: set/clear VIA IRQ source bit */
 static void irq_callback(bool state, void* userdata) {
     emulator_t* emu = (emulator_t*)userdata;
     if (state) {
-        cpu_irq(&emu->cpu);
+        cpu_irq_set(&emu->cpu, IRQF_VIA);
+    } else {
+        cpu_irq_clear(&emu->cpu, IRQF_VIA);
     }
 }
 
-/* Microdisc CPU IRQ callbacks */
+/* Microdisc CPU IRQ callbacks - level-triggered: set/clear DISK IRQ source bit */
 static void microdisc_cpu_irq_set(void* userdata) {
     emulator_t* emu = (emulator_t*)userdata;
-    cpu_irq(&emu->cpu);
+    cpu_irq_set(&emu->cpu, IRQF_DISK);
 }
 
 static void microdisc_cpu_irq_clr(void* userdata) {
-    (void)userdata;
-    /* IRQ clear - 6502 IRQ is level-triggered, will be cleared
-     * when the source is acknowledged */
+    emulator_t* emu = (emulator_t*)userdata;
+    cpu_irq_clear(&emu->cpu, IRQF_DISK);
 }
 
 static bool emulator_init(emulator_t* emu) {
@@ -467,6 +472,29 @@ static void emulator_run(emulator_t* emu) {
         /* Execute one frame worth of CPU cycles */
         int frame_cycles = 0;
         while (frame_cycles < CYCLES_PER_FRAME && !emu->cpu.halted) {
+            /* Breakpoint check */
+            if (emu->breakpoint >= 0 && emu->cpu.PC == (uint16_t)emu->breakpoint) {
+                printf("\n*** BREAKPOINT at $%04X ***\n", emu->cpu.PC);
+                printf("PC=$%04X A=%02X X=%02X Y=%02X SP=%02X P=%02X\n",
+                       emu->cpu.PC, emu->cpu.A, emu->cpu.X, emu->cpu.Y,
+                       emu->cpu.SP, emu->cpu.P);
+                printf("Cycles: %llu\n", (unsigned long long)(total_executed + frame_cycles));
+                /* Dump surrounding memory */
+                printf("Memory at PC:\n");
+                for (int i = 0; i < 32; i++) {
+                    if (i % 16 == 0) printf("  $%04X: ", (uint16_t)(emu->cpu.PC + i));
+                    printf("%02X ", memory_read(&emu->memory, (uint16_t)(emu->cpu.PC + i)));
+                    if (i % 16 == 15) printf("\n");
+                }
+                printf("Stack ($01%02X-$01FF):\n  ", emu->cpu.SP);
+                for (int i = emu->cpu.SP + 1; i <= 0xFF && i < emu->cpu.SP + 17; i++) {
+                    printf("%02X ", memory_read(&emu->memory, (uint16_t)(0x0100 + i)));
+                }
+                printf("\n");
+                emu->running = false;
+                break;
+            }
+
             tape_patches(emu);
             int step = cpu_step(&emu->cpu);
             frame_cycles += step;
@@ -617,6 +645,7 @@ static void emulator_run(emulator_t* emu) {
 int main(int argc, char* argv[]) {
     emulator_t emu;
     memset(&emu, 0, sizeof(emu));
+    emu.breakpoint = -1;
 
     const char* tape_file = NULL;
     const char* disk_files[MICRODISC_MAX_DRIVES] = {NULL, NULL, NULL, NULL};
@@ -636,7 +665,7 @@ int main(int argc, char* argv[]) {
     const char* disk_rom_file = NULL;
 
     /* Long option codes for options without short equivalents */
-    enum { OPT_SCREENSHOT = 256, OPT_SCREENSHOT_AT, OPT_FRAME_DUMP, OPT_FRAME_DUMP_INTERVAL, OPT_TYPE_KEYS, OPT_DISK_ROM, OPT_DISK1, OPT_DISK2, OPT_DISK3 };
+    enum { OPT_SCREENSHOT = 256, OPT_SCREENSHOT_AT, OPT_FRAME_DUMP, OPT_FRAME_DUMP_INTERVAL, OPT_TYPE_KEYS, OPT_DISK_ROM, OPT_DISK1, OPT_DISK2, OPT_DISK3, OPT_BREAKPOINT };
 
     static struct option long_options[] = {
         {"tape",                required_argument, 0, 't'},
@@ -657,6 +686,7 @@ int main(int argc, char* argv[]) {
         {"keyboard",            required_argument, 0, 'k'},
         {"type-keys",           required_argument, 0, OPT_TYPE_KEYS},
         {"disk-rom",            required_argument, 0, OPT_DISK_ROM},
+        {"breakpoint",          required_argument, 0, 'b'},
         {"help",                no_argument,       0, '?'},
         {0, 0, 0, 0}
     };
@@ -664,7 +694,7 @@ int main(int argc, char* argv[]) {
     int opt;
     int option_index = 0;
 
-    while ((opt = getopt_long(argc, argv, "t:d:r:h:fnc:vk:?", long_options, &option_index)) != -1) {
+    while ((opt = getopt_long(argc, argv, "t:d:r:h:fnc:vk:b:?", long_options, &option_index)) != -1) {
         switch (opt) {
             case 't': tape_file = optarg; break;
             case 'd': disk_files[0] = optarg; break;
@@ -684,6 +714,7 @@ int main(int argc, char* argv[]) {
             case 'k': keyboard_layout = optarg; break;
             case OPT_TYPE_KEYS: type_keys_arg = optarg; break;
             case OPT_DISK_ROM: disk_rom_file = optarg; break;
+            case 'b': emu.breakpoint = (int32_t)strtol(optarg, NULL, 16); break;
             case '?':
             default:
                 print_usage(argv[0]);

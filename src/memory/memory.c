@@ -108,11 +108,19 @@ uint8_t memory_read(memory_t* mem, uint16_t address) {
         return val;
     }
 
-    /* ROM area: $C000-$FFFF */
+    /* ROM area: $C000-$FFFF
+     *
+     * Microdisc memory map (matching Oricutron):
+     * | romdis | diskrom | $C000-$DFFF | $E000-$FFFF      |
+     * |--------|---------|-------------|-------------------|
+     * | false  | any     | BASIC ROM   | BASIC ROM         |
+     * | true   | true    | RAM         | microdis.rom      |
+     * | true   | false   | RAM         | RAM               |
+     */
     if (mem->basic_rom_disabled) {
-        /* Microdisc mode: BASIC ROM is disabled */
+        /* Microdisc mode: BASIC ROM is disabled (romdis=true) */
         if (mem->overlay_active && mem->overlay_rom && address >= 0xE000) {
-            /* Overlay ROM (microdis.rom) mapped at $E000-$FFFF */
+            /* diskrom=true: overlay ROM (microdis.rom) at $E000-$FFFF */
             uint16_t rom_offset = address - 0xE000;
             if (rom_offset < mem->overlay_rom_size) {
                 val = mem->overlay_rom[rom_offset];
@@ -120,11 +128,11 @@ uint8_t memory_read(memory_t* mem, uint16_t address) {
                 val = mem->upper_ram[address - 0xC000];
             }
         } else {
-            /* RAM visible at $C000-$FFFF */
+            /* diskrom=false or $C000-$DFFF: RAM */
             val = mem->upper_ram[address - 0xC000];
         }
     } else {
-        /* Normal mode: ROM at $C000-$FFFF */
+        /* Normal mode: BASIC ROM at $C000-$FFFF */
         val = mem->rom[address - 0xC000];
     }
 
