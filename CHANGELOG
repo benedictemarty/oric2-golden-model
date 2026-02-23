@@ -5,6 +5,48 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0-beta.7] - 2026-02-23
+
+### Fixed - RAM Initialization for Sedoric Boot (Sprint 17b)
+- **RAM initialization pattern**: Apply Oricutron-compatible RAM pattern
+  (128 bytes 0x00 + 128 bytes 0xFF per 256-byte page) instead of all zeros.
+  This is critical for Sedoric boot: the boot code at $B932 checksums
+  upper_ram $C980-$FFFF; if all zeros only 4 sectors are loaded (mini-loader),
+  missing the full SYSTEM.DOS (60 sectors). With the correct pattern, the
+  checksum is non-zero and all 60 sectors of SYSTEM.DOS are loaded.
+- **Sedoric boot now works**: `./oric1-emu -r basic10.rom --disk-rom microdis.rom -d SEDO40u.DSK`
+  boots to "SEDORIC V4.0" prompt successfully
+- `memory_init()`: initializes ram[] and upper_ram[] with Oricutron pattern
+- `memory_clear_ram()`: supports pattern=0 for Oricutron-compatible reset
+
+## [1.0.0-beta.6] - 2026-02-23
+
+### Added - Microdisc Controller & Sedoric Boot (Sprint 17)
+- **Microdisc controller** (`src/io/microdisc.c`, `include/io/microdisc.h`):
+  WD1793 FDC interface with control register at $0314, IRQ/DRQ status
+- **Overlay ROM support**: microdis.rom mapped at $E000-$FFFF when diskrom=true
+- **I/O routing**: $0310-$031F routed to Microdisc in I/O callbacks
+- **FDC IRQ forwarding**: FDC INTRQ forwarded to CPU when INTENA bit set
+- **`--disk-rom FILE`** CLI option: load Microdisc ROM for disk boot
+- **4 lecteurs disque** (A, B, C, D): `-d` (drive A), `--disk1` (B), `--disk2` (C), `--disk3` (D)
+- **`-d FILE`** now functional: loads .DSK disk image via Sedoric, connects to FDC
+- **Public headers**: `include/storage/disk.h` and `include/storage/sedoric.h`
+  extracted from .c files (removes duplicate declarations in tests)
+
+### Changed
+- `memory_t` extended: `upper_ram[16384]` for RAM behind ROM, `overlay_rom`,
+  `overlay_active`, `basic_rom_disabled` fields for Microdisc overlay logic
+- `memory_read()`: overlay ROM at $E000-$FFFF when basic_rom_disabled + overlay_active
+- `memory_write()`: RAM writable at $C000-$DFFF when basic_rom_disabled
+- `microdisc_t`: 4 drive slots (`disk_data[4]`, `disk_size[4]`), `microdisc_set_disk()`,
+  automatic FDC switch on drive select via control register bits 6:5
+- `emulator_t`: added `microdisc_t`, `sedoric_disk_t* disks[4]`, `has_microdisc`
+- `io_read_callback`/`io_write_callback`: route $0310-$031F to Microdisc
+- `disk.c`/`sedoric.c`: include public headers, removed internal struct definitions
+- `test_storage.c`: uses `#include` headers instead of extern forward declarations
+- Makefile: added `src/io/microdisc.c` to build
+- Version updated to 1.0.0-beta.6
+
 ## [1.0.0-beta.5] - 2026-02-23
 
 ### Fixed - HIRES Rendering & Keyboard Automation (Sprint 16b)

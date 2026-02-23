@@ -49,9 +49,16 @@ typedef struct {
     uint8_t ram[RAM_SIZE];      /**< Main RAM */
     uint8_t rom[ROM_SIZE];      /**< ROM (BASIC + Monitor) */
     uint8_t charset[2048];      /**< Character set ROM */
+    uint8_t upper_ram[ROM_SIZE]; /**< RAM behind ROM area ($C000-$FFFF) for Microdisc overlay */
 
     memory_bank_t charset_bank; /**< Character set banking */
     bool rom_enabled;           /**< ROM enable flag */
+
+    /* Microdisc overlay ROM support */
+    uint8_t* overlay_rom;         /**< Overlay ROM data (microdis.rom) */
+    uint32_t overlay_rom_size;    /**< Overlay ROM size in bytes */
+    bool overlay_active;          /**< Overlay ROM mapped at $E000-$FFFF */
+    bool basic_rom_disabled;      /**< BASIC ROM disabled (romdis) */
 
     /* I/O device callbacks */
     uint8_t (*io_read)(uint16_t address, void* userdata);

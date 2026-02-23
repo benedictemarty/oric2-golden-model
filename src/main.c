@@ -22,6 +22,9 @@
 #include "video/video.h"
 #include "video/export.h"
 #include "storage/tap.h"
+#include "storage/disk.h"
+#include "storage/sedoric.h"
+#include "io/microdisc.h"
 #include "audio/audio.h"
 #include "io/keyboard.h"
 #ifdef HAS_SDL2
@@ -30,7 +33,7 @@
 #include "hostfs/hostfs.h"
 #include "utils/logging.h"
 
-#define VERSION "1.0.0-beta.5"
+#define VERSION "1.0.0-beta.7"
 #define ORIC_CLOCK_HZ   1000000
 #define ORIC_FRAME_RATE  50
 #define CYCLES_PER_FRAME (ORIC_CLOCK_HZ / ORIC_FRAME_RATE)
@@ -53,7 +56,11 @@ static void print_usage(const char* program_name) {
     printf("Usage: %s [options]\n\n", program_name);
     printf("Options:\n");
     printf("  -t, --tape FILE            Load .TAP tape file\n");
-    printf("  -d, --disk FILE            Load .DSK disk file\n");
+    printf("  -d, --disk FILE            Load .DSK disk file in drive A\n");
+    printf("      --disk1 FILE           Load .DSK disk file in drive B\n");
+    printf("      --disk2 FILE           Load .DSK disk file in drive C\n");
+    printf("      --disk3 FILE           Load .DSK disk file in drive D\n");
+    printf("      --disk-rom FILE        Load Microdisc ROM (microdis.rom)\n");
     printf("  -r, --rom FILE             Load custom ROM file\n");
     printf("  -h, --hostfs PATH          Mount host directory\n");
     printf("  -f, --fast-load            Fast tape loading (inject directly, no CLOAD needed)\n");
@@ -88,6 +95,11 @@ typedef struct {
     /* Keyboard */
     oric_keyboard_t keyboard;
 
+    /* Microdisc controller */
+    microdisc_t microdisc;
+    sedoric_disk_t* disks[MICRODISC_MAX_DRIVES]; /* 4 drives: A, B, C, D */
+    bool has_microdisc;
+
     /* Tape buffer for ROM patching (CLOAD support) */
     uint8_t* tapebuf;       /* TAP file data loaded in memory */
     int tapelen;             /* Total length of tape data */
@@ -118,9 +130,16 @@ typedef struct {
     bool type_keys_done;           /* All characters typed */
 } emulator_t;
 
-/* I/O callback: route VIA register access */
+/* I/O callback: route VIA and Microdisc register access */
 static uint8_t io_read_callback(uint16_t address, void* userdata) {
     emulator_t* emu = (emulator_t*)userdata;
+
+    /* Microdisc I/O: $0310-$031F */
+    if (emu->has_microdisc && address >= 0x0310 && address <= 0x031F) {
+        return microdisc_read(&emu->microdisc, address);
+    }
+
+    /* VIA 6522: $0300-$030F (mirrored in $0300-$03FF) */
     return via_read(&emu->via, (uint8_t)(address & 0x0F));
 }
 
@@ -210,6 +229,16 @@ static uint8_t portb_read_callback(void* userdata) {
 
 static void io_write_callback(uint16_t address, uint8_t value, void* userdata) {
     emulator_t* emu = (emulator_t*)userdata;
+
+    /* Microdisc I/O: $0310-$031F */
+    if (emu->has_microdisc && address >= 0x0310 && address <= 0x031F) {
+        microdisc_write(&emu->microdisc, address, value);
+        /* Sync overlay flags to memory system */
+        emu->memory.basic_rom_disabled = emu->microdisc.romdis;
+        emu->memory.overlay_active = emu->microdisc.diskrom;
+        return;
+    }
+
     uint8_t reg = (uint8_t)(address & 0x0F);
 
     /* Intercept VIA Port A writes to forward to PSG data bus */
@@ -234,6 +263,18 @@ static void irq_callback(bool state, void* userdata) {
     if (state) {
         cpu_irq(&emu->cpu);
     }
+}
+
+/* Microdisc CPU IRQ callbacks */
+static void microdisc_cpu_irq_set(void* userdata) {
+    emulator_t* emu = (emulator_t*)userdata;
+    cpu_irq(&emu->cpu);
+}
+
+static void microdisc_cpu_irq_clr(void* userdata) {
+    (void)userdata;
+    /* IRQ clear - 6502 IRQ is level-triggered, will be cleared
+     * when the source is acknowledged */
 }
 
 static bool emulator_init(emulator_t* emu) {
@@ -309,6 +350,15 @@ static void emulator_cleanup(emulator_t* emu) {
     if (emu->tapebuf) {
         free(emu->tapebuf);
         emu->tapebuf = NULL;
+    }
+    if (emu->has_microdisc) {
+        microdisc_cleanup(&emu->microdisc);
+    }
+    for (int i = 0; i < MICRODISC_MAX_DRIVES; i++) {
+        if (emu->disks[i]) {
+            sedoric_destroy(emu->disks[i]);
+            emu->disks[i] = NULL;
+        }
     }
     log_info("Emulator cleanup complete");
 }
@@ -423,6 +473,11 @@ static void emulator_run(emulator_t* emu) {
 
             /* Update VIA timers */
             via_update(&emu->via, step);
+
+            /* Microdisc FDC: process delayed DRQ/INTRQ timers */
+            if (emu->has_microdisc) {
+                fdc_ticktock(&emu->microdisc.fdc, step);
+            }
         }
 
         total_executed += (uint64_t)frame_cycles;
@@ -564,7 +619,7 @@ int main(int argc, char* argv[]) {
     memset(&emu, 0, sizeof(emu));
 
     const char* tape_file = NULL;
-    const char* disk_file = NULL;
+    const char* disk_files[MICRODISC_MAX_DRIVES] = {NULL, NULL, NULL, NULL};
     const char* rom_file = NULL;
     const char* hostfs_path = NULL;
     bool fast_load = false;
@@ -578,13 +633,17 @@ int main(int argc, char* argv[]) {
     const char* keyboard_layout = NULL;
 
     const char* type_keys_arg = NULL;
+    const char* disk_rom_file = NULL;
 
     /* Long option codes for options without short equivalents */
-    enum { OPT_SCREENSHOT = 256, OPT_SCREENSHOT_AT, OPT_FRAME_DUMP, OPT_FRAME_DUMP_INTERVAL, OPT_TYPE_KEYS };
+    enum { OPT_SCREENSHOT = 256, OPT_SCREENSHOT_AT, OPT_FRAME_DUMP, OPT_FRAME_DUMP_INTERVAL, OPT_TYPE_KEYS, OPT_DISK_ROM, OPT_DISK1, OPT_DISK2, OPT_DISK3 };
 
     static struct option long_options[] = {
         {"tape",                required_argument, 0, 't'},
         {"disk",                required_argument, 0, 'd'},
+        {"disk1",               required_argument, 0, OPT_DISK1},
+        {"disk2",               required_argument, 0, OPT_DISK2},
+        {"disk3",               required_argument, 0, OPT_DISK3},
         {"rom",                 required_argument, 0, 'r'},
         {"hostfs",              required_argument, 0, 'h'},
         {"fast-load",           no_argument,       0, 'f'},
@@ -597,6 +656,7 @@ int main(int argc, char* argv[]) {
         {"frame-dump-interval", required_argument, 0, OPT_FRAME_DUMP_INTERVAL},
         {"keyboard",            required_argument, 0, 'k'},
         {"type-keys",           required_argument, 0, OPT_TYPE_KEYS},
+        {"disk-rom",            required_argument, 0, OPT_DISK_ROM},
         {"help",                no_argument,       0, '?'},
         {0, 0, 0, 0}
     };
@@ -607,7 +667,10 @@ int main(int argc, char* argv[]) {
     while ((opt = getopt_long(argc, argv, "t:d:r:h:fnc:vk:?", long_options, &option_index)) != -1) {
         switch (opt) {
             case 't': tape_file = optarg; break;
-            case 'd': disk_file = optarg; break;
+            case 'd': disk_files[0] = optarg; break;
+            case OPT_DISK1: disk_files[1] = optarg; break;
+            case OPT_DISK2: disk_files[2] = optarg; break;
+            case OPT_DISK3: disk_files[3] = optarg; break;
             case 'r': rom_file = optarg; break;
             case 'h': hostfs_path = optarg; break;
             case 'f': fast_load = true; break;
@@ -620,6 +683,7 @@ int main(int argc, char* argv[]) {
             case OPT_FRAME_DUMP_INTERVAL: frame_dump_interval = atoi(optarg); break;
             case 'k': keyboard_layout = optarg; break;
             case OPT_TYPE_KEYS: type_keys_arg = optarg; break;
+            case OPT_DISK_ROM: disk_rom_file = optarg; break;
             case '?':
             default:
                 print_usage(argv[0]);
@@ -766,9 +830,56 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    /* Load disk */
-    if (disk_file) {
-        log_info("Disk file specified: %s (disk controller active)", disk_file);
+    /* Load disks with Microdisc controller */
+    bool any_disk = false;
+    for (int i = 0; i < MICRODISC_MAX_DRIVES; i++) {
+        if (disk_files[i]) { any_disk = true; break; }
+    }
+
+    if (any_disk) {
+        /* Initialize Microdisc controller */
+        microdisc_init(&emu.microdisc);
+        emu.microdisc.cpu_irq_set = microdisc_cpu_irq_set;
+        emu.microdisc.cpu_irq_clr = microdisc_cpu_irq_clr;
+        emu.microdisc.cpu_userdata = &emu;
+        emu.has_microdisc = true;
+
+        /* Load Microdisc ROM if specified */
+        if (disk_rom_file) {
+            log_info("Loading Microdisc ROM: %s", disk_rom_file);
+            if (!microdisc_load_rom(&emu.microdisc, disk_rom_file)) {
+                log_error("Failed to load Microdisc ROM: %s", disk_rom_file);
+                emulator_cleanup(&emu);
+                return 1;
+            }
+            /* Set overlay ROM in memory system */
+            emu.memory.overlay_rom = emu.microdisc.diskrom_data;
+            emu.memory.overlay_rom_size = emu.microdisc.diskrom_size;
+            emu.memory.overlay_active = true;
+            emu.memory.basic_rom_disabled = true;
+            log_info("Microdisc ROM loaded (%u bytes), overlay active", emu.microdisc.diskrom_size);
+        }
+
+        /* Load disk images into drives A-D */
+        for (int i = 0; i < MICRODISC_MAX_DRIVES; i++) {
+            if (!disk_files[i]) continue;
+
+            log_info("Loading disk drive %c: %s", 'A' + i, disk_files[i]);
+            emu.disks[i] = sedoric_load(disk_files[i]);
+            if (!emu.disks[i]) {
+                log_error("Failed to load disk image: %s", disk_files[i]);
+                emulator_cleanup(&emu);
+                return 1;
+            }
+
+            /* Connect disk data to Microdisc drive slot */
+            microdisc_set_disk(&emu.microdisc, (uint8_t)i,
+                               emu.disks[i]->data, emu.disks[i]->size,
+                               emu.disks[i]->tracks, emu.disks[i]->sectors);
+            log_info("Drive %c: %u bytes, %d sides x %d tracks x %d sectors",
+                     'A' + i, emu.disks[i]->size, emu.disks[i]->sides,
+                     emu.disks[i]->tracks, emu.disks[i]->sectors);
+        }
     }
 
     if (!headless) {

@@ -127,7 +127,23 @@ host filesystem sharing and conversion tools for legacy BASIC/machine code progr
 - [x] --type-keys CYCLES:TEXT CLI option (supports \n, \pN pause)
 - [x] Poker game compatibility validated (poker-asn.tap)
 
-### Sprint 17: Release Preparation (v1.0.0) - PLANNED
+### Sprint 17: Microdisc & Sedoric Boot (v1.0.0-beta.6) - DONE
+- [x] Microdisc controller emulation (I/O $0310-$031F)
+- [x] WD1793 FDC connected to Microdisc interface with IRQ routing
+- [x] Overlay ROM support (microdis.rom at $E000-$FFFF)
+- [x] Memory system extended with upper_ram + overlay logic
+- [x] --disk-rom option for Microdisc ROM loading
+- [x] -d option functional: loads .DSK via Sedoric + FDC
+- [x] Public headers for disk.h and sedoric.h
+- [x] Test file updated to use proper headers
+
+### Sprint 17b: Sedoric Boot Fix (v1.0.0-beta.7) - DONE
+- [x] Fix RAM initialization: Oricutron-compatible pattern (128x00+128xFF per page)
+- [x] Sedoric boot now loads full SYSTEM.DOS (60 sectors instead of 4)
+- [x] Boot completes to "SEDORIC V4.0" prompt
+- [x] Root cause: Sedoric boot checksum at $B932 needs non-zero upper_ram
+
+### Sprint 18: Release Preparation (v1.0.0) - PLANNED
 - [ ] Complete user guide
 - [ ] Create example programs
 - [ ] Package for Linux distributions
@@ -171,6 +187,6 @@ host filesystem sharing and conversion tools for legacy BASIC/machine code progr
 
 ---
 
-**Last Updated**: 2026-02-22
-**Current Version**: 1.0.0-beta.4
+**Last Updated**: 2026-02-23
+**Current Version**: 1.0.0-beta.6
 **Next Milestone**: 1.0.0-rc (Release preparation)

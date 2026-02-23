@@ -3,7 +3,7 @@
  * @brief ORIC-1 Memory management - complete implementation
  * @author bmarty <bmarty@mailo.com>
  * @date 2026-02-22
- * @version 0.3.0-alpha
+ * @version 1.0.0-beta.7
  *
  * Memory Map:
  * $0000-$00FF: Zero Page
@@ -21,6 +21,31 @@
 
 bool memory_init(memory_t* mem) {
     memset(mem, 0, sizeof(memory_t));
+
+    /* Initialize RAM with Oricutron-compatible pattern (rampattern=0):
+     * Per 256-byte page: first 128 bytes = 0x00, next 128 bytes = 0xFF.
+     * This is critical for Sedoric boot: the boot code at $B932 checksums
+     * upper_ram $C980-$FFFF. If all zeros, only 4 sectors are loaded
+     * (mini-loader), missing the full SYSTEM.DOS (60 sectors). */
+    for (uint32_t i = 0; i < RAM_SIZE; i += 256) {
+        /* First 128 bytes already 0x00 from memset */
+        uint32_t end = i + 256;
+        if (end > RAM_SIZE) end = RAM_SIZE;
+        uint32_t half = i + 128;
+        if (half < end) {
+            memset(&mem->ram[half], 0xFF, end - half);
+        }
+    }
+    for (uint32_t i = 0; i < ROM_SIZE; i += 256) {
+        /* upper_ram: same pattern */
+        uint32_t end = i + 256;
+        if (end > ROM_SIZE) end = ROM_SIZE;
+        uint32_t half = i + 128;
+        if (half < end) {
+            memset(&mem->upper_ram[half], 0xFF, end - half);
+        }
+    }
+
     mem->rom_enabled = true;
     mem->charset_bank = BANK_ROM;
     return true;
@@ -83,10 +108,25 @@ uint8_t memory_read(memory_t* mem, uint16_t address) {
         return val;
     }
 
-    /* ROM area: $C000-$FFFF - always from rom[] array */
-    /* When rom_enabled=false, rom[] acts as RAM overlay.
-     * Interrupt vectors ($FFFA-$FFFF) always come from original ROM data. */
-    val = mem->rom[address - 0xC000];
+    /* ROM area: $C000-$FFFF */
+    if (mem->basic_rom_disabled) {
+        /* Microdisc mode: BASIC ROM is disabled */
+        if (mem->overlay_active && mem->overlay_rom && address >= 0xE000) {
+            /* Overlay ROM (microdis.rom) mapped at $E000-$FFFF */
+            uint16_t rom_offset = address - 0xE000;
+            if (rom_offset < mem->overlay_rom_size) {
+                val = mem->overlay_rom[rom_offset];
+            } else {
+                val = mem->upper_ram[address - 0xC000];
+            }
+        } else {
+            /* RAM visible at $C000-$FFFF */
+            val = mem->upper_ram[address - 0xC000];
+        }
+    } else {
+        /* Normal mode: ROM at $C000-$FFFF */
+        val = mem->rom[address - 0xC000];
+    }
 
     if (mem->trace_enabled && mem->trace_callback)
         mem->trace_callback(address, val, MEM_READ);
@@ -112,8 +152,15 @@ void memory_write(memory_t* mem, uint16_t address, uint8_t value) {
     }
 
     /* ROM overlay area: $C000-$FFFF */
-    if (!mem->rom_enabled) {
-        /* Write to overlay (stored in rom array when ROM is disabled) */
+    if (mem->basic_rom_disabled) {
+        /* Microdisc mode: RAM writable at $C000-$FFFF (except overlay ROM) */
+        if (mem->overlay_active && address >= 0xE000) {
+            /* Overlay ROM area: writes ignored (ROM is read-only) */
+        } else {
+            mem->upper_ram[address - 0xC000] = value;
+        }
+    } else if (!mem->rom_enabled) {
+        /* Legacy mode: Write to overlay (stored in rom array when ROM is disabled) */
         mem->rom[address - 0xC000] = value;
     }
     /* Writes to ROM area when ROM enabled are silently ignored */
@@ -146,7 +193,30 @@ void memory_set_trace(memory_t* mem, bool enabled,
 }
 
 void memory_clear_ram(memory_t* mem, uint8_t pattern) {
-    memset(mem->ram, pattern, RAM_SIZE);
+    if (pattern == 0) {
+        /* Oricutron-compatible pattern: 128x 0x00 + 128x 0xFF per page */
+        for (uint32_t i = 0; i < RAM_SIZE; i += 256) {
+            uint32_t end = i + 256;
+            if (end > RAM_SIZE) end = RAM_SIZE;
+            uint32_t half = i + 128;
+            if (half > end) half = end;
+            memset(&mem->ram[i], 0x00, half - i);
+            if (half < end)
+                memset(&mem->ram[half], 0xFF, end - half);
+        }
+        for (uint32_t i = 0; i < ROM_SIZE; i += 256) {
+            uint32_t end = i + 256;
+            if (end > ROM_SIZE) end = ROM_SIZE;
+            uint32_t half = i + 128;
+            if (half > end) half = end;
+            memset(&mem->upper_ram[i], 0x00, half - i);
+            if (half < end)
+                memset(&mem->upper_ram[half], 0xFF, end - half);
+        }
+    } else {
+        memset(mem->ram, pattern, RAM_SIZE);
+        memset(mem->upper_ram, pattern, ROM_SIZE);
+    }
 }
 
 uint8_t* memory_get_ptr(memory_t* mem, uint16_t address) {

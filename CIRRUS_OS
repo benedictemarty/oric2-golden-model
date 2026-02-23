@@ -2,7 +2,7 @@ CIRRUS_OS - ORIC-1 Emulator Build & Development Status
 ======================================================
 
 Project: ORIC-1 Cycle-Accurate Emulator
-Version: 1.0.0-beta.5
+Version: 1.0.0-beta.7
 Build Status: BETA
 Last Updated: 2026-02-23
 
@@ -33,6 +33,9 @@ BUILD STATUS
 [V] HIRES Rendering       - Fixed (attribute detection, bit 7 inversion, $9800 charset)
 [V] HIRES Mode Detection  - Fixed ($26A bit 1, not bit 2)
 [V] Keyboard Automation   - Complete (--type-keys, press_char/release_all API)
+[V] Microdisc Controller  - Complete (I/O $0310-$031F, overlay ROM, IRQ routing)
+[V] Disk Boot (Sedoric)   - Working (-d .dsk + --disk-rom microdis.rom, boots to SEDORIC V4.0)
+[V] RAM Init Pattern      - Fixed (Oricutron-compatible: 128x00+128xFF per page)
 [V] Test Suite            - Complete (147 tests, 100% pass)
 [V] ROM Compatibility     - Validated (ORIC-1 BASIC 1.0 ROM)
 [V] Performance           - Benchmarked (~90+ MHz, target met)
@@ -63,7 +66,7 @@ Video Tests:        11/11 passed
 
 CODE METRICS
 ------------
-Total Source Files: 23 (.c) + 9 (.h)
+Total Source Files: 24 (.c) + 12 (.h)
 Total Test Files: 7
 Lines of Code: ~4500+ (source) + ~2500 (tests)
 Build Warnings: 0 critical (informational conversion warnings with strict flags)
@@ -88,8 +91,8 @@ QUALITY GATES
 
 SPRINT STATUS
 -------------
-Current Sprint: Sprint 16a completed
-Sprint Progress: 100% (CLOAD via ROM patching)
+Current Sprint: Sprint 17 completed
+Sprint Progress: 100% (Microdisc Controller & Sedoric Boot)
 
 Completed Sprints:
 - [V] Sprint 0: Infrastructure setup
@@ -105,6 +108,8 @@ Completed Sprints:
 - [V] Sprint 15: Video integration + Debug export (159 tests)
 - [V] Sprint 15b: PSG bus fix + SDL2 keyboard mapping
 - [V] Sprint 16a: CLOAD via ROM patching
+- [V] Sprint 16b: HIRES rendering fix + keyboard automation
+- [V] Sprint 17: Microdisc controller + Sedoric disk boot
 
 Remaining (Release phase):
 - [V] SDL2 display integration testing
@@ -124,6 +129,7 @@ src/memory/banking.c    - ROM enable/disable, charset bank
 src/io/via6522.c        - All 16 registers, 2 timers, interrupts
 src/io/keyboard.c       - 8x8 matrix scanning + SDL2 key mapping (64 keys)
 src/io/cassette.c       - Motor control, bit read/write
+src/io/microdisc.c      - Microdisc interface (WD1793 + overlay ROM + IRQ)
 src/video/video.c       - Text + HIRES rendering to framebuffer
 src/video/textmode.c    - Text mode helpers
 src/video/hires.c       - HIRES pixel helpers
@@ -167,4 +173,4 @@ License: Not specified yet
 ================================================================
 
 End of CIRRUS_OS Status Report
-Generated: 2026-02-22
+Generated: 2026-02-23

@@ -1,12 +1,27 @@
 VERSION_TRACKING - ORIC-1 Emulator
 =====================================
 
-Current Version: 1.0.0-beta.5
+Current Version: 1.0.0-beta.7
 Release Date: 2026-02-23
-Status: Beta (HIRES Rendering Fix & Keyboard Automation)
+Status: Beta (Sedoric Boot Working)
 
 Version History:
 ----------------
+- 1.0.0-beta.7 (2026-02-23): RAM Initialization Fix for Sedoric Boot (Sprint 17b)
+  * Oricutron-compatible RAM pattern (128x 0x00 + 128x 0xFF per page)
+  * Sedoric boot now works: loads full SYSTEM.DOS (60 sectors)
+  * memory_init() and memory_clear_ram() updated
+
+- 1.0.0-beta.6 (2026-02-23): Microdisc Controller & Sedoric Boot (Sprint 17)
+  * Microdisc controller emulation (I/O $0310-$031F)
+  * WD1793 FDC connected to Microdisc interface
+  * Overlay ROM support (microdis.rom at $E000-$FFFF)
+  * Memory system extended: upper_ram + overlay logic
+  * --disk-rom option for Microdisc ROM loading
+  * -d option now functional: loads .DSK via Sedoric + FDC
+  * Public headers for disk.h and sedoric.h
+  * FDC IRQ forwarding to CPU
+
 - 1.0.0-beta.5 (2026-02-23): HIRES Rendering Fix & Keyboard Automation (Sprint 16b)
   * Fixed HIRES mode detection: $26A bit 1 (not bit 2)
   * Fixed HIRES attribute detection: (byte & 0x60)==0 (matches Oricutron ULA)

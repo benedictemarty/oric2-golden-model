@@ -1,0 +1,81 @@
+/**
+ * @file microdisc.h
+ * @brief Microdisc disk controller interface for ORIC
+ * @author bmarty <bmarty@mailo.com>
+ * @date 2026-02-23
+ * @version 1.0.0-beta.7
+ *
+ * Microdisc I/O addresses:
+ *   $0310 R/W - WD1793 Status (R) / Command (W)
+ *   $0311 R/W - WD1793 Track
+ *   $0312 R/W - WD1793 Sector
+ *   $0313 R/W - WD1793 Data
+ *   $0314 W   - Control register
+ *   $0314 R   - IRQ status (bit 7 = /INTRQ)
+ *   $0318 R   - DRQ status (bit 7 = /DRQ)
+ */
+
+#ifndef MICRODISC_H
+#define MICRODISC_H
+
+#include <stdint.h>
+#include <stdbool.h>
+#include "storage/disk.h"
+
+/* Microdisc I/O addresses */
+#define MICRODISC_BASE     0x0310
+#define MICRODISC_FDC_BASE 0x0310  /* $0310-$0313: WD1793 registers */
+#define MICRODISC_CTRL     0x0314  /* Control register (write) / IRQ status (read) */
+#define MICRODISC_DRQ      0x0318  /* DRQ status (read) */
+
+/* Control register bits ($0314 write) */
+#define MICRODISC_CTRL_INTENA   0x01  /* Bit 0: IRQ enable (1=enabled) */
+#define MICRODISC_CTRL_ROMDIS   0x02  /* Bit 1: BASIC ROM disable */
+#define MICRODISC_CTRL_DENSITY  0x08  /* Bit 3: Density select */
+#define MICRODISC_CTRL_SIDE     0x10  /* Bit 4: Side select */
+#define MICRODISC_CTRL_DRIVE    0x60  /* Bits 6:5: Drive select */
+#define MICRODISC_CTRL_EPROM    0x80  /* Bit 7: 0=overlay ROM active, 1=overlay OFF */
+
+#define MICRODISC_MAX_DRIVES 4
+
+typedef struct {
+    fdc_t fdc;                  /* WD1793 FDC */
+
+    /* Microdisc status (active-low convention matching Oricutron) */
+    uint8_t status;             /* Control register ($0314 last write) */
+    uint8_t intrq;              /* 0x00 = INTRQ active, 0x80 = inactive */
+    uint8_t drq;                /* 0x00 = DRQ active, 0x80 = inactive */
+
+    /* Decoded control bits */
+    bool diskrom;               /* Overlay ROM visible at $E000-$FFFF */
+    bool romdis;                /* BASIC ROM disabled */
+    bool intena;                /* FDC IRQ forwarded to CPU */
+    uint8_t drive;              /* Selected drive (0-3) */
+    uint8_t side;               /* Selected side (0-1) */
+
+    /* Per-drive disk data (4 drives: A, B, C, D) */
+    uint8_t* disk_data[MICRODISC_MAX_DRIVES];
+    uint32_t disk_size[MICRODISC_MAX_DRIVES];
+    uint8_t  disk_tracks[MICRODISC_MAX_DRIVES];
+    uint8_t  disk_sectors[MICRODISC_MAX_DRIVES];
+
+    /* Overlay ROM data (microdis.rom, 8KB) */
+    uint8_t* diskrom_data;
+    uint32_t diskrom_size;
+
+    /* CPU IRQ routing */
+    void (*cpu_irq_set)(void* userdata);
+    void (*cpu_irq_clr)(void* userdata);
+    void* cpu_userdata;
+} microdisc_t;
+
+void microdisc_init(microdisc_t* md);
+void microdisc_reset(microdisc_t* md);
+uint8_t microdisc_read(microdisc_t* md, uint16_t addr);
+void microdisc_write(microdisc_t* md, uint16_t addr, uint8_t value);
+void microdisc_set_disk(microdisc_t* md, uint8_t drive, uint8_t* data, uint32_t size,
+                        uint8_t tracks, uint8_t sectors_per_track);
+bool microdisc_load_rom(microdisc_t* md, const char* filename);
+void microdisc_cleanup(microdisc_t* md);
+
+#endif /* MICRODISC_H */

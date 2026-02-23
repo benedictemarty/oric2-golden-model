@@ -2,8 +2,8 @@
  * @file test_storage.c
  * @brief Storage subsystem tests (Sedoric, FDC)
  * @author bmarty <bmarty@mailo.com>
- * @date 2026-02-22
- * @version 1.0.0-alpha
+ * @date 2026-02-23
+ * @version 1.0.0-beta.7
  */
 
 #include <stdio.h>
@@ -12,49 +12,8 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-/* Forward declarations for sedoric functions */
-typedef struct {
-    uint8_t* data;
-    uint32_t size;
-    uint8_t tracks;
-    uint8_t sectors;
-    uint8_t sides;
-    bool modified;
-} sedoric_disk_t;
-
-extern sedoric_disk_t* sedoric_create(void);
-extern void sedoric_destroy(sedoric_disk_t* disk);
-extern uint8_t* sedoric_get_sector(sedoric_disk_t* disk, uint8_t track, uint8_t sector);
-extern bool sedoric_read_sector(sedoric_disk_t* disk, uint8_t track, uint8_t sector, uint8_t* buffer);
-extern bool sedoric_write_sector(sedoric_disk_t* disk, uint8_t track, uint8_t sector, const uint8_t* buffer);
-
-/* Forward declarations for FDC */
-typedef struct {
-    uint8_t status;
-    uint8_t command;
-    uint8_t track;
-    uint8_t sector;
-    uint8_t data;
-    uint8_t direction;
-    bool busy;
-    bool drq;
-    bool irq;
-    uint8_t* disk_data;
-    uint32_t disk_size;
-    uint8_t tracks;
-    uint8_t sectors_per_track;
-    uint8_t sector_buf[256];
-    int buf_pos;
-    int buf_len;
-    bool reading;
-    bool writing;
-} fdc_t;
-
-extern void fdc_init(fdc_t* fdc);
-extern void fdc_reset(fdc_t* fdc);
-extern void fdc_set_disk(fdc_t* fdc, uint8_t* data, uint32_t size);
-extern uint8_t fdc_read(fdc_t* fdc, uint8_t reg);
-extern void fdc_write(fdc_t* fdc, uint8_t reg, uint8_t value);
+#include "storage/sedoric.h"
+#include "storage/disk.h"
 
 static int tests_passed = 0;
 static int tests_failed = 0;
@@ -87,6 +46,25 @@ static int tests_failed = 0;
         tests_failed++; return; \
     } \
 } while(0)
+
+/* Test signal tracking */
+static bool test_drq_set = false;
+static bool test_intrq_set = false;
+
+static void test_set_drq(void* ud)   { (void)ud; test_drq_set = true; }
+static void test_clr_drq(void* ud)   { (void)ud; test_drq_set = false; }
+static void test_set_intrq(void* ud) { (void)ud; test_intrq_set = true; }
+static void test_clr_intrq(void* ud) { (void)ud; test_intrq_set = false; }
+
+static void fdc_init_test(fdc_t* fdc) {
+    fdc_init(fdc);
+    fdc->set_drq = test_set_drq;
+    fdc->clr_drq = test_clr_drq;
+    fdc->set_intrq = test_set_intrq;
+    fdc->clr_intrq = test_clr_intrq;
+    test_drq_set = false;
+    test_intrq_set = false;
+}
 
 /* ═══════════════════════════════════════════════════════════════════ */
 /*  SEDORIC TESTS                                                     */
@@ -152,75 +130,121 @@ TEST(test_sedoric_system_info) {
 TEST(test_fdc_init) {
     fdc_t fdc;
     fdc_init(&fdc);
-    ASSERT_EQ(fdc.tracks, 42);
+    ASSERT_EQ(fdc.tracks, 80);
     ASSERT_EQ(fdc.sectors_per_track, 17);
-    ASSERT_FALSE(fdc.busy);
+    ASSERT_EQ(fdc.currentop, FDC_OP_NONE);
 }
 
 TEST(test_fdc_reset) {
     fdc_t fdc;
-    fdc_init(&fdc);
+    fdc_init_test(&fdc);
     fdc.track = 10;
     fdc.sector = 5;
     fdc_reset(&fdc);
     ASSERT_EQ(fdc.track, 0);
     ASSERT_EQ(fdc.sector, 1);
-    ASSERT_FALSE(fdc.busy);
-    ASSERT_FALSE(fdc.drq);
+    ASSERT_EQ(fdc.currentop, FDC_OP_NONE);
 }
 
 TEST(test_fdc_restore) {
     fdc_t fdc;
-    fdc_init(&fdc);
+    fdc_init_test(&fdc);
+    /* Need disk data for successful restore */
+    uint8_t* disk_data = calloc(80 * 17 * 256, 1);
+    fdc_set_disk(&fdc, disk_data, 80 * 17 * 256);
+    fdc.c_track = 20;
     fdc.track = 20;
     fdc_write(&fdc, 0, 0x00); /* Restore */
     ASSERT_EQ(fdc.track, 0);
-    ASSERT_TRUE(fdc.irq);
+    ASSERT_EQ(fdc.c_track, 0);
+    /* INTRQ is delayed by 20 cycles */
+    ASSERT_FALSE(test_intrq_set);
+    fdc_ticktock(&fdc, 25);
+    ASSERT_TRUE(test_intrq_set);
+    /* Status should have TRK0 bit set */
+    ASSERT_TRUE(fdc.status & FDC_STI_TRK0);
+    free(disk_data);
 }
 
 TEST(test_fdc_seek) {
     fdc_t fdc;
-    fdc_init(&fdc);
+    fdc_init_test(&fdc);
+    uint8_t* disk_data = calloc(80 * 17 * 256, 1);
+    fdc_set_disk(&fdc, disk_data, 80 * 17 * 256);
     fdc_write(&fdc, 3, 15); /* DATA = 15 */
     fdc_write(&fdc, 0, 0x10); /* Seek */
     ASSERT_EQ(fdc.track, 15);
+    ASSERT_EQ(fdc.c_track, 15);
+    fdc_ticktock(&fdc, 25);
+    ASSERT_TRUE(test_intrq_set);
+    free(disk_data);
 }
 
 TEST(test_fdc_read_sector) {
     fdc_t fdc;
-    fdc_init(&fdc);
-    uint8_t* disk_data = calloc(42 * 17 * 256, 1);
+    fdc_init_test(&fdc);
+    uint8_t* disk_data = calloc(80 * 17 * 256, 1);
     disk_data[0] = 0xAA;
     disk_data[255] = 0xBB;
-    fdc_set_disk(&fdc, disk_data, 42 * 17 * 256);
+    fdc_set_disk(&fdc, disk_data, 80 * 17 * 256);
 
+    fdc.c_track = 0;
     fdc.track = 0;
     fdc.sector = 1;
     fdc_write(&fdc, 0, 0x80); /* Read sector */
-    ASSERT_TRUE(fdc.reading);
+    ASSERT_EQ(fdc.currentop, FDC_OP_READ_SECTOR);
 
+    /* DRQ is delayed by 60 cycles */
+    ASSERT_FALSE(test_drq_set);
+    fdc_ticktock(&fdc, 65);
+    ASSERT_TRUE(test_drq_set);
+
+    /* Read first byte */
     uint8_t first = fdc_read(&fdc, 3);
     ASSERT_EQ(first, 0xAA);
-    for (int i = 1; i < 255; i++) fdc_read(&fdc, 3);
+    ASSERT_FALSE(test_drq_set); /* DRQ cleared after read */
+
+    /* Advance DRQ for remaining bytes */
+    for (int i = 1; i < 255; i++) {
+        fdc_ticktock(&fdc, 35); /* Let DRQ fire */
+        fdc_read(&fdc, 3);
+    }
+
+    /* Read last byte */
+    fdc_ticktock(&fdc, 35);
     uint8_t last = fdc_read(&fdc, 3);
     ASSERT_EQ(last, 0xBB);
-    ASSERT_FALSE(fdc.reading);
-    ASSERT_TRUE(fdc.irq);
+    ASSERT_EQ(fdc.currentop, FDC_OP_NONE);
+
+    /* INTRQ fires after delay */
+    fdc_ticktock(&fdc, 35);
+    ASSERT_TRUE(test_intrq_set);
+
     free(disk_data);
 }
 
 TEST(test_fdc_write_sector) {
     fdc_t fdc;
-    fdc_init(&fdc);
-    uint8_t* disk_data = calloc(42 * 17 * 256, 1);
-    fdc_set_disk(&fdc, disk_data, 42 * 17 * 256);
+    fdc_init_test(&fdc);
+    uint8_t* disk_data = calloc(80 * 17 * 256, 1);
+    fdc_set_disk(&fdc, disk_data, 80 * 17 * 256);
 
+    fdc.c_track = 0;
     fdc.track = 0;
     fdc.sector = 1;
     fdc_write(&fdc, 0, 0xA0); /* Write sector */
-    ASSERT_TRUE(fdc.writing);
-    for (int i = 0; i < 256; i++) fdc_write(&fdc, 3, (uint8_t)i);
-    ASSERT_FALSE(fdc.writing);
+    ASSERT_EQ(fdc.currentop, FDC_OP_WRITE_SECTOR);
+
+    /* Wait for DRQ */
+    fdc_ticktock(&fdc, 505);
+    ASSERT_TRUE(test_drq_set);
+
+    /* Write 256 bytes with DRQ delays between each */
+    for (int i = 0; i < 256; i++) {
+        fdc_write(&fdc, 3, (uint8_t)i);
+        if (i < 255) fdc_ticktock(&fdc, 35);
+    }
+    ASSERT_EQ(fdc.currentop, FDC_OP_NONE);
     ASSERT_EQ(disk_data[0], 0x00);
     ASSERT_EQ(disk_data[1], 0x01);
     ASSERT_EQ(disk_data[255], 0xFF);
@@ -229,21 +253,19 @@ TEST(test_fdc_write_sector) {
 
 TEST(test_fdc_force_interrupt) {
     fdc_t fdc;
-    fdc_init(&fdc);
-    fdc.busy = true;
-    fdc.reading = true;
+    fdc_init_test(&fdc);
+    fdc.currentop = FDC_OP_READ_SECTOR;
     fdc_write(&fdc, 0, 0xD0); /* Force interrupt */
-    ASSERT_FALSE(fdc.busy);
-    ASSERT_FALSE(fdc.reading);
-    ASSERT_TRUE(fdc.irq);
+    ASSERT_EQ(fdc.currentop, FDC_OP_NONE);
+    ASSERT_TRUE(test_intrq_set);
 }
 
-TEST(test_fdc_status_read_clears_irq) {
+TEST(test_fdc_status_read_clears_intrq) {
     fdc_t fdc;
-    fdc_init(&fdc);
-    fdc.irq = true;
+    fdc_init_test(&fdc);
+    test_intrq_set = true;
     fdc_read(&fdc, 0);
-    ASSERT_FALSE(fdc.irq);
+    ASSERT_FALSE(test_intrq_set);
 }
 
 /* ═══════════════════════════════════════════════════════════════════ */
@@ -268,7 +290,7 @@ int main(void) {
     RUN(test_fdc_read_sector);
     RUN(test_fdc_write_sector);
     RUN(test_fdc_force_interrupt);
-    RUN(test_fdc_status_read_clears_irq);
+    RUN(test_fdc_status_read_clears_intrq);
 
     printf("\n═══════════════════════════════════════════════════════════\n");
     printf("Results: %d passed, %d failed\n", tests_passed, tests_failed);

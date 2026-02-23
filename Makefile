@@ -30,6 +30,7 @@ SOURCES = src/main.c \
           src/io/via6522.c \
           src/io/keyboard.c \
           src/io/cassette.c \
+          src/io/microdisc.c \
           src/video/video.c \
           src/video/textmode.c \
           src/video/hires.c \
