@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.15)
-project(oric1-emulator VERSION 0.1.0 LANGUAGES C CXX)
+project(oric1-emulator VERSION 1.0.0 LANGUAGES C CXX)
 
 # C/C++ Standards
 set(CMAKE_C_STANDARD 11)
@@ -53,12 +53,14 @@ set(IO_SOURCES
     src/io/via6522.c
     src/io/keyboard.c
     src/io/cassette.c
+    src/io/microdisc.c
 )
 
 set(VIDEO_SOURCES
     src/video/video.c
     src/video/textmode.c
     src/video/hires.c
+    src/video/export.c
     src/video/renderer.c
 )
 

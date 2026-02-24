@@ -165,12 +165,17 @@ host filesystem sharing and conversion tools for legacy BASIC/machine code progr
 - [x] Boot beep and Sedoric ding sound work correctly
 - [x] Root cause: env_step reset to 0 at cycle end instead of holding at 31
 
-### Sprint 18: Release Preparation (v1.0.0) - PLANNED
-- [ ] Complete user guide
-- [ ] Create example programs
-- [ ] Package for Linux distributions
-- [ ] Fix all known bugs
-- [ ] Release candidate testing
+### Sprint 18: Release Preparation (v1.0.0-rc) - DONE
+- [x] Repository cleanup (debug binaries, screenshots excluded)
+- [x] CMakeLists.txt synced with Makefile (microdisc.c, export.c)
+- [x] Makefile: install/uninstall targets, test-audio target
+- [x] 8 PSG audio tests (init, write/read, envelopes, mixer, tone, silence)
+- [x] README.md updated with Quick Start section
+- [x] CONTRIBUTING.md: build, style, testing guidelines
+- [x] docs/COMPATIBILITY.md: tested programs list
+- [x] docs/user-guide/README.md: complete user guide
+- [x] Example BASIC programs (hello, sound, graphics) with .tap files
+- [x] 155 total tests, 100% pass rate
 
 ---
 
@@ -202,13 +207,13 @@ host filesystem sharing and conversion tools for legacy BASIC/machine code progr
 - [ ] <5% CPU overhead on modern hardware
 
 ### Quality
-- [x] 159 tests passing
+- [x] 155 tests passing
 - [x] Zero critical bugs in test suite
 - [x] API documentation complete
 - [ ] Comprehensive user guide
 
 ---
 
-**Last Updated**: 2026-02-23
-**Current Version**: 1.0.0-beta.6
-**Next Milestone**: 1.0.0-rc (Release preparation)
+**Last Updated**: 2026-02-24
+**Current Version**: 1.0.0-rc
+**Next Milestone**: 1.0.0 (Stable release)

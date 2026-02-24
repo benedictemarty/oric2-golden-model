@@ -5,6 +5,38 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0-rc] - 2026-02-24
+
+### Release Preparation (Sprint 18)
+
+#### Added
+- **PSG audio tests**: 8 unit tests for AY-3-8910 (init, write/read, envelope
+  shapes 0/8/hold, silence, tone generation, mixer control)
+- **CONTRIBUTING.md**: Contribution guide with build instructions, coding style,
+  testing workflow
+- **docs/COMPATIBILITY.md**: Tested programs and hardware accuracy table
+- **docs/user-guide/README.md**: Complete user guide (CLI, keyboard, loading,
+  audio, headless mode, troubleshooting)
+- **Example programs**: `examples/hello.bas`, `examples/sound.bas`,
+  `examples/graphics.bas` with pre-built .tap files
+- **Makefile install/uninstall targets**: `make install PREFIX=/usr/local`
+- **Makefile test-audio target**: `make test-audio` for PSG tests
+
+#### Changed
+- **README.md**: Updated to v1.0.0-rc, added Quick Start section, accurate
+  feature list, test count (155), and architecture overview
+- **CMakeLists.txt**: Added missing `src/io/microdisc.c` and `src/video/export.c`,
+  updated project version to 1.0.0
+- **.gitignore**: Added `test_audio`, `tools/debug_*`, `*.bmp`, `*.ppm`, `*.png`,
+  `disks/`, `!examples/*.tap`
+- **Makefile**: Added test-audio to tests/valgrind, install/uninstall targets,
+  updated help text, updated clean target
+- Test suite expanded from 147 to 155 tests (147 + 8 audio PSG)
+- Total test count: 155 tests, 100% pass rate
+
+#### Cleaned
+- Repository cleanup: debug binaries and screenshots excluded via .gitignore
+
 ## [1.0.0-beta.10] - 2026-02-23
 
 ### Fixed - PSG Envelope & Audio Corrections (Sprint 18b)

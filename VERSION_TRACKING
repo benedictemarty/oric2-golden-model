@@ -1,12 +1,24 @@
 VERSION_TRACKING - ORIC-1 Emulator
 =====================================
 
-Current Version: 1.0.0-beta.10
-Release Date: 2026-02-23
-Status: Beta (Sedoric Boot + Keyboard + Audio Working)
+Current Version: 1.0.0-rc
+Release Date: 2026-02-24
+Status: Release Candidate (All features complete, 155 tests pass)
 
 Version History:
 ----------------
+- 1.0.0-rc (2026-02-24): Release Preparation (Sprint 18)
+  * 8 PSG audio tests added (init, write/read, envelopes, mixer, tone, silence)
+  * CMakeLists.txt synced with Makefile (microdisc.c, export.c added)
+  * Makefile: install/uninstall targets, test-audio target
+  * Repository cleanup: debug files excluded via .gitignore
+  * README.md updated with Quick Start and accurate feature list
+  * CONTRIBUTING.md created (build, style, testing guide)
+  * COMPATIBILITY.md created (tested programs list)
+  * User guide created (CLI, keyboard, loading, audio)
+  * Example BASIC programs: hello.bas, sound.bas, graphics.bas (.tap included)
+  * Total: 155 tests, 100% pass rate
+
 - 1.0.0-beta.10 (2026-02-23): PSG Envelope Fix (Sprint 18b)
   * Fixed envelope shapes 0-7 cycling: single decay now plays once and holds silent
   * Envelope shapes with HOLD bit (9,11,13,15) hold at final value
@@ -117,11 +129,9 @@ MAJOR.MINOR.PATCH-LABEL
 - PATCH: Bug fixes (backward compatible)
 - LABEL: alpha, beta, rc, stable
 
-Next Planned Version: 1.0.0-rc
+Next Planned Version: 1.0.0
 Target Date: TBD
 Planned Features:
-  - SDL2 display integration testing
-  - Debugger with breakpoints
-  - Save states
-  - Game compatibility testing
-  - Release packaging
+  - Final release testing
+  - Package for Linux distributions
+  - Additional game compatibility testing

@@ -24,6 +24,7 @@ test_storage
 test_system
 test_rom
 test_video
+test_audio
 
 # Coverage files
 *.gcda
@@ -37,6 +38,19 @@ coverage.info
 *.su
 *.idb
 *.pdb
+
+# Debug tools (temporary)
+tools/debug_*
+
+# Screenshots and images at root
+*.bmp
+*.ppm
+*.png
+sedoric_text.txt
+screenshot.png
+
+# User disk images
+disks/
 
 # IDE files
 .vscode/
@@ -68,6 +82,7 @@ docs/latex/
 *.dsk
 !tests/roms/*.tap
 !tests/roms/*.dsk
+!examples/*.tap
 
 # Temporary files
 *.tmp

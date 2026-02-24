@@ -2,15 +2,15 @@ CIRRUS_OS - ORIC-1 Emulator Build & Development Status
 ======================================================
 
 Project: ORIC-1 Cycle-Accurate Emulator
-Version: 1.0.0-beta.10
-Build Status: BETA
-Last Updated: 2026-02-23
+Version: 1.0.0-rc
+Build Status: RELEASE CANDIDATE
+Last Updated: 2026-02-24
 
 ================================================================
 
 BUILD CONFIGURATION
 -------------------
-Build System: Makefile (primary) / CMake (planned)
+Build System: Makefile (primary) / CMake (secondary)
 Compiler: GCC (C11)
 Target Platform: Linux x86_64
 Dependencies: SDL2 (optional, for display/audio)
@@ -40,7 +40,7 @@ BUILD STATUS
 [V] Sedoric Keyboard      - Fixed (T1 IRQ reasserts after Sedoric init)
 [V] Audio Output          - Connected (PSG → SDL2 audio callback)
 [V] PSG Envelopes         - Fixed (shapes 0-7 single cycle, HOLD shapes, continuous shapes)
-[V] Test Suite            - Complete (147 tests, 100% pass)
+[V] Test Suite            - Complete (155 tests, 100% pass)
 [V] ROM Compatibility     - Validated (ORIC-1 BASIC 1.0 ROM)
 [V] Performance           - Benchmarked (~90+ MHz, target met)
 [V] Static Analysis       - Run (no critical issues)
@@ -52,11 +52,12 @@ Legend: [V] Complete [*] In Progress [ ] Not Started [X] Failed
 
 TEST RESULTS
 ------------
-Unit Tests: 147/147 passed (100%)
+Unit Tests: 155/155 passed (100%)
 Integration Tests: 7/7 passed (100%)
 ROM Compatibility: 12/12 passed (100%)
 Video Export Tests: 11/11 passed (100%)
-Last Test Run: 2026-02-22
+Audio PSG Tests: 8/8 passed (100%)
+Last Test Run: 2026-02-24
 
 CPU Tests:          74/74 passed
 Memory Tests:       19/19 passed
@@ -65,13 +66,14 @@ Storage Tests:      12/12 passed
 System Tests:        7/7  passed
 ROM Tests:          12/12 passed
 Video Tests:        11/11 passed
+Audio Tests:         8/8  passed
 
 ================================================================
 
 CODE METRICS
 ------------
 Total Source Files: 24 (.c) + 12 (.h)
-Total Test Files: 7
+Total Test Files: 8
 Lines of Code: ~4500+ (source) + ~2500 (tests)
 Build Warnings: 0 critical (informational conversion warnings with strict flags)
 Memory Leaks: 0 (Valgrind clean)
@@ -81,7 +83,7 @@ Performance: ~90+ MHz equivalent (target: 10x real-time met)
 
 QUALITY GATES
 -------------
-[V] All unit tests pass (159/159)
+[V] All unit tests pass (155/155)
 [V] No compiler errors
 [ ] Code coverage > 80% (measurement pending)
 [V] No critical warnings
@@ -95,8 +97,8 @@ QUALITY GATES
 
 SPRINT STATUS
 -------------
-Current Sprint: Sprint 17 completed
-Sprint Progress: 100% (Microdisc Controller & Sedoric Boot)
+Current Sprint: Sprint 18 completed
+Sprint Progress: 100% (Release Preparation v1.0.0-rc)
 
 Completed Sprints:
 - [V] Sprint 0: Infrastructure setup
@@ -109,17 +111,19 @@ Completed Sprints:
 - [V] Sprint 12: Build system + Tests (136 tests)
 - [V] Sprint 13: Main emulation loop + Documentation
 - [V] Sprint 14: ROM compatibility + Performance + Static analysis (148 tests)
-- [V] Sprint 15: Video integration + Debug export (159 tests)
+- [V] Sprint 15: Video integration + Debug export
 - [V] Sprint 15b: PSG bus fix + SDL2 keyboard mapping
 - [V] Sprint 16a: CLOAD via ROM patching
 - [V] Sprint 16b: HIRES rendering fix + keyboard automation
 - [V] Sprint 17: Microdisc controller + Sedoric disk boot
+- [V] Sprint 17b-c: RAM init fix + level-triggered IRQ
+- [V] Sprint 18a-b: Audio output + PSG envelope fix
+- [V] Sprint 18: Release preparation (155 tests, docs, examples)
 
-Remaining (Release phase):
-- [V] SDL2 display integration testing
+Remaining (Post-release):
 - [ ] Debugger with breakpoints
 - [ ] Save states
-- [ ] Release packaging
+- [ ] ORIC Atmos support
 
 ================================================================
 
@@ -177,4 +181,4 @@ License: Not specified yet
 ================================================================
 
 End of CIRRUS_OS Status Report
-Generated: 2026-02-23
+Generated: 2026-02-24

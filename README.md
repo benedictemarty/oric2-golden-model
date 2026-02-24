@@ -1,229 +1,233 @@
 # ORIC-1 Emulator
 
-A cycle-accurate ORIC-1 (8-bit computer) emulator written in C/C++.
+A cycle-accurate ORIC-1 (8-bit computer, 1983) emulator written in C.
+
+**Version: 1.0.0-rc** | **Status: Release Candidate** | **155 tests, 100% pass**
+
+## Quick Start
+
+```bash
+# Install dependencies (Debian/Ubuntu)
+sudo apt-get install build-essential libsdl2-dev
+
+# Build
+make SDL2=1
+
+# Run with ROM
+./oric1-emu -r roms/basic10.rom
+
+# Load a tape program
+./oric1-emu -r roms/basic10.rom -t program.tap
+
+# Boot Sedoric from disk
+./oric1-emu -r roms/basic10.rom --disk-rom roms/microdis.rom -d disk.dsk
+```
 
 ## Features
 
 ### Core Emulation
-- **6502 CPU**: Cycle-accurate emulation of all official opcodes
+- **6502 CPU**: Cycle-accurate emulation of all 151 official opcodes
 - **Memory**: 64KB addressable space with ROM/RAM banking
-- **VIA 6522**: I/O controller for keyboard and peripherals
+- **VIA 6522**: I/O controller with timers, interrupts, keyboard scanning
 - **Video**: Text mode (40x28) and HIRES graphics (240x200, 6 colors)
-- **Audio**: AY-3-8910 PSG sound chip emulation
-- **Storage**: Cassette (.TAP) and disk (Sedoric) support
+- **Audio**: AY-3-8910 PSG sound chip (3 tone channels, noise, 16 envelope shapes)
+- **Storage**: Cassette (.TAP) and disk (Sedoric .DSK) support
+- **Microdisc**: WD1793 FDC controller with 4 drives, overlay ROM
+
+### BASIC Loading
+- `CLOAD` command supported via ROM patching
+- Fast load mode with `-f` flag (direct memory injection)
+- Sedoric disk boot with full SYSTEM.DOS loading
 
 ### Modern Features
-- **Host Filesystem**: Share files between host and emulator
-- **Conversion Tools**: Convert BASIC/machine code to .TAP or Sedoric formats
-- **Fast Load**: Turbo tape loading
-- **Save States**: Quick save/restore (planned)
-- **Debugger**: Built-in debugging tools (planned)
+- **Host Filesystem**: Share files between host and emulator (`--hostfs`)
+- **Conversion Tools**: `bas2tap`, `bin2tap`, `tap2sedoric`
+- **Video Export**: Screenshot in PPM/BMP format (`--screenshot`)
+- **Keyboard Layouts**: QWERTY and AZERTY (`--keyboard azerty`)
+- **Headless Mode**: Run without display for testing/automation
 
 ## Building
 
 ### Prerequisites
 ```bash
-# Install dependencies (Debian/Ubuntu)
-sudo apt-get install build-essential cmake libsdl2-dev libsdl2-mixer-dev
+# Debian/Ubuntu
+sudo apt-get install build-essential cmake libsdl2-dev
 
-# Install dependencies (Fedora)
-sudo dnf install gcc-c++ cmake SDL2-devel SDL2_mixer-devel
+# Fedora
+sudo dnf install gcc cmake SDL2-devel
 
-# Install dependencies (Arch)
-sudo pacman -S base-devel cmake sdl2 sdl2_mixer
+# Arch
+sudo pacman -S base-devel cmake sdl2
 ```
 
-### Compilation
+### With Make (primary)
+```bash
+# Build with SDL2 (display + audio)
+make SDL2=1
+
+# Build headless (no display)
+make
+
+# Debug build
+make DEBUG=1 SDL2=1
+
+# Install
+sudo make install
+```
+
+### With CMake
 ```bash
 mkdir build && cd build
 cmake ..
 make -j$(nproc)
-```
-
-### Installation
-```bash
 sudo make install
 ```
 
 ## Usage
 
-### Running the Emulator
-```bash
-# Start with default ROM
-oric1-emu
+### Command Line Options
+```
+./oric1-emu [OPTIONS]
 
-# Load a .TAP file
-oric1-emu --tape program.tap
-
-# Load a .DSK file
-oric1-emu --disk program.dsk
-
-# Mount host directory
-oric1-emu --hostfs /path/to/shared/folder
+  -r, --rom FILE          Load BASIC ROM (required)
+  -t, --tape FILE         Load .TAP cassette file
+  -f, --fast-load         Fast load tape (direct memory injection)
+  -d, --disk FILE         Load .DSK disk image (drive A)
+  --disk-rom FILE         Load Microdisc ROM for disk boot
+  --disk1/2/3 FILE        Load disk for drives B/C/D
+  --hostfs DIR            Mount host directory
+  --keyboard LAYOUT       Keyboard layout: qwerty (default), azerty
+  --headless              Run without display
+  --cycles N              Run N cycles then exit (headless)
+  --screenshot FILE       Screenshot at exit (.ppm or .bmp)
+  --screenshot-at N:FILE  Screenshot after N cycles
+  --type-keys N:TEXT      Simulate keyboard input after N cycles
+  -v, --verbose           Enable debug logging
 ```
 
-### Conversion Tools
+### Key Bindings
+| Key | Function |
+|-----|----------|
+| F4 | Cold reset |
+| F5 | Warm reset |
+| F10 | Quit |
+| F11 | Fullscreen |
+| F12 | Screenshot |
 
-#### BASIC to .TAP
+### ORIC Keyboard
+Standard PC keyboard maps to ORIC-1 layout. The ORIC has 48 keys arranged in an 8x8 matrix. Shift and CTRL modifiers are supported.
+
+### Loading Programs
+
+**From tape (CLOAD):**
 ```bash
-# Convert a BASIC program to tape format
+./oric1-emu -r basic10.rom -t game.tap
+# Then type CLOAD in BASIC
+```
+
+**From tape (fast load):**
+```bash
+./oric1-emu -r basic10.rom -t game.tap -f
+```
+
+**From Sedoric disk:**
+```bash
+./oric1-emu -r basic10.rom --disk-rom microdis.rom -d SEDORIC.DSK
+```
+
+## Conversion Tools
+
+```bash
+# Convert BASIC text file to .TAP
 bas2tap program.bas -o program.tap
-```
 
-#### Binary to .TAP
-```bash
-# Convert machine code binary to tape format
+# Convert binary to .TAP with load/exec address
 bin2tap program.bin --start 0x0400 --exec 0x0400 -o program.tap
-```
 
-#### .TAP to Sedoric
-```bash
-# Convert tape format to Sedoric disk
+# Convert .TAP to Sedoric disk
 tap2sedoric program.tap -o disk.dsk
 ```
 
-#### Hybrid BASIC/Machine Code
+## Testing
+
 ```bash
-# Convert hybrid BASIC+machine code
-bas2tap hybrid.bas --attach code.bin --load-addr 0x0400 -o program.tap
+# Run all tests (155 tests)
+make tests
+
+# Run specific test suite
+make test-cpu       # 74 CPU tests
+make test-memory    # 19 memory tests
+make test-io        # 24 VIA/I/O tests
+make test-storage   # 12 storage tests
+make test-system    # 7 integration tests
+make test-video     # 11 video export tests
+make test-audio     # 8 PSG audio tests
+
+# Memory leak check
+make valgrind
+
+# Static analysis
+make static-analysis
 ```
-
-## Key Bindings
-
-### Emulator Controls
-- **F1**: Help menu
-- **F2**: Save state
-- **F3**: Load state
-- **F4**: Reset (cold)
-- **F5**: Reset (warm)
-- **F6**: Fast forward
-- **F9**: Debugger
-- **F10**: Menu
-- **F11**: Fullscreen
-- **F12**: Screenshot
-
-### ORIC Keyboard
-Standard PC keyboard maps to ORIC-1 layout. See [docs/keyboard-mapping.md](docs/keyboard-mapping.md)
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────┐
-│              ORIC-1 Emulator                │
-├─────────────────────────────────────────────┤
-│  ┌────────┐  ┌───────┐  ┌────────────────┐ │
-│  │  6502  │◄─┤  BUS  ├─►│  Memory (64KB) │ │
-│  │  CPU   │  └───┬───┘  └────────────────┘ │
-│  └────────┘      │                          │
-│                  ├──► VIA 6522 (I/O)        │
-│                  ├──► Video System          │
-│                  ├──► AY-3-8910 (Audio)     │
-│                  ├──► Storage (Tape/Disk)   │
-│                  └──► Host Filesystem       │
-├─────────────────────────────────────────────┤
-│            SDL2 (Display/Audio/Input)       │
-└─────────────────────────────────────────────┘
++---------------------------------------------+
+|              ORIC-1 Emulator                |
++---------------------------------------------+
+|  +--------+  +-------+  +----------------+ |
+|  |  6502  |<-|  BUS  |->|  Memory (64KB) | |
+|  |  CPU   |  +---+---+  +----------------+ |
+|  +--------+      |                          |
+|                   +---> VIA 6522 (I/O)      |
+|                   +---> Video System        |
+|                   +---> AY-3-8910 (Audio)   |
+|                   +---> Microdisc (FDC)     |
+|                   +---> Host Filesystem     |
++---------------------------------------------+
+|            SDL2 (Display/Audio/Input)       |
++---------------------------------------------+
 ```
 
 ## Project Structure
 
 ```
 Oric1/
-├── src/                   # Source code
-│   ├── cpu/              # 6502 CPU emulation
-│   ├── memory/           # Memory management
-│   ├── io/               # I/O (VIA 6522, keyboard)
-│   ├── video/            # Video system
-│   ├── audio/            # Audio (AY-3-8910)
-│   ├── storage/          # Tape/disk storage
-│   ├── hostfs/           # Host filesystem
-│   └── utils/            # Utilities
-├── include/              # Header files
-├── tests/                # Test suite
-│   ├── unit/            # Unit tests
-│   └── integration/     # Integration tests
-├── tools/                # Conversion utilities
-│   ├── bas2tap.c        # BASIC → .TAP
-│   ├── bin2tap.c        # Binary → .TAP
-│   └── tap2sedoric.c    # .TAP → Sedoric
-├── docs/                 # Documentation
-│   ├── api/             # API documentation
-│   ├── specs/           # Hardware specifications
-│   └── user-guide/      # User manual
-├── roms/                 # ROM files
-└── build/                # Build directory
+  src/
+    cpu/          # 6502 CPU emulation
+    memory/       # Memory management + banking
+    io/           # VIA 6522, keyboard, cassette, microdisc
+    video/        # Video (text + HIRES) + export
+    audio/        # AY-3-8910 PSG + SDL2 output
+    storage/      # TAP, Sedoric, FDC WD1793
+    hostfs/       # Host filesystem + VFS
+    utils/        # Logging, config
+  include/        # Header files
+  tests/unit/     # Unit tests (155 tests)
+  tools/          # Conversion tools
+  examples/       # Example BASIC programs
+  docs/           # Documentation
+  roms/           # ROM files (not distributed)
 ```
 
 ## Documentation
 
 - [User Guide](docs/user-guide/README.md)
-- [API Documentation](docs/api/README.md)
-- [Hardware Specifications](docs/specs/README.md)
-- [Development Guide](docs/DEVELOPMENT.md)
-- [Contributing](docs/CONTRIBUTING.md)
-
-## Roadmap
-
-See [ROADMAP](ROADMAP) for detailed development plan.
-
-### Current Sprint: Sprint 0 (Initialization)
-- [x] Project structure
-- [x] Agile documentation
-- [ ] Build system
-- [ ] Initial implementation
-
-### Next Sprint: Sprint 1 (CPU Core)
-- [ ] 6502 instruction set
-- [ ] Cycle-accurate timing
-- [ ] Comprehensive tests
-
-## Testing
-
-```bash
-# Run all tests
-make test
-
-# Run specific test suite
-./build/tests/cpu_tests
-./build/tests/memory_tests
-
-# Run with coverage
-make coverage
-```
+- [Compatibility List](docs/COMPATIBILITY.md)
+- [Contributing](CONTRIBUTING.md)
+- [Changelog](CHANGELOG)
+- [Roadmap](ROADMAP)
 
 ## Contributing
 
-Contributions welcome! Please read [CONTRIBUTING.md](docs/CONTRIBUTING.md) first.
-
-### Development Workflow
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Write tests for your changes
-4. Implement your feature
-5. Ensure all tests pass
-6. Update documentation
-7. Commit with descriptive message
-8. Push and create Pull Request
-
-## Agile Process
-
-This project follows Agile methodology:
-- **Sprints**: 2-week iterations
-- **Daily Updates**: CIRRUS_OS status file
-- **Version Tracking**: Semantic versioning
-- **Documentation**: Living documentation updated with code
-
-See [CHANGELOG](CHANGELOG) for version history and [VERSION_TRACKING](VERSION_TRACKING) for current status.
-
-## License
-
-To be determined.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for build instructions, coding style, and contribution guidelines.
 
 ## Credits
 
-### ORIC-1 Hardware
+### ORIC-1 Hardware (1983)
 - **CPU**: MOS Technology 6502 @ 1 MHz
-- **RAM**: 48 KB (16 KB on base model)
+- **RAM**: 48 KB
 - **ROM**: 16 KB (BASIC 1.0)
 - **Video**: ULA (Uncommitted Logic Array)
 - **Sound**: General Instrument AY-3-8910
@@ -234,20 +238,17 @@ To be determined.
 - 6502 Programming Manual
 - Defence Force documentation
 - Fabrice Frances' EUPHORIC emulator
+- Oricutron (reference implementation for PSG, keyboard, ULA)
+
+## License
+
+To be determined.
 
 ## Contact
 
 - **Maintainer**: bmarty
 - **Email**: bmarty@mailo.com
-- **Repository**: [Local development]
-
-## Status
-
-⚠️ **Early Development**: This emulator is in active development. Many features are not yet implemented.
-
-Current Version: **0.1.0-alpha**
-Last Updated: **2026-01-31**
 
 ---
 
-*Made with ❤️ for the ORIC community*
+Current Version: **1.0.0-rc** | Last Updated: **2026-02-24**

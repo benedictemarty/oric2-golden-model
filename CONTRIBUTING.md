@@ -1,0 +1,143 @@
+# Contributing to ORIC-1 Emulator
+
+Thank you for your interest in contributing to the ORIC-1 emulator project.
+
+## Building from Source
+
+### Prerequisites
+
+```bash
+# Debian/Ubuntu
+sudo apt-get install build-essential cmake libsdl2-dev
+
+# Fedora
+sudo dnf install gcc cmake SDL2-devel
+
+# Arch
+sudo pacman -S base-devel cmake sdl2
+```
+
+### Build
+
+```bash
+# Standard build with SDL2
+make SDL2=1
+
+# Debug build
+make DEBUG=1 SDL2=1
+
+# Run tests
+make tests
+```
+
+### CMake (alternative)
+
+```bash
+mkdir build && cd build
+cmake ..
+make -j$(nproc)
+ctest
+```
+
+## Project Layout
+
+| Directory | Contents |
+|-----------|----------|
+| `src/cpu/` | 6502 CPU emulation |
+| `src/memory/` | Memory system + ROM/RAM banking |
+| `src/io/` | VIA 6522, keyboard, cassette, microdisc |
+| `src/video/` | Text/HIRES rendering + export |
+| `src/audio/` | AY-3-8910 PSG + SDL2 output |
+| `src/storage/` | TAP, Sedoric, FDC WD1793 |
+| `src/hostfs/` | Host filesystem sharing |
+| `src/utils/` | Logging, config |
+| `include/` | Public headers |
+| `tests/unit/` | Unit tests |
+| `tools/` | Conversion utilities |
+
+## Coding Style
+
+- **Language**: C11 (gcc/clang)
+- **Indentation**: 4 spaces (no tabs)
+- **Braces**: K&R style (opening brace on same line)
+- **Naming**: `snake_case` for functions and variables, `UPPER_CASE` for macros
+- **Headers**: Include guards with `#ifndef HEADER_H` / `#define HEADER_H`
+- **Comments**: C-style `/* ... */` for block, `//` for single line
+- **Line length**: 100 characters max
+
+### Example
+
+```c
+void via_write(via6522_t* via, uint8_t reg, uint8_t data) {
+    switch (reg) {
+    case VIA_ORB:
+        via->orb = (data & via->ddrb) | (via->orb & ~via->ddrb);
+        break;
+    default:
+        break;
+    }
+}
+```
+
+## Testing
+
+Every change should include tests. The test framework uses simple C macros:
+
+```c
+#define TEST(name) static void name(void)
+#define RUN(name) do { printf("  %-50s", #name); name(); tests_passed++; printf("PASS\n"); } while(0)
+#define ASSERT_EQ(a, b) do { if ((a) != (b)) { /* fail */ } } while(0)
+```
+
+### Running Tests
+
+```bash
+make tests              # All test suites (155 tests)
+make test-cpu           # CPU tests only
+make test-audio         # Audio tests only
+make valgrind           # Memory leak check
+make static-analysis    # Compiler warnings analysis
+```
+
+### Adding a Test
+
+1. Add test function in the appropriate `tests/unit/test_*.c` file
+2. Add `RUN(test_name);` in `main()`
+3. Verify with `make test-<suite>`
+
+## Development Workflow
+
+1. Create a feature branch from `main`
+2. Write tests first (TDD encouraged)
+3. Implement the feature
+4. Run `make tests` to verify all tests pass
+5. Update CHANGELOG with your changes
+6. Commit with a descriptive message
+7. Submit a pull request
+
+## Commit Messages
+
+Follow conventional commit format:
+
+```
+feat: add joystick support
+fix: correct HIRES attribute parsing
+docs: update user guide with disk loading
+test: add envelope shape tests for PSG
+```
+
+## Reporting Issues
+
+When reporting bugs, please include:
+- Steps to reproduce
+- Expected vs actual behavior
+- ROM/program used (if applicable)
+- Build configuration (SDL2, DEBUG, etc.)
+
+## Architecture Notes
+
+- The emulator is designed to be modular: each subsystem (CPU, memory, VIA, video, audio, storage) is independent
+- I/O routing uses callbacks: `memory_set_io_callbacks()` wires read/write to VIA and peripherals
+- SDL2 is optional: the emulator can run headless for testing
+- The PSG (AY-3-8910) runs at 1 MHz clock, divided by 8 for tone/noise and 16 for envelopes
+- Reference implementation: Oricutron (for PSG timing, ULA rendering, keyboard mapping)

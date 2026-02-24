@@ -59,7 +59,13 @@ TOOL_OBJECTS = src/storage/tap.o src/utils/logging.o
 TARGET = oric1-emu
 TOOLS = bas2tap bin2tap tap2sedoric
 
-.PHONY: all clean tools tests test-cpu test-memory test-io test-storage test-system test-rom test-video valgrind static-analysis help
+# Install paths
+PREFIX ?= /usr/local
+BINDIR = $(PREFIX)/bin
+DATADIR = $(PREFIX)/share/oric1-emulator
+DOCDIR = $(PREFIX)/share/doc/oric1-emulator
+
+.PHONY: all clean tools tests test-cpu test-memory test-io test-storage test-system test-rom test-video test-audio valgrind static-analysis install uninstall help
 
 all: $(TARGET)
 
@@ -137,7 +143,13 @@ test-video: $(TEST_VIDEO_SRCS)
 	@$(CC) $(CFLAGS) $(TEST_VIDEO_SRCS) $(LDFLAGS) -o test_video
 	@./test_video
 
-tests: test-cpu test-memory test-io test-storage test-system test-video
+TEST_AUDIO_SRCS = tests/unit/test_audio.c src/audio/ay3891x.c src/utils/logging.c
+
+test-audio: $(TEST_AUDIO_SRCS)
+	@$(CC) $(CFLAGS) $(TEST_AUDIO_SRCS) $(LDFLAGS) -o test_audio
+	@./test_audio
+
+tests: test-cpu test-memory test-io test-storage test-system test-video test-audio
 	@echo ""
 	@echo "═══════════════════════════════════════════════════════"
 	@echo "  All test suites completed!"
@@ -157,7 +169,7 @@ static-analysis:
 	@echo ""
 	@echo "Static analysis complete."
 
-valgrind: test-cpu test-memory test-io test-storage test-system test-rom test-video
+valgrind: test-cpu test-memory test-io test-storage test-system test-rom test-video test-audio
 	@echo "Running tests under Valgrind..."
 	@valgrind --leak-check=full --error-exitcode=1 --quiet ./test_cpu
 	@valgrind --leak-check=full --error-exitcode=1 --quiet ./test_memory
@@ -166,14 +178,28 @@ valgrind: test-cpu test-memory test-io test-storage test-system test-rom test-vi
 	@valgrind --leak-check=full --error-exitcode=1 --quiet ./test_system
 	@valgrind --leak-check=full --error-exitcode=1 --quiet ./test_rom
 	@valgrind --leak-check=full --error-exitcode=1 --quiet ./test_video
+	@valgrind --leak-check=full --error-exitcode=1 --quiet ./test_audio
 	@echo ""
 	@echo "═══════════════════════════════════════════════════════"
 	@echo "  Valgrind: No memory leaks detected!"
 	@echo "═══════════════════════════════════════════════════════"
 
+install: $(TARGET)
+	install -d $(DESTDIR)$(BINDIR)
+	install -m 755 $(TARGET) $(DESTDIR)$(BINDIR)/
+	install -d $(DESTDIR)$(DATADIR)/roms
+	-install -m 644 roms/*.rom $(DESTDIR)$(DATADIR)/roms/ 2>/dev/null || true
+	install -d $(DESTDIR)$(DOCDIR)
+	install -m 644 README.md $(DESTDIR)$(DOCDIR)/
+
+uninstall:
+	rm -f $(DESTDIR)$(BINDIR)/$(TARGET)
+	rm -rf $(DESTDIR)$(DATADIR)
+	rm -rf $(DESTDIR)$(DOCDIR)
+
 clean:
 	rm -f $(OBJECTS) $(TARGET) $(TOOLS)
-	rm -f test_cpu test_memory test_io test_storage test_system test_rom test_video
+	rm -f test_cpu test_memory test_io test_storage test_system test_rom test_video test_audio
 	rm -f tools/*.o
 
 help:
@@ -190,8 +216,11 @@ help:
 	@echo "  test-system  - Run integration tests only"
 	@echo "  test-rom     - Run ROM compatibility tests"
 	@echo "  test-video   - Run video export tests"
+	@echo "  test-audio   - Run PSG audio tests"
 	@echo "  valgrind     - Run all tests under Valgrind"
 	@echo "  static-analysis - Run static analysis"
+	@echo "  install      - Install emulator (PREFIX=/usr/local)"
+	@echo "  uninstall    - Remove installed files"
 	@echo "  clean        - Remove build artifacts"
 	@echo "  help         - Show this help"
 	@echo ""
