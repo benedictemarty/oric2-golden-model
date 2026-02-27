@@ -19,7 +19,7 @@ make install PREFIX=/usr/local
 ## Testing
 
 ```bash
-make tests               # All 163 tests (must all pass before commit)
+make tests               # All 168 tests (must all pass before commit)
 make test-cpu            # 74 CPU tests
 make test-memory         # 19 memory tests
 make test-io             # 24 VIA/I/O tests

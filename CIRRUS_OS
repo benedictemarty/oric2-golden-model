@@ -2,8 +2,8 @@ CIRRUS_OS - ORIC-1 Emulator Build & Development Status
 ======================================================
 
 Project: ORIC-1 Cycle-Accurate Emulator
-Version: 1.1.1-alpha
-Build Status: ALPHA (VSync CB1 Signal)
+Version: 1.1.2-alpha
+Build Status: ALPHA (VSync CB1 Improvements)
 Last Updated: 2026-02-27
 
 ================================================================
@@ -41,8 +41,8 @@ BUILD STATUS
 [V] Audio Output          - Connected (PSG → SDL2 audio callback)
 [V] PSG Envelopes         - Fixed (shapes 0-7 single cycle, HOLD shapes, continuous shapes)
 [V] Interactive Debugger   - Complete (breakpoints, watchpoints, step, REPL)
-[V] VSync CB1 Signal      - Fixed (via_trigger_cb1 at end of each frame, IFR bit 4)
-[V] Test Suite            - Complete (163 tests, 100% pass)
+[V] VSync CB1 Signal      - Improved (edge-triggered CB1, PAL timing, mid-frame trigger, IER guard)
+[V] Test Suite            - Complete (168 tests, 100% pass)
 [V] ROM Compatibility     - Validated (ORIC-1 BASIC 1.0 ROM)
 [V] Performance           - Benchmarked (~90+ MHz, target met)
 [V] Static Analysis       - Run (no critical issues)

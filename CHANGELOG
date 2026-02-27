@@ -5,6 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.2-alpha] - 2026-02-27
+
+### VSync CB1 Improvements (Sprint 19c)
+
+#### Changed
+- **PAL timing constants**: replaced `CYCLES_PER_FRAME = 1000000/50` (20000)
+  with real PAL values: 312 lines x 64 cycles = 19968 cycles/frame.
+  New constants: `PAL_LINES_PER_FRAME`, `PAL_CYCLES_PER_LINE`, `VSYNC_START_LINE`,
+  `VSYNC_CYCLE` (16384 = line 256 x 64 cycles).
+- **VSync mid-frame trigger**: VSync CB1 pulse now fires at line 256 (cycle
+  16384) inside the frame loop instead of at the end of frame, matching real
+  ULA timing. CB1 goes low (falling edge) at VSYNC_CYCLE, then returns high
+  after the frame loop completes.
+- **Edge-triggered CB1**: new `via_set_cb1()` function implements proper edge
+  detection using PCR bit 4 (0=falling edge, 1=rising edge). IFR CB1 flag is
+  only set on the correct edge transition. Added `cb1_pin` field to `via6522_t`.
+- **Legacy `via_trigger_cb1()`**: refactored to use `via_set_cb1()` internally
+  (complete pulse: high→low→high).
+- **IER guard on VSync trigger**: emulation loop only generates VSync CB1 pulse
+  when software has enabled CB1 in VIA IER (`emu->via.ier & VIA_INT_CB1`),
+  preventing disruption of ROM keyboard scan IRQ timing.
+
+#### Added
+- **5 new CB1 edge detection tests**: falling edge trigger, rising edge trigger,
+  wrong edge no trigger, same state no trigger, clear and retrigger.
+- Total: 168 tests (163 + 5), 100% pass rate.
+
 ## [1.1.1-alpha] - 2026-02-27
 
 ### VSync CB1 Signal (Sprint 19b)

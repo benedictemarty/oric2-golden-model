@@ -84,6 +84,9 @@ typedef struct {
     void (*portb_write)(uint8_t value, void* userdata);
     void* userdata;
 
+    /* CB1 pin state for edge detection */
+    bool cb1_pin;  /**< Current CB1 pin level (true=high, VSync inactive) */
+
     /* IRQ callback */
     void (*irq_callback)(bool state, void* userdata);
     void* irq_userdata;
@@ -172,11 +175,23 @@ void via_trigger_ca1(via6522_t* via);
 void via_trigger_ca2(via6522_t* via);
 
 /**
- * @brief Trigger CB1 interrupt
+ * @brief Trigger CB1 interrupt (legacy: pulse high→low→high)
  *
  * @param via Pointer to VIA structure
  */
 void via_trigger_cb1(via6522_t* via);
+
+/**
+ * @brief Set CB1 pin level with edge detection
+ *
+ * Compares new state against cb1_pin. If a transition occurs,
+ * checks PCR bit 4 to determine active edge (0=falling, 1=rising).
+ * Sets IFR CB1 flag only on the correct edge.
+ *
+ * @param via Pointer to VIA structure
+ * @param state New CB1 pin level (true=high, false=low)
+ */
+void via_set_cb1(via6522_t* via, bool state);
 
 /**
  * @brief Trigger CB2 interrupt

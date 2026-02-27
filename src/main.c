@@ -438,6 +438,7 @@ static void emulator_run(emulator_t* emu) {
     while (emu->running && g_running) {
         /* Execute one frame worth of CPU cycles */
         int frame_cycles = 0;
+        bool vsync_triggered = false;
         while (frame_cycles < CYCLES_PER_FRAME && !emu->cpu.halted) {
             /* Legacy single breakpoint (--breakpoint / -b) */
             if (emu->breakpoint >= 0 && emu->cpu.PC == (uint16_t)emu->breakpoint) {
@@ -462,14 +463,25 @@ static void emulator_run(emulator_t* emu) {
             if (emu->has_microdisc) {
                 fdc_ticktock(&emu->microdisc.fdc, step);
             }
+
+            /* VSync trigger at line 256 (cycle 16384) — On real Oric hardware,
+             * the ULA drives CB1 low at the start of vertical blanking.
+             * Only generate the CB1 pulse if software has enabled CB1 in IER,
+             * to avoid disturbing the ROM keyboard scan IRQ timing. */
+            if (!vsync_triggered && frame_cycles >= VSYNC_CYCLE) {
+                if (emu->via.ier & VIA_INT_CB1) {
+                    via_set_cb1(&emu->via, false);  /* Falling edge: VSync active */
+                }
+                vsync_triggered = true;
+            }
+        }
+
+        /* Release VSync at end of frame (CB1 returns high) */
+        if (vsync_triggered && !(emu->via.cb1_pin)) {
+            via_set_cb1(&emu->via, true);
         }
 
         total_executed += (uint64_t)frame_cycles;
-
-        /* Trigger CB1 (VSync) — On real Oric hardware, the ULA generates
-         * a vertical sync pulse on VIA CB1 at the end of each frame (50 Hz).
-         * Software can poll IFR bit 4 to synchronize with the display. */
-        via_trigger_cb1(&emu->via);
 
         /* Auto-type: inject keystrokes at specified cycle count.
          * Each key is pressed for ~2 frames (40ms) then released for ~2 frames.

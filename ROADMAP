@@ -207,6 +207,15 @@ host filesystem sharing and conversion tools for legacy BASIC/machine code progr
 - [x] Faithful to real Oric hardware (ULA → CB1 pin → VIA IFR bit 4)
 - [x] 163 tests pass (no regression)
 
+### Sprint 19c: VSync CB1 Improvements (v1.1.2-alpha) - DONE
+- [x] PAL timing: 312 lines x 64 cycles = 19968 cycles/frame (was 20000)
+- [x] VSync mid-frame: CB1 triggers at line 256 (cycle 16384) not end of frame
+- [x] Edge-triggered CB1: via_set_cb1() with PCR bit 4 edge selection
+- [x] cb1_pin field in via6522_t for pin level tracking
+- [x] IER guard: VSync only fires when CB1 enabled in IER (keyboard safe)
+- [x] Legacy via_trigger_cb1() refactored to use via_set_cb1() (pulse)
+- [x] 5 new CB1 edge detection tests (168 total, 100% pass)
+
 ## Future Enhancements
 
 ### Advanced Features
@@ -234,13 +243,13 @@ host filesystem sharing and conversion tools for legacy BASIC/machine code progr
 - [ ] <5% CPU overhead on modern hardware
 
 ### Quality
-- [x] 163 tests passing
+- [x] 168 tests passing
 - [x] Zero critical bugs in test suite
 - [x] API documentation complete
 - [ ] Comprehensive user guide
 
 ---
 
-**Last Updated**: 2026-02-24
-**Current Version**: 1.1.0-alpha
-**Next Milestone**: 1.1.0 (Debugger + Advanced features)
+**Last Updated**: 2026-02-27
+**Current Version**: 1.1.2-alpha
+**Next Milestone**: 1.2.0 (Advanced features)

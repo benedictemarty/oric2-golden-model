@@ -26,10 +26,16 @@
 #include "hostfs/hostfs.h"
 #include "debugger.h"
 
-#define EMU_VERSION "1.1.0-alpha"
+#define EMU_VERSION "1.1.2-alpha"
 #define ORIC_CLOCK_HZ   1000000
 #define ORIC_FRAME_RATE  50
-#define CYCLES_PER_FRAME (ORIC_CLOCK_HZ / ORIC_FRAME_RATE)
+
+/* PAL timing constants (real hardware values) */
+#define PAL_LINES_PER_FRAME  312
+#define PAL_CYCLES_PER_LINE  64
+#define CYCLES_PER_FRAME     (PAL_LINES_PER_FRAME * PAL_CYCLES_PER_LINE)  /* 19968 */
+#define VSYNC_START_LINE     256
+#define VSYNC_CYCLE          (VSYNC_START_LINE * PAL_CYCLES_PER_LINE)     /* 16384 */
 
 typedef struct {
     cpu6502_t cpu;

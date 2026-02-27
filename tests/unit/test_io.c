@@ -326,6 +326,74 @@ TEST(test_trigger_cb2) {
 }
 
 /* ═══════════════════════════════════════════════════════════════════ */
+/*  CB1 EDGE DETECTION TESTS                                          */
+/* ═══════════════════════════════════════════════════════════════════ */
+
+TEST(test_cb1_edge_falling) {
+    /* PCR bit 4 = 0: interrupt on falling edge */
+    via6522_t via;
+    via_init(&via);
+    via_reset(&via);
+    via.pcr &= ~0x10;  /* Falling edge (default) */
+    /* CB1 starts high after reset, drive it low */
+    via_set_cb1(&via, false);
+    ASSERT_TRUE(via.ifr & VIA_INT_CB1);
+}
+
+TEST(test_cb1_edge_rising) {
+    /* PCR bit 4 = 1: interrupt on rising edge */
+    via6522_t via;
+    via_init(&via);
+    via_reset(&via);
+    via.pcr |= 0x10;  /* Rising edge */
+    /* Drive low first (no trigger on rising edge mode) */
+    via.cb1_pin = false;  /* Force pin low without triggering */
+    /* Now drive high: should trigger */
+    via_set_cb1(&via, true);
+    ASSERT_TRUE(via.ifr & VIA_INT_CB1);
+}
+
+TEST(test_cb1_no_trigger_wrong_edge) {
+    /* PCR bit 4 = 1 (rising): falling edge should NOT trigger */
+    via6522_t via;
+    via_init(&via);
+    via_reset(&via);
+    via.pcr |= 0x10;  /* Rising edge mode */
+    /* CB1 starts high, drive low = falling edge */
+    via_set_cb1(&via, false);
+    ASSERT_FALSE(via.ifr & VIA_INT_CB1);
+}
+
+TEST(test_cb1_no_trigger_same_state) {
+    /* Setting CB1 to same state should not trigger */
+    via6522_t via;
+    via_init(&via);
+    via_reset(&via);
+    via.pcr &= ~0x10;  /* Falling edge */
+    /* CB1 starts high, set high again = no transition */
+    via_set_cb1(&via, true);
+    ASSERT_FALSE(via.ifr & VIA_INT_CB1);
+}
+
+TEST(test_cb1_clear_and_retrigger) {
+    /* Clear CB1 flag via ORB read, then re-trigger */
+    via6522_t via;
+    via_init(&via);
+    via_reset(&via);
+    via.pcr &= ~0x10;  /* Falling edge */
+    /* First trigger */
+    via_set_cb1(&via, false);
+    ASSERT_TRUE(via.ifr & VIA_INT_CB1);
+    /* Clear CB1 flag by reading ORB */
+    via_read(&via, VIA_ORB);
+    ASSERT_FALSE(via.ifr & VIA_INT_CB1);
+    /* Re-trigger: drive high then low again */
+    via_set_cb1(&via, true);
+    via_set_cb1(&via, false);
+    ASSERT_TRUE(via.ifr & VIA_INT_CB1);
+}
+
+/* ═══════════════════════════════════════════════════════════════════ */
 /*  SHIFT REGISTER TESTS                                              */
 /* ═══════════════════════════════════════════════════════════════════ */
 
@@ -391,6 +459,13 @@ int main(void) {
     RUN(test_trigger_ca2);
     RUN(test_trigger_cb1);
     RUN(test_trigger_cb2);
+
+    printf("\n  CB1 Edge Detection:\n");
+    RUN(test_cb1_edge_falling);
+    RUN(test_cb1_edge_rising);
+    RUN(test_cb1_no_trigger_wrong_edge);
+    RUN(test_cb1_no_trigger_same_state);
+    RUN(test_cb1_clear_and_retrigger);
 
     printf("\n  Shift Register:\n");
     RUN(test_shift_register);

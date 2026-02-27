@@ -21,6 +21,7 @@ static void via_check_irq(via6522_t* via) {
 
 void via_init(via6522_t* via) {
     memset(via, 0, sizeof(via6522_t));
+    via->cb1_pin = true;  /* CB1 defaults high (VSync inactive) */
 }
 
 void via_reset(via6522_t* via) {
@@ -39,6 +40,7 @@ void via_reset(via6522_t* via) {
     via->pcr = 0;
     via->ifr = 0;
     via->ier = 0;
+    via->cb1_pin = true;  /* CB1 defaults high (VSync inactive) */
 }
 
 uint8_t via_read(via6522_t* via, uint8_t reg) {
@@ -242,9 +244,31 @@ void via_trigger_ca2(via6522_t* via) {
     via_check_irq(via);
 }
 
+void via_set_cb1(via6522_t* via, bool state) {
+    bool old = via->cb1_pin;
+    via->cb1_pin = state;
+
+    /* No transition = no interrupt */
+    if (old == state) return;
+
+    /* PCR bit 4: 0 = interrupt on falling edge, 1 = interrupt on rising edge */
+    bool rising_edge = (via->pcr & 0x10) != 0;
+
+    if (rising_edge && !old && state) {
+        /* Rising edge detected and PCR selects rising */
+        via->ifr |= VIA_INT_CB1;
+        via_check_irq(via);
+    } else if (!rising_edge && old && !state) {
+        /* Falling edge detected and PCR selects falling */
+        via->ifr |= VIA_INT_CB1;
+        via_check_irq(via);
+    }
+}
+
 void via_trigger_cb1(via6522_t* via) {
-    via->ifr |= VIA_INT_CB1;
-    via_check_irq(via);
+    /* Legacy pulse: high→low→high (always triggers regardless of PCR) */
+    via_set_cb1(via, false);
+    via_set_cb1(via, true);
 }
 
 void via_trigger_cb2(via6522_t* via) {
