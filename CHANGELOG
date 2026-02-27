@@ -27,6 +27,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   when software has enabled CB1 in VIA IER (`emu->via.ier & VIA_INT_CB1`),
   preventing disruption of ROM keyboard scan IRQ timing.
 
+#### Fixed
+- **VSync release IER guard**: the CB1 release (rising edge at end of frame)
+  now also checks IER before calling `via_set_cb1(true)`. Without this guard,
+  a rising edge with PCR bit 4=1 would set IFR CB1 parasitically, disrupting
+  the ROM T1 keyboard scan IRQ handler. Pin state is reset silently when IER
+  does not have CB1 enabled.
+
 #### Added
 - **5 new CB1 edge detection tests**: falling edge trigger, rising edge trigger,
   wrong edge no trigger, same state no trigger, clear and retrigger.

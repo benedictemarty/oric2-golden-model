@@ -478,7 +478,12 @@ static void emulator_run(emulator_t* emu) {
 
         /* Release VSync at end of frame (CB1 returns high) */
         if (vsync_triggered && !(emu->via.cb1_pin)) {
-            via_set_cb1(&emu->via, true);
+            if (emu->via.ier & VIA_INT_CB1) {
+                via_set_cb1(&emu->via, true);
+            } else {
+                /* Reset pin state silently (no IFR side effect) */
+                emu->via.cb1_pin = true;
+            }
         }
 
         total_executed += (uint64_t)frame_cycles;
