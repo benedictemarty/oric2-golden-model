@@ -1,12 +1,29 @@
 VERSION_TRACKING - ORIC-1 Emulator
 =====================================
 
-Current Version: 1.0.0-rc
-Release Date: 2026-02-24
-Status: Release Candidate (All features complete, 155 tests pass)
+Current Version: 1.1.1-alpha
+Release Date: 2026-02-27
+Status: Alpha (VSync CB1 signal, 163 tests pass)
 
 Version History:
 ----------------
+- 1.1.1-alpha (2026-02-27): VSync CB1 Signal (Sprint 19b)
+  * Fixed: via_trigger_cb1() now called at end of each frame (50 Hz)
+  * ULA VSync pulse on CB1 enables IFR bit 4 polling and CB1 interrupts
+  * Programs using VBlank synchronization now work correctly
+  * 163 tests, 100% pass rate
+
+- 1.1.0-alpha (2026-02-24): Interactive Debugger (Sprint 19)
+  * Interactive REPL debugger (breakpoints, watchpoints, step, disassembly)
+  * emulator_t extracted to include/emulator.h shared header
+  * CLI: --debug/-D (break at start), --break ADDR (initial breakpoint)
+  * F9 key enters debugger during SDL2 emulation
+  * Commands: s, n, c, r, d, m, b, bd, w, wd, via, psg, stack, set, q, h
+  * Memory write watchpoints via memory_set_trace() callback
+  * Step-over (next) for JSR with temporary breakpoint at PC+3
+  * 8 new unit tests (init, breakpoints, watchpoints, step, disassembly)
+  * Total: 163 tests, 100% pass rate
+
 - 1.0.0-rc (2026-02-24): Release Preparation (Sprint 18)
   * 8 PSG audio tests added (init, write/read, envelopes, mixer, tone, silence)
   * CMakeLists.txt synced with Makefile (microdisc.c, export.c added)
@@ -129,9 +146,9 @@ MAJOR.MINOR.PATCH-LABEL
 - PATCH: Bug fixes (backward compatible)
 - LABEL: alpha, beta, rc, stable
 
-Next Planned Version: 1.0.0
+Next Planned Version: 1.1.0
 Target Date: TBD
 Planned Features:
-  - Final release testing
-  - Package for Linux distributions
+  - Save states
+  - ORIC Atmos support
   - Additional game compatibility testing

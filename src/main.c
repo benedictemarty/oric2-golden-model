@@ -16,6 +16,7 @@
 #include <sys/types.h>
 #include <errno.h>
 
+#include "emulator.h"
 #include "cpu/cpu6502.h"
 #include "memory/memory.h"
 #include "io/via6522.h"
@@ -27,16 +28,12 @@
 #include "io/microdisc.h"
 #include "audio/audio.h"
 #include "io/keyboard.h"
+#include "debugger.h"
 #ifdef HAS_SDL2
 #include <SDL2/SDL.h>
 #endif
 #include "hostfs/hostfs.h"
 #include "utils/logging.h"
-
-#define VERSION "1.0.0-beta.10"
-#define ORIC_CLOCK_HZ   1000000
-#define ORIC_FRAME_RATE  50
-#define CYCLES_PER_FRAME (ORIC_CLOCK_HZ / ORIC_FRAME_RATE)
 
 /* Forward declarations for renderer (in renderer.c) */
 bool renderer_init(int scale);
@@ -52,7 +49,7 @@ static void signal_handler(int sig) {
 }
 
 static void print_usage(const char* program_name) {
-    printf("ORIC-1 Emulator v%s\n", VERSION);
+    printf("ORIC-1 Emulator v%s\n", EMU_VERSION);
     printf("Usage: %s [options]\n\n", program_name);
     printf("Options:\n");
     printf("  -t, --tape FILE            Load .TAP tape file\n");
@@ -74,65 +71,21 @@ static void print_usage(const char* program_name) {
     printf("  -k, --keyboard LAYOUT      Keyboard layout: qwerty (default) or azerty\n");
     printf("      --type-keys C:TEXT     Auto-type TEXT after C cycles (\\n=Return, \\pN=pause N sec)\n");
     printf("  -b, --breakpoint ADDR      Break when PC reaches address (hex, e.g. ED8A)\n");
+    printf("  -D, --debug                Start in debugger mode (break at first instruction)\n");
+    printf("      --break ADDR           Set initial debugger breakpoint (hex)\n");
     printf("  -?, --help                 Show this help\n");
     printf("\n");
     printf("Controls:\n");
     printf("  F1  - Help menu\n");
     printf("  F5  - Reset\n");
+    printf("  F9  - Enter debugger\n");
     printf("  F10 - Quit\n");
     printf("  F11 - Fullscreen\n");
     printf("  F12 - Screenshot\n");
     printf("\n");
 }
 
-typedef struct {
-    cpu6502_t cpu;
-    memory_t memory;
-    via6522_t via;
-    ay3891x_t psg;
-    video_t video;
-    hostfs_t hostfs;
-
-    /* Keyboard */
-    oric_keyboard_t keyboard;
-
-    /* Microdisc controller */
-    microdisc_t microdisc;
-    sedoric_disk_t* disks[MICRODISC_MAX_DRIVES]; /* 4 drives: A, B, C, D */
-    bool has_microdisc;
-
-    /* Tape buffer for ROM patching (CLOAD support) */
-    uint8_t* tapebuf;       /* TAP file data loaded in memory */
-    int tapelen;             /* Total length of tape data */
-    int tapeoffs;            /* Current read offset */
-    bool tape_loaded;        /* A tape is loaded and available */
-    int tape_syncstack;     /* Saved SP for sync loop recovery (-1 = none) */
-
-    bool running;
-    bool fast_load;
-    bool headless;
-    int64_t max_cycles;
-
-    /* Screenshot options */
-    const char* screenshot_file;
-    int64_t screenshot_at_cycles;
-    const char* screenshot_at_file;
-
-    /* Frame dump options */
-    const char* frame_dump_dir;
-    int frame_dump_interval;
-
-    /* Auto-type: inject keystrokes at specified cycle count
-     * Format: "CYCLES:TEXT" e.g. "3000000:CLOAD\"\"\n" */
-    const char* type_keys_text;    /* Text to type */
-    int64_t type_keys_at;          /* Cycle count to start typing */
-    int type_keys_idx;             /* Current character index */
-    int64_t type_keys_next_cycle;  /* Next cycle to type a char */
-    bool type_keys_done;           /* All characters typed */
-
-    /* Breakpoint */
-    int32_t breakpoint;            /* PC address to break at (-1 = none) */
-} emulator_t;
+/* emulator_t is defined in include/emulator.h */
 
 /* I/O callback: route VIA and Microdisc register access */
 static uint8_t io_read_callback(uint16_t address, void* userdata) {
@@ -288,7 +241,7 @@ static void microdisc_cpu_irq_clr(void* userdata) {
 }
 
 static bool emulator_init(emulator_t* emu) {
-    log_info("Initializing ORIC-1 emulator v%s", VERSION);
+    log_info("Initializing ORIC-1 emulator v%s", EMU_VERSION);
 
     if (!memory_init(&emu->memory)) {
         log_error("Failed to initialize memory");
@@ -341,6 +294,9 @@ static bool emulator_init(emulator_t* emu) {
         log_error("Failed to initialize host filesystem");
         return false;
     }
+
+    /* Initialize debugger */
+    debugger_init(&emu->debugger);
 
     emu->running = true;
     /* Note: fast_load, headless, max_cycles are set by caller before init */
@@ -483,27 +439,16 @@ static void emulator_run(emulator_t* emu) {
         /* Execute one frame worth of CPU cycles */
         int frame_cycles = 0;
         while (frame_cycles < CYCLES_PER_FRAME && !emu->cpu.halted) {
-            /* Breakpoint check */
+            /* Legacy single breakpoint (--breakpoint / -b) */
             if (emu->breakpoint >= 0 && emu->cpu.PC == (uint16_t)emu->breakpoint) {
-                printf("\n*** BREAKPOINT at $%04X ***\n", emu->cpu.PC);
-                printf("PC=$%04X A=%02X X=%02X Y=%02X SP=%02X P=%02X\n",
-                       emu->cpu.PC, emu->cpu.A, emu->cpu.X, emu->cpu.Y,
-                       emu->cpu.SP, emu->cpu.P);
-                printf("Cycles: %llu\n", (unsigned long long)(total_executed + frame_cycles));
-                /* Dump surrounding memory */
-                printf("Memory at PC:\n");
-                for (int i = 0; i < 32; i++) {
-                    if (i % 16 == 0) printf("  $%04X: ", (uint16_t)(emu->cpu.PC + i));
-                    printf("%02X ", memory_read(&emu->memory, (uint16_t)(emu->cpu.PC + i)));
-                    if (i % 16 == 15) printf("\n");
-                }
-                printf("Stack ($01%02X-$01FF):\n  ", emu->cpu.SP);
-                for (int i = emu->cpu.SP + 1; i <= 0xFF && i < emu->cpu.SP + 17; i++) {
-                    printf("%02X ", memory_read(&emu->memory, (uint16_t)(0x0100 + i)));
-                }
-                printf("\n");
-                emu->running = false;
-                break;
+                /* Promote to interactive debugger if available */
+                emu->debugger.active = true;
+            }
+
+            /* Interactive debugger check */
+            if (emu->debugger.active || debugger_should_break(&emu->debugger, emu)) {
+                debugger_repl(&emu->debugger, emu);
+                if (!emu->running) break;
             }
 
             tape_patches(emu);
@@ -520,6 +465,11 @@ static void emulator_run(emulator_t* emu) {
         }
 
         total_executed += (uint64_t)frame_cycles;
+
+        /* Trigger CB1 (VSync) — On real Oric hardware, the ULA generates
+         * a vertical sync pulse on VIA CB1 at the end of each frame (50 Hz).
+         * Software can poll IFR bit 4 to synchronize with the display. */
+        via_trigger_cb1(&emu->via);
 
         /* Auto-type: inject keystrokes at specified cycle count.
          * Each key is pressed for ~2 frames (40ms) then released for ~2 frames.
@@ -576,6 +526,10 @@ static void emulator_run(emulator_t* emu) {
                     switch (event.key.keysym.sym) {
                     case SDLK_F5:
                         cpu_reset(&emu->cpu);
+                        break;
+                    case SDLK_F9:
+                        /* Enter interactive debugger */
+                        emu->debugger.active = true;
                         break;
                     case SDLK_F10:
                         emu->running = false;
@@ -674,9 +628,11 @@ int main(int argc, char* argv[]) {
 
     const char* type_keys_arg = NULL;
     const char* disk_rom_file = NULL;
+    bool debug_mode = false;
+    const char* debug_break_addr = NULL;
 
     /* Long option codes for options without short equivalents */
-    enum { OPT_SCREENSHOT = 256, OPT_SCREENSHOT_AT, OPT_FRAME_DUMP, OPT_FRAME_DUMP_INTERVAL, OPT_TYPE_KEYS, OPT_DISK_ROM, OPT_DISK1, OPT_DISK2, OPT_DISK3, OPT_BREAKPOINT };
+    enum { OPT_SCREENSHOT = 256, OPT_SCREENSHOT_AT, OPT_FRAME_DUMP, OPT_FRAME_DUMP_INTERVAL, OPT_TYPE_KEYS, OPT_DISK_ROM, OPT_DISK1, OPT_DISK2, OPT_DISK3, OPT_BREAKPOINT, OPT_DEBUG_BREAK };
 
     static struct option long_options[] = {
         {"tape",                required_argument, 0, 't'},
@@ -698,6 +654,8 @@ int main(int argc, char* argv[]) {
         {"type-keys",           required_argument, 0, OPT_TYPE_KEYS},
         {"disk-rom",            required_argument, 0, OPT_DISK_ROM},
         {"breakpoint",          required_argument, 0, 'b'},
+        {"debug",               no_argument,       0, 'D'},
+        {"break",               required_argument, 0, OPT_DEBUG_BREAK},
         {"help",                no_argument,       0, '?'},
         {0, 0, 0, 0}
     };
@@ -705,7 +663,7 @@ int main(int argc, char* argv[]) {
     int opt;
     int option_index = 0;
 
-    while ((opt = getopt_long(argc, argv, "t:d:r:h:fnc:vk:b:?", long_options, &option_index)) != -1) {
+    while ((opt = getopt_long(argc, argv, "t:d:r:h:fnc:vk:b:D?", long_options, &option_index)) != -1) {
         switch (opt) {
             case 't': tape_file = optarg; break;
             case 'd': disk_files[0] = optarg; break;
@@ -726,6 +684,8 @@ int main(int argc, char* argv[]) {
             case OPT_TYPE_KEYS: type_keys_arg = optarg; break;
             case OPT_DISK_ROM: disk_rom_file = optarg; break;
             case 'b': emu.breakpoint = (int32_t)strtol(optarg, NULL, 16); break;
+            case 'D': debug_mode = true; break;
+            case OPT_DEBUG_BREAK: debug_break_addr = optarg; break;
             case '?':
             default:
                 print_usage(argv[0]);
@@ -924,9 +884,20 @@ int main(int argc, char* argv[]) {
         }
     }
 
+    /* Setup debugger if requested */
+    if (debug_mode) {
+        emu.debugger.active = true;
+        log_info("Debugger mode enabled (will break at first instruction)");
+    }
+    if (debug_break_addr) {
+        uint16_t addr = (uint16_t)strtol(debug_break_addr, NULL, 16);
+        debugger_add_breakpoint(&emu.debugger, addr);
+        log_info("Debugger breakpoint set at $%04X", addr);
+    }
+
     if (!headless) {
         printf("\n");
-        printf("ORIC-1 Emulator v%s\n", VERSION);
+        printf("ORIC-1 Emulator v%s\n", EMU_VERSION);
         printf("Press Ctrl+C to quit\n\n");
     }
 

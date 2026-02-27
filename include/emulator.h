@@ -1,0 +1,85 @@
+/**
+ * @file emulator.h
+ * @brief ORIC-1 Emulator core structure and API
+ * @author bmarty <bmarty@mailo.com>
+ * @date 2026-02-24
+ * @version 1.1.0-alpha
+ *
+ * Shared emulator state structure, accessible by all modules
+ * (main loop, debugger, etc.)
+ */
+
+#ifndef EMULATOR_H
+#define EMULATOR_H
+
+#include <stdint.h>
+#include <stdbool.h>
+
+#include "cpu/cpu6502.h"
+#include "memory/memory.h"
+#include "io/via6522.h"
+#include "video/video.h"
+#include "audio/audio.h"
+#include "io/keyboard.h"
+#include "io/microdisc.h"
+#include "storage/sedoric.h"
+#include "hostfs/hostfs.h"
+#include "debugger.h"
+
+#define EMU_VERSION "1.1.0-alpha"
+#define ORIC_CLOCK_HZ   1000000
+#define ORIC_FRAME_RATE  50
+#define CYCLES_PER_FRAME (ORIC_CLOCK_HZ / ORIC_FRAME_RATE)
+
+typedef struct {
+    cpu6502_t cpu;
+    memory_t memory;
+    via6522_t via;
+    ay3891x_t psg;
+    video_t video;
+    hostfs_t hostfs;
+
+    /* Keyboard */
+    oric_keyboard_t keyboard;
+
+    /* Microdisc controller */
+    microdisc_t microdisc;
+    sedoric_disk_t* disks[MICRODISC_MAX_DRIVES]; /* 4 drives: A, B, C, D */
+    bool has_microdisc;
+
+    /* Tape buffer for ROM patching (CLOAD support) */
+    uint8_t* tapebuf;       /* TAP file data loaded in memory */
+    int tapelen;             /* Total length of tape data */
+    int tapeoffs;            /* Current read offset */
+    bool tape_loaded;        /* A tape is loaded and available */
+    int tape_syncstack;     /* Saved SP for sync loop recovery (-1 = none) */
+
+    bool running;
+    bool fast_load;
+    bool headless;
+    int64_t max_cycles;
+
+    /* Screenshot options */
+    const char* screenshot_file;
+    int64_t screenshot_at_cycles;
+    const char* screenshot_at_file;
+
+    /* Frame dump options */
+    const char* frame_dump_dir;
+    int frame_dump_interval;
+
+    /* Auto-type: inject keystrokes at specified cycle count */
+    const char* type_keys_text;
+    int64_t type_keys_at;
+    int type_keys_idx;
+    int64_t type_keys_next_cycle;
+    bool type_keys_done;
+
+    /* Breakpoint (legacy single breakpoint, -1 = none) */
+    int32_t breakpoint;
+
+    /* Interactive debugger */
+    debugger_t debugger;
+} emulator_t;
+
+#endif /* EMULATOR_H */

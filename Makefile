@@ -43,6 +43,7 @@ SOURCES = src/main.c \
           src/storage/disk.c \
           src/hostfs/hostfs.c \
           src/hostfs/vfs.c \
+          src/debugger.c \
           src/utils/logging.c \
           src/utils/config.c
 
@@ -65,7 +66,7 @@ BINDIR = $(PREFIX)/bin
 DATADIR = $(PREFIX)/share/oric1-emulator
 DOCDIR = $(PREFIX)/share/doc/oric1-emulator
 
-.PHONY: all clean tools tests test-cpu test-memory test-io test-storage test-system test-rom test-video test-audio valgrind static-analysis install uninstall help
+.PHONY: all clean tools tests test-cpu test-memory test-io test-storage test-system test-rom test-video test-audio test-debugger valgrind static-analysis install uninstall help
 
 all: $(TARGET)
 
@@ -149,7 +150,16 @@ test-audio: $(TEST_AUDIO_SRCS)
 	@$(CC) $(CFLAGS) $(TEST_AUDIO_SRCS) $(LDFLAGS) -o test_audio
 	@./test_audio
 
-tests: test-cpu test-memory test-io test-storage test-system test-video test-audio
+TEST_DEBUGGER_SRCS = tests/unit/test_debugger.c src/debugger.c \
+                     src/cpu/cpu6502.c src/cpu/opcodes.c src/cpu/addressing.c \
+                     src/memory/memory.c src/memory/banking.c \
+                     src/io/via6522.c src/utils/logging.c
+
+test-debugger: $(TEST_DEBUGGER_SRCS)
+	@$(CC) $(CFLAGS) $(TEST_DEBUGGER_SRCS) $(LDFLAGS) -o test_debugger
+	@./test_debugger
+
+tests: test-cpu test-memory test-io test-storage test-system test-video test-audio test-debugger
 	@echo ""
 	@echo "═══════════════════════════════════════════════════════"
 	@echo "  All test suites completed!"
@@ -169,7 +179,7 @@ static-analysis:
 	@echo ""
 	@echo "Static analysis complete."
 
-valgrind: test-cpu test-memory test-io test-storage test-system test-rom test-video test-audio
+valgrind: test-cpu test-memory test-io test-storage test-system test-rom test-video test-audio test-debugger
 	@echo "Running tests under Valgrind..."
 	@valgrind --leak-check=full --error-exitcode=1 --quiet ./test_cpu
 	@valgrind --leak-check=full --error-exitcode=1 --quiet ./test_memory
@@ -179,6 +189,7 @@ valgrind: test-cpu test-memory test-io test-storage test-system test-rom test-vi
 	@valgrind --leak-check=full --error-exitcode=1 --quiet ./test_rom
 	@valgrind --leak-check=full --error-exitcode=1 --quiet ./test_video
 	@valgrind --leak-check=full --error-exitcode=1 --quiet ./test_audio
+	@valgrind --leak-check=full --error-exitcode=1 --quiet ./test_debugger
 	@echo ""
 	@echo "═══════════════════════════════════════════════════════"
 	@echo "  Valgrind: No memory leaks detected!"
@@ -199,7 +210,7 @@ uninstall:
 
 clean:
 	rm -f $(OBJECTS) $(TARGET) $(TOOLS)
-	rm -f test_cpu test_memory test_io test_storage test_system test_rom test_video test_audio
+	rm -f test_cpu test_memory test_io test_storage test_system test_rom test_video test_audio test_debugger
 	rm -f tools/*.o
 
 help:
@@ -217,6 +228,7 @@ help:
 	@echo "  test-rom     - Run ROM compatibility tests"
 	@echo "  test-video   - Run video export tests"
 	@echo "  test-audio   - Run PSG audio tests"
+	@echo "  test-debugger- Run debugger tests"
 	@echo "  valgrind     - Run all tests under Valgrind"
 	@echo "  static-analysis - Run static analysis"
 	@echo "  install      - Install emulator (PREFIX=/usr/local)"

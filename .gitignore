@@ -25,6 +25,7 @@ test_system
 test_rom
 test_video
 test_audio
+test_debugger
 
 # Coverage files
 *.gcda

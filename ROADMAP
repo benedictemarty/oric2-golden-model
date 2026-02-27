@@ -179,20 +179,47 @@ host filesystem sharing and conversion tools for legacy BASIC/machine code progr
 
 ---
 
-## Future Enhancements (Post v1.0.0)
+## Phase 5: Advanced Features (Sprint 19+) - IN PROGRESS
+
+### Sprint 19: Interactive Debugger (v1.1.0-alpha) - DONE
+- [x] Interactive REPL debugger module (src/debugger.c, include/debugger.h)
+- [x] emulator_t extracted to shared header (include/emulator.h)
+- [x] PC breakpoints (up to 16) with add/remove/list
+- [x] Memory write watchpoints (up to 8) via memory_set_trace()
+- [x] Single-step (s/step) and step-over (n/next for JSR)
+- [x] Continue execution (c/continue)
+- [x] Register display (r/regs) and modification (set reg val)
+- [x] Disassembly at address (d [addr] [n])
+- [x] Memory hex+ASCII dump (m addr [len])
+- [x] Stack display (stack)
+- [x] VIA 6522 state inspection (via)
+- [x] PSG AY-3-8910 state inspection (psg)
+- [x] CLI: --debug/-D (break at first instruction)
+- [x] CLI: --break ADDR (initial debugger breakpoint)
+- [x] F9 key enters debugger during SDL2 emulation
+- [x] Legacy breakpoint (-b) promoted to interactive debugger
+- [x] 8 debugger unit tests (163 total tests, 100% pass)
+
+### Sprint 19b: VSync CB1 Signal (v1.1.1-alpha) - DONE
+- [x] Generate ULA VSync pulse on VIA CB1 at end of each frame (50 Hz)
+- [x] via_trigger_cb1() called in emulation loop after CPU frame cycles
+- [x] Software can poll IFR bit 4 or enable CB1 interrupt for VBlank sync
+- [x] Faithful to real Oric hardware (ULA → CB1 pin → VIA IFR bit 4)
+- [x] 163 tests pass (no regression)
+
+## Future Enhancements
 
 ### Advanced Features
 - [ ] ORIC Atmos support
 - [ ] Telestrat support
-- [ ] Debugger with breakpoints
 - [ ] Save states
 - [ ] Joystick support
 - [ ] Printer emulation
 - [ ] Trace logging
 
 ### Developer Tools
-- [ ] Memory viewer
-- [ ] Register inspector
+- [x] Memory viewer (debugger: m command)
+- [x] Register inspector (debugger: r command)
 - [ ] Performance profiler
 - [ ] ROM analysis tools
 
@@ -207,7 +234,7 @@ host filesystem sharing and conversion tools for legacy BASIC/machine code progr
 - [ ] <5% CPU overhead on modern hardware
 
 ### Quality
-- [x] 155 tests passing
+- [x] 163 tests passing
 - [x] Zero critical bugs in test suite
 - [x] API documentation complete
 - [ ] Comprehensive user guide
@@ -215,5 +242,5 @@ host filesystem sharing and conversion tools for legacy BASIC/machine code progr
 ---
 
 **Last Updated**: 2026-02-24
-**Current Version**: 1.0.0-rc
-**Next Milestone**: 1.0.0 (Stable release)
+**Current Version**: 1.1.0-alpha
+**Next Milestone**: 1.1.0 (Debugger + Advanced features)

@@ -5,6 +5,64 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.1-alpha] - 2026-02-27
+
+### VSync CB1 Signal (Sprint 19b)
+
+#### Fixed
+- **VSync signal on VIA CB1**: the ULA VSync pulse is now generated at the
+  end of each frame (50 Hz) by calling `via_trigger_cb1()` in the emulation
+  loop. On real Oric hardware, the ULA drives CB1 at vertical retrace so
+  software can poll IFR bit 4 (`VIA_INT_CB1 = 0x10`) or enable the CB1
+  interrupt to synchronize with the display. Previously this signal was never
+  generated, causing programs relying on VBlank synchronization to malfunction.
+- All 163 tests pass (no regression)
+
+## [1.1.0-alpha] - 2026-02-24
+
+### Interactive Debugger (Sprint 19)
+
+#### Added
+- **Interactive debugger module** (`src/debugger.c`, `include/debugger.h`):
+  REPL-based debugger with stdin/stdout command interface
+- **Breakpoints**: up to 16 PC breakpoints (`b addr`, `bd n`, `b` to list)
+- **Watchpoints**: up to 8 memory write watchpoints (`w addr`, `wd n`, `w` to list)
+  using `memory_set_trace()` callback for hardware-level detection
+- **Single-step**: `s`/`step` executes one instruction and re-enters REPL
+- **Step-over**: `n`/`next` steps over JSR (temporary breakpoint at PC+3)
+- **Continue**: `c`/`continue` resumes execution until next breakpoint
+- **Register display**: `r`/`regs` shows full CPU state (A,X,Y,SP,PC,P,cycles)
+- **Disassembly**: `d [addr] [n]` disassembles n instructions from addr
+- **Memory dump**: `m addr [len]` hex+ASCII dump
+- **Stack display**: `stack` shows stack contents from SP to $01FF
+- **VIA inspection**: `via` shows all VIA 6522 registers, timers, IRQ status
+- **PSG inspection**: `psg` shows AY-3-8910 registers, channels, envelope
+- **Register modification**: `set reg val` modifies CPU registers at runtime
+- **Quit**: `q`/`quit` stops emulator from debugger
+- **Help**: `h`/`help` shows command reference
+- **`include/emulator.h`**: extracted `emulator_t` struct from `src/main.c`
+  into shared header for access by debugger and future modules
+- **CLI option `--debug` / `-D`**: start in debugger mode (break at first instruction)
+- **CLI option `--break ADDR`**: set initial debugger breakpoint (hex address)
+- **F9 key**: enter interactive debugger during SDL2 emulation
+- **Legacy breakpoint promotion**: existing `-b`/`--breakpoint` now enters
+  interactive debugger instead of halting
+- **8 debugger unit tests** in `tests/unit/test_debugger.c`:
+  init state, add/remove breakpoints, breakpoint limit (16 max),
+  add/remove watchpoints, breakpoint hit/miss, step mode, disassembly
+- **`make test-debugger`** target added
+- **Valgrind target** updated to include debugger tests
+
+#### Changed
+- `emulator_t` struct moved from `src/main.c` to `include/emulator.h`
+- `emulator_t` now includes `debugger_t debugger` member
+- Version updated from 1.0.0-rc to 1.1.0-alpha
+- Makefile: added `src/debugger.c` to SOURCES, test-debugger target
+- CMakeLists.txt: added DEBUGGER_SOURCES, debugger_tests target
+- .gitignore: added `test_debugger`
+- Test suite expanded from 155 to 163 tests (155 + 8 debugger)
+- Total test count: 163 tests, 100% pass rate
+
 ## [1.0.0-rc] - 2026-02-24
 
 ### Release Preparation (Sprint 18)

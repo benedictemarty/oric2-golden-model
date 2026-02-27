@@ -80,6 +80,10 @@ set(HOSTFS_SOURCES
     src/hostfs/vfs.c
 )
 
+set(DEBUGGER_SOURCES
+    src/debugger.c
+)
+
 set(UTILS_SOURCES
     src/utils/logging.c
     src/utils/config.c
@@ -98,6 +102,7 @@ add_library(oric1_core STATIC
     ${AUDIO_SOURCES}
     ${STORAGE_SOURCES}
     ${HOSTFS_SOURCES}
+    ${DEBUGGER_SOURCES}
     ${UTILS_SOURCES}
 )
 
@@ -149,6 +154,10 @@ if(BUILD_TESTS)
     add_executable(storage_tests tests/unit/test_storage.c)
     target_link_libraries(storage_tests oric1_core)
     add_test(NAME storage_tests COMMAND storage_tests)
+
+    add_executable(debugger_tests tests/unit/test_debugger.c)
+    target_link_libraries(debugger_tests oric1_core)
+    add_test(NAME debugger_tests COMMAND debugger_tests)
 
     # Integration tests
     add_executable(integration_tests tests/integration/test_full_system.c)
