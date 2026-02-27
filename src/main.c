@@ -466,24 +466,18 @@ static void emulator_run(emulator_t* emu) {
 
             /* VSync trigger at line 256 (cycle 16384) — On real Oric hardware,
              * the ULA drives CB1 low at the start of vertical blanking.
-             * Only generate the CB1 pulse if software has enabled CB1 in IER,
-             * to avoid disturbing the ROM keyboard scan IRQ timing. */
+             * IFR CB1 is always set on the correct edge (per PCR bit 4).
+             * via_check_irq only notifies CPU on /IRQ transitions, so
+             * spurious IFR flags won't cause cpu_irq_clear side effects. */
             if (!vsync_triggered && frame_cycles >= VSYNC_CYCLE) {
-                if (emu->via.ier & VIA_INT_CB1) {
-                    via_set_cb1(&emu->via, false);  /* Falling edge: VSync active */
-                }
+                via_set_cb1(&emu->via, false);  /* Falling edge: VSync active */
                 vsync_triggered = true;
             }
         }
 
         /* Release VSync at end of frame (CB1 returns high) */
-        if (vsync_triggered && !(emu->via.cb1_pin)) {
-            if (emu->via.ier & VIA_INT_CB1) {
-                via_set_cb1(&emu->via, true);
-            } else {
-                /* Reset pin state silently (no IFR side effect) */
-                emu->via.cb1_pin = true;
-            }
+        if (vsync_triggered) {
+            via_set_cb1(&emu->via, true);
         }
 
         total_executed += (uint64_t)frame_cycles;

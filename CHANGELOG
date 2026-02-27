@@ -28,11 +28,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   preventing disruption of ROM keyboard scan IRQ timing.
 
 #### Fixed
-- **VSync release IER guard**: the CB1 release (rising edge at end of frame)
-  now also checks IER before calling `via_set_cb1(true)`. Without this guard,
-  a rising edge with PCR bit 4=1 would set IFR CB1 parasitically, disrupting
-  the ROM T1 keyboard scan IRQ handler. Pin state is reset silently when IER
-  does not have CB1 enabled.
+- **`via_check_irq()` transition-only notification**: the IRQ callback to the
+  CPU is now called only when the /IRQ line state **changes** (assert→deassert
+  or deassert→assert), not on every IFR/IER modification. Added `irq_line`
+  field to `via6522_t` to track the current /IRQ output level. This prevents
+  spurious `cpu_irq_clear(IRQF_VIA)` when unrelated IFR bits (e.g. CB1) change
+  while no matching IER bit is set, which was causing loss of pending T1 IRQs
+  and breaking the ROM keyboard scan.
+- **Removed IER guards from VSync trigger**: CB1 now fires unconditionally
+  like real hardware. Programs polling IFR bit 4 without enabling CB1 in IER
+  will work correctly. The transition-only fix in `via_check_irq` makes this
+  safe.
 
 #### Added
 - **5 new CB1 edge detection tests**: falling edge trigger, rising edge trigger,

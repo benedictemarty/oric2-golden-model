@@ -14,14 +14,20 @@ static void via_check_irq(via6522_t* via) {
     if (irq) via->ifr |= VIA_INT_ANY;
     else via->ifr &= ~VIA_INT_ANY;
 
-    if (via->irq_callback) {
-        via->irq_callback(irq, via->irq_userdata);
+    /* Only notify CPU on /IRQ line transitions (like real hardware wire-OR).
+     * Avoids spurious cpu_irq_clear when unrelated IFR bits change. */
+    if (irq != via->irq_line) {
+        via->irq_line = irq;
+        if (via->irq_callback) {
+            via->irq_callback(irq, via->irq_userdata);
+        }
     }
 }
 
 void via_init(via6522_t* via) {
     memset(via, 0, sizeof(via6522_t));
-    via->cb1_pin = true;  /* CB1 defaults high (VSync inactive) */
+    via->cb1_pin = true;   /* CB1 defaults high (VSync inactive) */
+    via->irq_line = false;  /* /IRQ not asserted */
 }
 
 void via_reset(via6522_t* via) {
@@ -40,7 +46,8 @@ void via_reset(via6522_t* via) {
     via->pcr = 0;
     via->ifr = 0;
     via->ier = 0;
-    via->cb1_pin = true;  /* CB1 defaults high (VSync inactive) */
+    via->cb1_pin = true;   /* CB1 defaults high (VSync inactive) */
+    via->irq_line = false;  /* /IRQ not asserted */
 }
 
 uint8_t via_read(via6522_t* via, uint8_t reg) {

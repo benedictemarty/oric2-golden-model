@@ -11,7 +11,8 @@ Version History:
   * PAL timing: 312 lines x 64 cycles = 19968 cycles/frame (was 20000)
   * VSync mid-frame: CB1 triggers at line 256 (cycle 16384), not end of frame
   * Edge-triggered CB1: via_set_cb1() with PCR bit 4 edge selection
-  * IER guard: VSync only fires when CB1 enabled in IER (keyboard safe)
+  * via_check_irq: transition-only /IRQ notification (irq_line tracking)
+  * VSync fires unconditionally (no IER guard needed, like real hardware)
   * 5 new CB1 edge detection tests
   * 168 tests, 100% pass rate
 
