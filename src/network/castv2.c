@@ -344,6 +344,7 @@ static int castv2_recv(castv2_client_t* client, char* payload_buf,
 static void* heartbeat_thread_func(void* arg) {
     castv2_client_t* client = (castv2_client_t*)arg;
     const char* ping_json = "{\"type\":\"PING\"}";
+    int cycle = 0;
 
     while (client->heartbeat_running) {
         sleep(CASTV2_HEARTBEAT_SEC);
@@ -358,6 +359,25 @@ static void* heartbeat_thread_func(void* arg) {
         if (client->transport_id[0]) {
             castv2_send(client, client->transport_id,
                        CASTV2_NS_HEARTBEAT, ping_json);
+        }
+
+        /* Every 30s: GET_STATUS to prevent Chromecast screensaver */
+        cycle++;
+        if (cycle % 6 == 0 && client->transport_id[0]) {
+            char status_json[128];
+            snprintf(status_json, sizeof(status_json),
+                     "{\"type\":\"GET_STATUS\",\"requestId\":%d}",
+                     client->request_id++);
+            castv2_send(client, "receiver-0", CASTV2_NS_RECEIVER, status_json);
+        }
+
+        /* Every 60s: re-send URL to DashCast to keep it active */
+        if (cycle % 12 == 0 && client->transport_id[0] && client->stream_url[0]) {
+            char url_json[512];
+            snprintf(url_json, sizeof(url_json),
+                     "{\"url\":\"%s\",\"force\":true}", client->stream_url);
+            castv2_send(client, client->transport_id,
+                       CASTV2_NS_DASHCAST, url_json);
         }
 
         pthread_mutex_unlock(&client->hb_mutex);
