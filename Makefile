@@ -20,6 +20,13 @@ ifeq ($(SDL2), 1)
     LDFLAGS += $(shell pkg-config --libs sdl2 2>/dev/null)
 endif
 
+# Cast server support (optional)
+CAST ?= 0
+ifeq ($(CAST), 1)
+    CFLAGS += -DHAS_CAST
+    LDFLAGS += -lpthread
+endif
+
 # Source files
 SOURCES = src/main.c \
           src/cpu/cpu6502.c \
@@ -47,6 +54,10 @@ SOURCES = src/main.c \
           src/utils/logging.c \
           src/utils/config.c
 
+ifeq ($(CAST), 1)
+    SOURCES += src/network/cast_server.c
+endif
+
 OBJECTS = $(SOURCES:.c=.o)
 
 # Core libraries (no main)
@@ -66,7 +77,7 @@ BINDIR = $(PREFIX)/bin
 DATADIR = $(PREFIX)/share/oric1-emulator
 DOCDIR = $(PREFIX)/share/doc/oric1-emulator
 
-.PHONY: all clean tools tests test-cpu test-memory test-io test-storage test-system test-rom test-video test-audio test-debugger valgrind static-analysis install uninstall help
+.PHONY: all clean tools tests test-cpu test-memory test-io test-storage test-system test-rom test-video test-audio test-debugger test-cast valgrind static-analysis install uninstall help
 
 all: $(TARGET)
 
@@ -159,6 +170,12 @@ test-debugger: $(TEST_DEBUGGER_SRCS)
 	@$(CC) $(CFLAGS) $(TEST_DEBUGGER_SRCS) $(LDFLAGS) -o test_debugger
 	@./test_debugger
 
+TEST_CAST_SRCS = tests/unit/test_cast.c src/network/cast_server.c src/utils/logging.c
+
+test-cast: $(TEST_CAST_SRCS)
+	@$(CC) $(CFLAGS) -DHAS_CAST $(TEST_CAST_SRCS) $(LDFLAGS) -lpthread -o test_cast
+	@./test_cast
+
 tests: test-cpu test-memory test-io test-storage test-system test-video test-audio test-debugger
 	@echo ""
 	@echo "═══════════════════════════════════════════════════════"
@@ -179,7 +196,7 @@ static-analysis:
 	@echo ""
 	@echo "Static analysis complete."
 
-valgrind: test-cpu test-memory test-io test-storage test-system test-rom test-video test-audio test-debugger
+valgrind: test-cpu test-memory test-io test-storage test-system test-rom test-video test-audio test-debugger test-cast
 	@echo "Running tests under Valgrind..."
 	@valgrind --leak-check=full --error-exitcode=1 --quiet ./test_cpu
 	@valgrind --leak-check=full --error-exitcode=1 --quiet ./test_memory
@@ -190,6 +207,7 @@ valgrind: test-cpu test-memory test-io test-storage test-system test-rom test-vi
 	@valgrind --leak-check=full --error-exitcode=1 --quiet ./test_video
 	@valgrind --leak-check=full --error-exitcode=1 --quiet ./test_audio
 	@valgrind --leak-check=full --error-exitcode=1 --quiet ./test_debugger
+	@valgrind --leak-check=full --error-exitcode=1 --quiet ./test_cast
 	@echo ""
 	@echo "═══════════════════════════════════════════════════════"
 	@echo "  Valgrind: No memory leaks detected!"
@@ -210,7 +228,7 @@ uninstall:
 
 clean:
 	rm -f $(OBJECTS) $(TARGET) $(TOOLS)
-	rm -f test_cpu test_memory test_io test_storage test_system test_rom test_video test_audio test_debugger
+	rm -f test_cpu test_memory test_io test_storage test_system test_rom test_video test_audio test_debugger test_cast
 	rm -f tools/*.o
 
 help:
@@ -229,6 +247,7 @@ help:
 	@echo "  test-video   - Run video export tests"
 	@echo "  test-audio   - Run PSG audio tests"
 	@echo "  test-debugger- Run debugger tests"
+	@echo "  test-cast    - Run cast server tests (requires CAST=1)"
 	@echo "  valgrind     - Run all tests under Valgrind"
 	@echo "  static-analysis - Run static analysis"
 	@echo "  install      - Install emulator (PREFIX=/usr/local)"
@@ -239,3 +258,4 @@ help:
 	@echo "Options:"
 	@echo "  DEBUG=1      - Build with debug symbols"
 	@echo "  SDL2=1       - Build with SDL2 display/audio"
+	@echo "  CAST=1       - Build with MJPEG cast server"

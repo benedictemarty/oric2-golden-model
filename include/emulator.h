@@ -25,8 +25,9 @@
 #include "storage/sedoric.h"
 #include "hostfs/hostfs.h"
 #include "debugger.h"
+#include "network/cast_server.h"
 
-#define EMU_VERSION "1.1.2-alpha"
+#define EMU_VERSION "1.2.0-alpha"
 #define ORIC_CLOCK_HZ   1000000
 #define ORIC_FRAME_RATE  50
 
@@ -86,6 +87,10 @@ typedef struct {
 
     /* Interactive debugger */
     debugger_t debugger;
+
+    /* Cast server (MJPEG streaming) */
+    cast_server_t cast_server;
+    bool has_cast_server;
 } emulator_t;
 
 #endif /* EMULATOR_H */

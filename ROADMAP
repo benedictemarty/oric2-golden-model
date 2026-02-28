@@ -217,6 +217,20 @@ host filesystem sharing and conversion tools for legacy BASIC/machine code progr
 - [x] Legacy via_trigger_cb1() refactored to use via_set_cb1() (pulse)
 - [x] 5 new CB1 edge detection tests (168 total, 100% pass)
 
+### Sprint 20: MJPEG Cast Server + mDNS Discovery (v1.2.0-alpha) - DONE
+- [x] HTTP MJPEG streaming server (src/network/cast_server.c)
+- [x] HTML viewer page at / with pixelated rendering
+- [x] MJPEG stream endpoint at /stream (720x672 upscaled 3x)
+- [x] Vendored stb_image_write.h for JPEG encoding (quality 80)
+- [x] Thread-safe multi-client support (up to 8, select() I/O)
+- [x] mDNS/DNS-SD Chromecast discovery (_googlecast._tcp.local)
+- [x] DNS compression pointer support, PTR/SRV/A/TXT parsing
+- [x] CLI: --cast-server[=PORT] (default 8080)
+- [x] CLI: --cast-discover (standalone discovery mode)
+- [x] Conditional build: CAST=1 (-DHAS_CAST -lpthread)
+- [x] No-op stubs when CAST=1 not set
+- [x] 13 cast server unit tests (181 total, 100% pass)
+
 ## Future Enhancements
 
 ### Advanced Features
@@ -244,13 +258,13 @@ host filesystem sharing and conversion tools for legacy BASIC/machine code progr
 - [ ] <5% CPU overhead on modern hardware
 
 ### Quality
-- [x] 168 tests passing
+- [x] 181 tests passing
 - [x] Zero critical bugs in test suite
 - [x] API documentation complete
 - [ ] Comprehensive user guide
 
 ---
 
-**Last Updated**: 2026-02-27
-**Current Version**: 1.1.2-alpha
-**Next Milestone**: 1.2.0 (Advanced features)
+**Last Updated**: 2026-02-28
+**Current Version**: 1.2.0-alpha
+**Next Milestone**: 1.3.0 (Advanced features)

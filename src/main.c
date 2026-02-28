@@ -73,6 +73,8 @@ static void print_usage(const char* program_name) {
     printf("  -b, --breakpoint ADDR      Break when PC reaches address (hex, e.g. ED8A)\n");
     printf("  -D, --debug                Start in debugger mode (break at first instruction)\n");
     printf("      --break ADDR           Set initial debugger breakpoint (hex)\n");
+    printf("      --cast-server[=PORT]   Start MJPEG cast server (default port: 8080)\n");
+    printf("      --cast-discover        Discover Chromecast devices on network\n");
     printf("  -?, --help                 Show this help\n");
     printf("\n");
     printf("Controls:\n");
@@ -323,6 +325,9 @@ static void emulator_cleanup(emulator_t* emu) {
         free(emu->tapebuf);
         emu->tapebuf = NULL;
     }
+    if (emu->has_cast_server) {
+        cast_server_stop(&emu->cast_server);
+    }
     if (emu->has_microdisc) {
         microdisc_cleanup(&emu->microdisc);
     }
@@ -521,6 +526,12 @@ static void emulator_run(emulator_t* emu) {
         /* Render video frame */
         video_render_frame(&emu->video, emu->memory.ram);
 
+        /* Push frame to cast server if active */
+        if (emu->has_cast_server) {
+            cast_server_push_frame(&emu->cast_server, emu->video.framebuffer,
+                                   ORIC_SCREEN_W, ORIC_SCREEN_H);
+        }
+
         /* Present to screen and handle events if not headless */
         if (!emu->headless) {
             renderer_present(&emu->video);
@@ -641,9 +652,12 @@ int main(int argc, char* argv[]) {
     const char* disk_rom_file = NULL;
     bool debug_mode = false;
     const char* debug_break_addr = NULL;
+    bool cast_server_enabled = false;
+    uint16_t cast_server_port = 0;
+    bool cast_discover = false;
 
     /* Long option codes for options without short equivalents */
-    enum { OPT_SCREENSHOT = 256, OPT_SCREENSHOT_AT, OPT_FRAME_DUMP, OPT_FRAME_DUMP_INTERVAL, OPT_TYPE_KEYS, OPT_DISK_ROM, OPT_DISK1, OPT_DISK2, OPT_DISK3, OPT_BREAKPOINT, OPT_DEBUG_BREAK };
+    enum { OPT_SCREENSHOT = 256, OPT_SCREENSHOT_AT, OPT_FRAME_DUMP, OPT_FRAME_DUMP_INTERVAL, OPT_TYPE_KEYS, OPT_DISK_ROM, OPT_DISK1, OPT_DISK2, OPT_DISK3, OPT_BREAKPOINT, OPT_DEBUG_BREAK, OPT_CAST_SERVER, OPT_CAST_DISCOVER };
 
     static struct option long_options[] = {
         {"tape",                required_argument, 0, 't'},
@@ -667,6 +681,8 @@ int main(int argc, char* argv[]) {
         {"breakpoint",          required_argument, 0, 'b'},
         {"debug",               no_argument,       0, 'D'},
         {"break",               required_argument, 0, OPT_DEBUG_BREAK},
+        {"cast-server",         optional_argument, 0, OPT_CAST_SERVER},
+        {"cast-discover",       no_argument,       0, OPT_CAST_DISCOVER},
         {"help",                no_argument,       0, '?'},
         {0, 0, 0, 0}
     };
@@ -697,6 +713,11 @@ int main(int argc, char* argv[]) {
             case 'b': emu.breakpoint = (int32_t)strtol(optarg, NULL, 16); break;
             case 'D': debug_mode = true; break;
             case OPT_DEBUG_BREAK: debug_break_addr = optarg; break;
+            case OPT_CAST_SERVER:
+                cast_server_enabled = true;
+                if (optarg) cast_server_port = (uint16_t)atoi(optarg);
+                break;
+            case OPT_CAST_DISCOVER: cast_discover = true; break;
             case '?':
             default:
                 print_usage(argv[0]);
@@ -708,6 +729,16 @@ int main(int argc, char* argv[]) {
 
     signal(SIGINT, signal_handler);
     signal(SIGTERM, signal_handler);
+
+    /* Cast discover: standalone mode, list devices and exit */
+    if (cast_discover) {
+#ifdef HAS_CAST
+        cast_discover_devices(3000);
+#else
+        fprintf(stderr, "Cast support not compiled in. Build with CAST=1.\n");
+#endif
+        return 0;
+    }
 
     /* Set headless before init so renderer is not started */
     emu.headless = headless;
@@ -904,6 +935,19 @@ int main(int argc, char* argv[]) {
         uint16_t addr = (uint16_t)strtol(debug_break_addr, NULL, 16);
         debugger_add_breakpoint(&emu.debugger, addr);
         log_info("Debugger breakpoint set at $%04X", addr);
+    }
+
+    /* Initialize cast server if requested */
+    if (cast_server_enabled) {
+#ifdef HAS_CAST
+        if (cast_server_init(&emu.cast_server, cast_server_port)) {
+            emu.has_cast_server = true;
+        } else {
+            log_error("Failed to start cast server");
+        }
+#else
+        fprintf(stderr, "Cast support not compiled in. Build with CAST=1.\n");
+#endif
     }
 
     if (!headless) {

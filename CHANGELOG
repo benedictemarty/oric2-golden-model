@@ -5,6 +5,51 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0-alpha] - 2026-02-28
+
+### MJPEG Cast Server + mDNS Chromecast Discovery (Sprint 20)
+
+#### Added
+- **MJPEG cast server** (`src/network/cast_server.c`, `include/network/cast_server.h`):
+  HTTP MJPEG streaming server for casting the emulator display to a browser
+  or Chromecast device via tab casting.
+- **HTML viewer page** at `/`: fullscreen black background with pixelated
+  `<img>` element pointing to `/stream`, styled for retro display.
+- **MJPEG stream endpoint** at `/stream`: multipart/x-mixed-replace JPEG
+  stream with 720x672 upscaled frames (3x nearest-neighbor from 240x224).
+- **JPEG encoding**: uses vendored `stb_image_write.h` (public domain,
+  Sean Barrett) for header-only JPEG encoding at quality 80.
+- **Multi-client support**: up to 8 concurrent stream clients with
+  `select()`-based non-blocking I/O and `MSG_NOSIGNAL` disconnect detection.
+- **Thread-safe frame push**: `cast_server_push_frame()` upscales under
+  mutex, JPEG encoding done in server thread outside mutex.
+- **mDNS/DNS-SD discovery** (`cast_discover_devices()`): sends PTR query
+  for `_googlecast._tcp.local` via UDP multicast to 224.0.0.251:5353,
+  parses PTR/SRV/A/TXT records with DNS compression pointer support,
+  displays device name (`fn=` from TXT), IP, and port.
+- **CLI option `--cast-server[=PORT]`**: start MJPEG server (default 8080).
+- **CLI option `--cast-discover`**: standalone mode, discover Chromecast
+  devices on the network and exit.
+- **Conditional build `CAST=1`**: adds `-DHAS_CAST -lpthread`, compiles
+  `src/network/cast_server.c`. Without CAST=1, cast_server_t is a minimal
+  stub and all functions are no-ops.
+- **Vendored `third_party/stb_image_write.h`**: v1.16, public domain,
+  no external dependency for JPEG encoding.
+- **13 cast server unit tests** in `tests/unit/test_cast.c`:
+  upscale (single pixel, 2x2 frame, color preservation), JPEG (non-zero
+  length, SOI marker), server (lifecycle, port default), HTTP (HTML page
+  content, MJPEG stream header), mDNS (query build, length, buffer too
+  small), frame push ready flag.
+- **`make test-cast`** target (requires CAST=1 implicitly via -DHAS_CAST).
+- **Valgrind target** updated to include cast tests.
+
+#### Changed
+- `emulator_t` struct: added `cast_server_t cast_server` and `has_cast_server`
+- `emulator_run()`: pushes frame to cast server after `video_render_frame()`
+- `emulator_cleanup()`: stops cast server
+- Version updated from 1.1.2-alpha to 1.2.0-alpha
+- Total test count: 181 tests (168 + 13 cast), 100% pass rate
+
 ## [1.1.2-alpha] - 2026-02-27
 
 ### VSync CB1 Improvements (Sprint 19c)
