@@ -246,7 +246,7 @@ TEST(test_http_html_page) {
     /* Check for HTML content */
     ASSERT_TRUE(strstr(response, "text/html") != NULL);
     ASSERT_TRUE(strstr(response, "ORIC-1 Cast") != NULL);
-    ASSERT_TRUE(strstr(response, "/stream") != NULL);
+    ASSERT_TRUE(strstr(response, "/snapshot") != NULL);
 
     close(sock);
     cast_server_stop(&server);

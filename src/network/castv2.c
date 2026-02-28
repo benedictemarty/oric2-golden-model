@@ -175,12 +175,11 @@ static bool castv2_tls_connect(castv2_client_t* client, const char* ip) {
         return false;
     }
 
-    /* Set 5s timeout */
-    struct timeval tv;
-    tv.tv_sec = 5;
-    tv.tv_usec = 0;
-    setsockopt(client->sock_fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
-    setsockopt(client->sock_fd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
+    /* Set 2s recv timeout, 5s send timeout */
+    struct timeval tv_recv = { .tv_sec = 2, .tv_usec = 0 };
+    struct timeval tv_send = { .tv_sec = 5, .tv_usec = 0 };
+    setsockopt(client->sock_fd, SOL_SOCKET, SO_RCVTIMEO, &tv_recv, sizeof(tv_recv));
+    setsockopt(client->sock_fd, SOL_SOCKET, SO_SNDTIMEO, &tv_send, sizeof(tv_send));
 
     /* Connect TCP */
     struct sockaddr_in addr;
@@ -244,6 +243,7 @@ static bool castv2_tls_connect(castv2_client_t* client, const char* ip) {
 /*  SEND / RECEIVE MESSAGES                                            */
 /* ═══════════════════════════════════════════════════════════════════ */
 
+/* Thread-safe send: protects SSL_write with mutex when heartbeat is active */
 static bool castv2_send(castv2_client_t* client, const char* dest_id,
                         const char* ns, const char* payload) {
     uint8_t buf[4096];
@@ -254,8 +254,15 @@ static bool castv2_send(castv2_client_t* client, const char* dest_id,
         return false;
     }
 
+    /* Lock mutex if heartbeat is running (concurrent SSL_write protection) */
+    bool locked = client->heartbeat_running;
+    if (locked) pthread_mutex_lock(&client->hb_mutex);
+
     SSL* ssl = (SSL*)client->ssl;
     int written = SSL_write(ssl, buf, len);
+
+    if (locked) pthread_mutex_unlock(&client->hb_mutex);
+
     if (written != len) {
         log_error("CastV2: SSL_write failed (%d/%d)", written, len);
         return false;
@@ -595,21 +602,30 @@ bool castv2_connect_and_cast(castv2_client_t* client, const char* device_ip,
     }
     client->state = CASTV2_STATE_CONNECTED;
 
-    /* Step 2: CONNECT to receiver-0 */
+    /* Step 2: Initialize mutex for thread-safe SSL writes */
+    pthread_mutex_init(&client->hb_mutex, NULL);
+
+    /* Step 3: CONNECT to receiver-0 */
     if (!castv2_send(client, "receiver-0", CASTV2_NS_CONNECTION,
-                     "{\"type\":\"CONNECT\"}")) {
+                     "{\"type\":\"CONNECT\",\"origin\":{}}")) {
         client->state = CASTV2_STATE_ERROR;
         return false;
     }
     log_info("CastV2: CONNECT sent to receiver-0");
 
-    /* Step 3: Start heartbeat thread */
-    pthread_mutex_init(&client->hb_mutex, NULL);
-    client->heartbeat_running = true;
-    if (pthread_create(&client->heartbeat_thread, NULL,
-                       heartbeat_thread_func, client) != 0) {
-        log_error("CastV2: failed to create heartbeat thread");
-        client->heartbeat_running = false;
+    /* Step 3b: STOP any existing app to force a fresh DashCast launch */
+    {
+        char stop_json[128];
+        snprintf(stop_json, sizeof(stop_json),
+                 "{\"type\":\"STOP\",\"requestId\":%d}",
+                 client->request_id++);
+        castv2_send(client, "receiver-0", CASTV2_NS_RECEIVER, stop_json);
+        log_info("CastV2: STOP sent (clearing previous session)");
+        /* Give Chromecast time to stop the app */
+        usleep(1500000);
+        /* Drain any pending messages */
+        char drain[4096];
+        while (castv2_recv(client, drain, sizeof(drain)) > 0) { }
     }
 
     /* Step 4: LAUNCH DashCast */
@@ -625,19 +641,43 @@ bool castv2_connect_and_cast(castv2_client_t* client, const char* device_ip,
     }
     log_info("CastV2: LAUNCH DashCast sent (appId=%s)", CASTV2_DASHCAST_APPID);
 
-    /* Step 5: Wait for RECEIVER_STATUS to get transportId */
+    /* Step 5: Wait for RECEIVER_STATUS to get transportId.
+     * DashCast may take several seconds to launch. We read messages
+     * and respond to PINGs while waiting. */
     char payload[4096];
     bool got_transport = false;
 
-    for (int attempt = 0; attempt < 30; attempt++) {
+    for (int attempt = 0; attempt < 60; attempt++) {
         int rd = castv2_recv(client, payload, sizeof(payload));
-        if (rd <= 0) continue;
+        if (rd <= 0) {
+            /* Timeout — send a PING to keep connection alive */
+            castv2_send(client, "receiver-0", CASTV2_NS_HEARTBEAT,
+                       "{\"type\":\"PING\"}");
+            continue;
+        }
+
+        log_debug("CastV2: recv [%d]: %.120s%s", attempt, payload,
+                  (int)strlen(payload) > 120 ? "..." : "");
+
+        /* Respond to PING from Chromecast */
+        if (strstr(payload, "\"PING\"")) {
+            castv2_send(client, "receiver-0", CASTV2_NS_HEARTBEAT,
+                       "{\"type\":\"PONG\"}");
+            continue;
+        }
 
         /* Handle PONG silently */
         if (strstr(payload, "\"PONG\"")) continue;
 
+        /* Handle CLOSE — Chromecast rejected us */
+        if (strstr(payload, "\"CLOSE\"")) {
+            log_error("CastV2: received CLOSE from Chromecast");
+            client->state = CASTV2_STATE_ERROR;
+            return false;
+        }
+
         /* Look for RECEIVER_STATUS with transportId */
-        if (strstr(payload, "RECEIVER_STATUS") || strstr(payload, "transportId")) {
+        if (strstr(payload, "transportId")) {
             char tid[128] = "";
             if (json_find_string(payload, "transportId", tid, sizeof(tid))) {
                 snprintf(client->transport_id, sizeof(client->transport_id), "%s", tid);
@@ -645,6 +685,16 @@ bool castv2_connect_and_cast(castv2_client_t* client, const char* device_ip,
                 got_transport = true;
                 break;
             }
+        }
+
+        /* Request status if we haven't got transport yet */
+        if (attempt > 0 && attempt % 10 == 0) {
+            char status_json[128];
+            snprintf(status_json, sizeof(status_json),
+                     "{\"type\":\"GET_STATUS\",\"requestId\":%d}",
+                     client->request_id++);
+            castv2_send(client, "receiver-0", CASTV2_NS_RECEIVER, status_json);
+            log_info("CastV2: requesting status (attempt %d)...", attempt);
         }
     }
 
@@ -656,11 +706,14 @@ bool castv2_connect_and_cast(castv2_client_t* client, const char* device_ip,
 
     /* Step 6: CONNECT to transport */
     if (!castv2_send(client, client->transport_id, CASTV2_NS_CONNECTION,
-                     "{\"type\":\"CONNECT\"}")) {
+                     "{\"type\":\"CONNECT\",\"origin\":{}}")) {
         client->state = CASTV2_STATE_ERROR;
         return false;
     }
     log_info("CastV2: CONNECT sent to transport %s", client->transport_id);
+
+    /* Small delay for transport connection to establish */
+    usleep(500000);
 
     /* Step 7: Send URL to DashCast */
     char url_json[512];
@@ -671,6 +724,14 @@ bool castv2_connect_and_cast(castv2_client_t* client, const char* device_ip,
                      CASTV2_NS_DASHCAST, url_json)) {
         client->state = CASTV2_STATE_ERROR;
         return false;
+    }
+
+    /* Step 8: Start heartbeat thread (now that connection is fully established) */
+    client->heartbeat_running = true;
+    if (pthread_create(&client->heartbeat_thread, NULL,
+                       heartbeat_thread_func, client) != 0) {
+        log_error("CastV2: failed to create heartbeat thread");
+        client->heartbeat_running = false;
     }
 
     client->state = CASTV2_STATE_RUNNING;
