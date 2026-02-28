@@ -15,6 +15,7 @@ DISCOVER_ONLY=false
 FAST_LOAD=false
 NO_CAST=false
 CAST_DEVICE=""
+KEYBOARD="azerty"
 
 # ═══════════════════════════════════════════════════════
 #  Couleurs
@@ -49,6 +50,7 @@ usage() {
     echo "  -c, --cast DEVICE    Nom du Chromecast cible (defaut: premier trouve)"
     echo "  -d, --discover       Detecter les Chromecast et quitter"
     echo "  -f, --fast-load      Chargement rapide (TAP uniquement)"
+    echo "  -k, --keyboard LAYOUT Layout clavier: azerty (defaut) ou qwerty"
     echo "  -n, --no-cast        Mode local uniquement (pas de cast)"
     echo "  -h, --help           Afficher cette aide"
     echo ""
@@ -75,6 +77,8 @@ while [[ $# -gt 0 ]]; do
             DISCOVER_ONLY=true; shift ;;
         -f|--fast-load)
             FAST_LOAD=true; shift ;;
+        -k|--keyboard)
+            KEYBOARD="$2"; shift 2 ;;
         -n|--no-cast)
             NO_CAST=true; shift ;;
         -h|--help)
@@ -151,7 +155,7 @@ fi
 # ═══════════════════════════════════════════════════════
 #  Etape 3 : Lancer l'emulateur avec --cast-to natif
 # ═══════════════════════════════════════════════════════
-CMD=("$EMU" -r "$ROM")
+CMD=("$EMU" -r "$ROM" -k "$KEYBOARD")
 
 # Ajouter le cast natif CASTV2 (sauf si --no-cast)
 if ! $NO_CAST; then
@@ -190,6 +194,7 @@ echo -e "${GREEN}[3/3] Demarrage emulateur + CASTV2 natif...${NC}"
 if ! $NO_CAST; then
     echo -e "  Chromecast cible: ${CYAN}${CAST_DEVICE:-premier trouve}${NC}"
 fi
+echo -e "  Clavier: ${CYAN}${KEYBOARD}${NC}"
 echo -e "  Port MJPEG: ${CYAN}${CAST_PORT}${NC}"
 echo ""
 
