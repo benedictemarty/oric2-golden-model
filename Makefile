@@ -24,7 +24,7 @@ endif
 CAST ?= 0
 ifeq ($(CAST), 1)
     CFLAGS += -DHAS_CAST
-    LDFLAGS += -lpthread
+    LDFLAGS += -lpthread -lssl -lcrypto
 endif
 
 # Source files
@@ -55,7 +55,7 @@ SOURCES = src/main.c \
           src/utils/config.c
 
 ifeq ($(CAST), 1)
-    SOURCES += src/network/cast_server.c
+    SOURCES += src/network/cast_server.c src/network/castv2.c
 endif
 
 OBJECTS = $(SOURCES:.c=.o)
@@ -170,10 +170,10 @@ test-debugger: $(TEST_DEBUGGER_SRCS)
 	@$(CC) $(CFLAGS) $(TEST_DEBUGGER_SRCS) $(LDFLAGS) -o test_debugger
 	@./test_debugger
 
-TEST_CAST_SRCS = tests/unit/test_cast.c src/network/cast_server.c src/utils/logging.c
+TEST_CAST_SRCS = tests/unit/test_cast.c src/network/cast_server.c src/network/castv2.c src/utils/logging.c
 
 test-cast: $(TEST_CAST_SRCS)
-	@$(CC) $(CFLAGS) -DHAS_CAST $(TEST_CAST_SRCS) $(LDFLAGS) -lpthread -o test_cast
+	@$(CC) $(CFLAGS) -DHAS_CAST $(TEST_CAST_SRCS) $(LDFLAGS) -lpthread -lssl -lcrypto -o test_cast
 	@./test_cast
 
 tests: test-cpu test-memory test-io test-storage test-system test-video test-audio test-debugger

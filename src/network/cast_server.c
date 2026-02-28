@@ -86,6 +86,9 @@ void cast_upscale_nearest(const uint8_t* src, int src_w, int src_h,
 /*  HTTP RESPONSES                                                     */
 /* ═══════════════════════════════════════════════════════════════════ */
 
+/* Page HTML avec fallback JS pour navigateurs sans support MJPEG (Chromecast).
+ * Tente d'abord le flux MJPEG natif (/stream). Si l'image ne se charge pas
+ * en 2s, bascule sur un rafraichissement JS via /snapshot (un JPEG par requete). */
 static const char* HTML_PAGE =
     "HTTP/1.1 200 OK\r\n"
     "Content-Type: text/html; charset=utf-8\r\n"
@@ -96,12 +99,32 @@ static const char* HTML_PAGE =
     "<style>\n"
     "  body { margin: 0; background: #000; display: flex;\n"
     "         justify-content: center; align-items: center;\n"
-    "         min-height: 100vh; }\n"
+    "         min-height: 100vh; overflow: hidden; }\n"
     "  img  { max-width: 100vw; max-height: 100vh;\n"
     "         image-rendering: pixelated;\n"
     "         image-rendering: crisp-edges; }\n"
     "</style></head><body>\n"
-    "<img src=\"/stream\" alt=\"ORIC-1\">\n"
+    "<img id=\"screen\" alt=\"ORIC-1\">\n"
+    "<script>\n"
+    "var img = document.getElementById('screen');\n"
+    "var mjpeg = true;\n"
+    "img.src = '/stream';\n"
+    "setTimeout(function() {\n"
+    "  if (!img.naturalWidth) {\n"
+    "    mjpeg = false;\n"
+    "    function refresh() {\n"
+    "      var i = new Image();\n"
+    "      i.onload = function() {\n"
+    "        img.src = i.src;\n"
+    "        setTimeout(refresh, 40);\n"
+    "      };\n"
+    "      i.onerror = function() { setTimeout(refresh, 200); };\n"
+    "      i.src = '/snapshot?' + Date.now();\n"
+    "    }\n"
+    "    refresh();\n"
+    "  }\n"
+    "}, 2000);\n"
+    "</script>\n"
     "</body></html>\n";
 
 static const char* MJPEG_HEADER =
@@ -162,6 +185,43 @@ static void handle_new_connection(cast_server_t* server, int client_fd) {
         send(client_fd, MJPEG_HEADER, strlen(MJPEG_HEADER), MSG_NOSIGNAL);
         set_nonblocking(client_fd);
         add_client(server, client_fd);
+    } else if (strstr(request, "GET /snapshot") != NULL) {
+        /* Single JPEG snapshot — encode current frame, send, close.
+         * Used as fallback by Chromecast browser (no MJPEG support). */
+        uint8_t* frame_copy = (uint8_t*)malloc(CAST_FRAME_W * CAST_FRAME_H * 3);
+        if (!frame_copy) { close(client_fd); return; }
+
+        pthread_mutex_lock(&server->mutex);
+        memcpy(frame_copy, server->upscaled, CAST_FRAME_W * CAST_FRAME_H * 3);
+        pthread_mutex_unlock(&server->mutex);
+
+        jpeg_buffer_t jbuf;
+        jbuf.capacity = CAST_FRAME_W * CAST_FRAME_H * 3;
+        jbuf.data = (uint8_t*)malloc((size_t)jbuf.capacity);
+        jbuf.len = 0;
+        if (!jbuf.data) { free(frame_copy); close(client_fd); return; }
+
+        stbi_write_jpg_to_func(jpeg_write_callback, &jbuf,
+                               CAST_FRAME_W, CAST_FRAME_H, 3,
+                               frame_copy, CAST_JPEG_QUALITY);
+        free(frame_copy);
+
+        char hdr[256];
+        int hlen = snprintf(hdr, sizeof(hdr),
+            "HTTP/1.1 200 OK\r\n"
+            "Content-Type: image/jpeg\r\n"
+            "Content-Length: %d\r\n"
+            "Cache-Control: no-cache, no-store\r\n"
+            "Connection: close\r\n"
+            "Access-Control-Allow-Origin: *\r\n"
+            "\r\n", jbuf.len);
+
+        send(client_fd, hdr, (size_t)hlen, MSG_NOSIGNAL);
+        if (jbuf.len > 0) {
+            send(client_fd, jbuf.data, (size_t)jbuf.len, MSG_NOSIGNAL);
+        }
+        free(jbuf.data);
+        close(client_fd);
     } else if (strstr(request, "GET /") != NULL) {
         /* HTML page — send and close */
         send(client_fd, HTML_PAGE, strlen(HTML_PAGE), MSG_NOSIGNAL);

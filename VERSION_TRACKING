@@ -1,12 +1,26 @@
 VERSION_TRACKING - ORIC-1 Emulator
 =====================================
 
-Current Version: 1.2.0-alpha
+Current Version: 1.3.0-alpha
 Release Date: 2026-02-28
-Status: Alpha (MJPEG Cast Server + mDNS Discovery, 181 tests pass)
+Status: Alpha (Native CASTV2 Client + MJPEG Cast Server, 189 tests pass)
 
 Version History:
 ----------------
+- 1.3.0-alpha (2026-02-28): Native CASTV2 Client (Sprint 21)
+  * Native Google Cast V2 protocol client (src/network/castv2.c)
+  * Hand-coded protobuf encoder/decoder (CastMessage, 6 fields)
+  * TLS via OpenSSL (self-signed Chromecast cert accepted)
+  * Protocol: CONNECT → LAUNCH DashCast → RECEIVER_STATUS → send URL
+  * Heartbeat thread (PING every 5s, clean shutdown)
+  * mDNS discovery wrapper with name filter
+  * Local IP detection (UDP connect + getsockname)
+  * CLI: --cast-to[=DEVICE] (implicitly enables --cast-server)
+  * Build: CAST=1 now adds -lssl -lcrypto
+  * cast-play.sh simplified: native --cast-to, zero external deps
+  * 8 new CASTV2 protobuf tests
+  * 189 tests, 100% pass rate
+
 - 1.2.0-alpha (2026-02-28): MJPEG Cast Server + mDNS Discovery (Sprint 20)
   * HTTP MJPEG streaming server at /stream (720x672, 3x upscale)
   * HTML viewer page at / with pixelated rendering

@@ -356,15 +356,125 @@ TEST(test_frame_push_ready) {
 }
 
 /* ═══════════════════════════════════════════════════════════════════ */
+/*  CASTV2 PROTOBUF TESTS                                              */
+/* ═══════════════════════════════════════════════════════════════════ */
+
+/* TEST 14: VARINT SINGLE BYTE */
+TEST(test_varint_single) {
+    uint8_t buf[16];
+    int len = castv2_encode_varint(buf, sizeof(buf), 42);
+    ASSERT_EQ(len, 1);
+    ASSERT_EQ(buf[0], 0x2A);
+}
+
+/* TEST 15: VARINT MULTI BYTE */
+TEST(test_varint_multi) {
+    uint8_t buf[16];
+    int len = castv2_encode_varint(buf, sizeof(buf), 300);
+    ASSERT_EQ(len, 2);
+    ASSERT_EQ(buf[0], 0xAC);
+    ASSERT_EQ(buf[1], 0x02);
+}
+
+/* TEST 16: VARINT ROUNDTRIP */
+TEST(test_varint_roundtrip) {
+    uint64_t test_values[] = {0, 1, 42, 127, 128, 300, 16384};
+    int count = (int)(sizeof(test_values) / sizeof(test_values[0]));
+
+    for (int i = 0; i < count; i++) {
+        uint8_t buf[16];
+        int enc_len = castv2_encode_varint(buf, sizeof(buf), test_values[i]);
+        ASSERT_TRUE(enc_len > 0);
+
+        uint64_t decoded;
+        int dec_len = castv2_decode_varint(buf, enc_len, &decoded);
+        ASSERT_EQ(dec_len, enc_len);
+        ASSERT_TRUE(decoded == test_values[i]);
+    }
+}
+
+/* TEST 17: BUILD MESSAGE POSITIVE LENGTH */
+TEST(test_build_message) {
+    uint8_t buf[4096];
+    int len = castv2_build_message(buf, sizeof(buf),
+                                   "sender-0", "receiver-0",
+                                   "urn:x-cast:com.google.cast.tp.connection",
+                                   "{\"type\":\"CONNECT\"}");
+    ASSERT_TRUE(len > 0);
+}
+
+/* TEST 18: MESSAGE FRAMING (4 bytes big-endian length) */
+TEST(test_message_framing) {
+    uint8_t buf[4096];
+    int len = castv2_build_message(buf, sizeof(buf),
+                                   "sender-0", "receiver-0",
+                                   "urn:x-cast:com.google.cast.tp.heartbeat",
+                                   "{\"type\":\"PING\"}");
+    ASSERT_TRUE(len > 4);
+
+    /* First 4 bytes = big-endian length of protobuf message */
+    uint32_t msg_len = ((uint32_t)buf[0] << 24) | ((uint32_t)buf[1] << 16) |
+                       ((uint32_t)buf[2] << 8) | (uint32_t)buf[3];
+    ASSERT_EQ((int)msg_len, len - 4);
+}
+
+/* TEST 19: MESSAGE CONTAINS SOURCE ID */
+TEST(test_message_contains_source) {
+    uint8_t buf[4096];
+    int len = castv2_build_message(buf, sizeof(buf),
+                                   "sender-0", "receiver-0",
+                                   "urn:x-cast:com.google.cast.tp.connection",
+                                   "{\"type\":\"CONNECT\"}");
+    ASSERT_TRUE(len > 0);
+
+    /* Search for "sender-0" in the protobuf payload */
+    bool found = false;
+    for (int i = 4; i < len - 8; i++) {
+        if (memcmp(buf + i, "sender-0", 8) == 0) {
+            found = true;
+            break;
+        }
+    }
+    ASSERT_TRUE(found);
+}
+
+/* TEST 20: MESSAGE BUFFER TOO SMALL */
+TEST(test_message_buffer_too_small) {
+    uint8_t buf[16]; /* Too small for a complete message */
+    int len = castv2_build_message(buf, sizeof(buf),
+                                   "sender-0", "receiver-0",
+                                   "urn:x-cast:com.google.cast.tp.connection",
+                                   "{\"type\":\"CONNECT\"}");
+    ASSERT_EQ(len, -1);
+}
+
+/* TEST 21: MESSAGE PROTOCOL VERSION FIELD */
+TEST(test_message_protocol_version) {
+    uint8_t buf[4096];
+    int len = castv2_build_message(buf, sizeof(buf),
+                                   "sender-0", "receiver-0",
+                                   "urn:x-cast:com.google.cast.tp.connection",
+                                   "{\"type\":\"CONNECT\"}");
+    ASSERT_TRUE(len > 6);
+
+    /* After 4-byte framing header, first protobuf field should be:
+     * Field 1 (protocol_version), wire type 0 (varint): tag = (1 << 3 | 0) = 0x08
+     * Value = 0: 0x00 */
+    ASSERT_EQ(buf[4], 0x08);
+    ASSERT_EQ(buf[5], 0x00);
+}
+
+/* ═══════════════════════════════════════════════════════════════════ */
 /*  MAIN                                                               */
 /* ═══════════════════════════════════════════════════════════════════ */
 
 int main(void) {
     printf("\n");
     printf("═══════════════════════════════════════════════════════\n");
-    printf("  Cast Server Unit Tests\n");
+    printf("  Cast Server + CASTV2 Unit Tests\n");
     printf("═══════════════════════════════════════════════════════\n\n");
 
+    /* Cast Server tests (13) */
     RUN(test_upscale_single_pixel);
     RUN(test_upscale_2x2_frame);
     RUN(test_upscale_color_preservation);
@@ -378,6 +488,17 @@ int main(void) {
     RUN(test_mdns_query_length);
     RUN(test_mdns_query_too_small);
     RUN(test_frame_push_ready);
+
+    /* CASTV2 Protobuf tests (8) */
+    printf("\n  --- CASTV2 Protobuf ---\n");
+    RUN(test_varint_single);
+    RUN(test_varint_multi);
+    RUN(test_varint_roundtrip);
+    RUN(test_build_message);
+    RUN(test_message_framing);
+    RUN(test_message_contains_source);
+    RUN(test_message_buffer_too_small);
+    RUN(test_message_protocol_version);
 
     printf("\n═══════════════════════════════════════════════════════\n");
     printf("  Results: %d passed, %d failed\n", tests_passed, tests_failed);

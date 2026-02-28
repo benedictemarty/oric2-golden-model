@@ -5,6 +5,44 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0-alpha] - 2026-02-28
+
+### Native CASTV2 Client (Sprint 21)
+
+#### Added
+- **Native CASTV2 client** (`src/network/castv2.c`):
+  Zero-dependency Google Cast V2 protocol implementation in C for direct
+  Chromecast control without catt, Chromium, or any external tool.
+- **Hand-coded protobuf** encoder/decoder for CastMessage (6 fields):
+  `castv2_encode_varint()`, `castv2_decode_varint()`, `pb_encode_string()`,
+  `pb_encode_enum()`, `castv2_build_message()` with 4-byte BE framing.
+- **TLS connection** via OpenSSL: `SSL_VERIFY_NONE` for Chromecast self-signed
+  certs, 5s socket timeout.
+- **Cast protocol sequence** in `castv2_connect_and_cast()`:
+  TLS connect → CONNECT receiver-0 → LAUNCH DashCast (appId 5C3F0A3C) →
+  parse RECEIVER_STATUS for transportId → CONNECT transport → send URL.
+- **Heartbeat thread**: PING every 5s to receiver-0 and transportId,
+  clean shutdown via `heartbeat_running` flag + `pthread_join`.
+- **mDNS discovery wrapper** `castv2_discover_device()`: find Chromecast
+  by name filter, returns IP address.
+- **Local IP detection** `castv2_get_local_ip()`: UDP connect to 8.8.8.8:53
+  (no data sent) + `getsockname()` to determine LAN IP.
+- **CLI option `--cast-to[=DEVICE]`**: cast to first Chromecast found or
+  to specific device by name. Implicitly enables `--cast-server`.
+- **8 new CASTV2 protobuf unit tests**: varint single/multi/roundtrip,
+  build message, message framing, source ID, buffer too small, protocol version.
+- **Simplified `cast-play.sh`**: uses native `--cast-to` instead of
+  catt/Chromium. Reduced from ~340 to ~100 lines. Zero external dependencies.
+
+#### Changed
+- `cast_server.h`: added `castv2_state_t` enum, `castv2_client_t` struct,
+  CASTV2 API functions and protobuf helpers, stubs for non-CAST builds.
+- `emulator_t` struct: added `castv2_client_t castv2_client` and `has_castv2`.
+- `emulator_cleanup()`: disconnects CASTV2 client (STOP → SSL shutdown).
+- `Makefile`: CAST=1 now adds `-lssl -lcrypto`, compiles `castv2.c`.
+- Version updated from 1.2.0-alpha to 1.3.0-alpha.
+- Total test count: 189 tests (181 + 8 CASTV2), 100% pass rate.
+
 ## [1.2.0-alpha] - 2026-02-28
 
 ### MJPEG Cast Server + mDNS Chromecast Discovery (Sprint 20)

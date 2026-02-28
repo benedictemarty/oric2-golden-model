@@ -27,7 +27,7 @@
 #include "debugger.h"
 #include "network/cast_server.h"
 
-#define EMU_VERSION "1.2.0-alpha"
+#define EMU_VERSION "1.3.0-alpha"
 #define ORIC_CLOCK_HZ   1000000
 #define ORIC_FRAME_RATE  50
 
@@ -91,6 +91,10 @@ typedef struct {
     /* Cast server (MJPEG streaming) */
     cast_server_t cast_server;
     bool has_cast_server;
+
+    /* CASTV2 client (native Chromecast control) */
+    castv2_client_t castv2_client;
+    bool has_castv2;
 } emulator_t;
 
 #endif /* EMULATOR_H */

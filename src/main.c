@@ -34,6 +34,9 @@
 #endif
 #include "hostfs/hostfs.h"
 #include "utils/logging.h"
+#ifdef HAS_CAST
+#include <arpa/inet.h>
+#endif
 
 /* Forward declarations for renderer (in renderer.c) */
 bool renderer_init(int scale);
@@ -74,6 +77,7 @@ static void print_usage(const char* program_name) {
     printf("  -D, --debug                Start in debugger mode (break at first instruction)\n");
     printf("      --break ADDR           Set initial debugger breakpoint (hex)\n");
     printf("      --cast-server[=PORT]   Start MJPEG cast server (default port: 8080)\n");
+    printf("      --cast-to[=DEVICE]     Cast to Chromecast (native CASTV2 protocol)\n");
     printf("      --cast-discover        Discover Chromecast devices on network\n");
     printf("  -?, --help                 Show this help\n");
     printf("\n");
@@ -324,6 +328,9 @@ static void emulator_cleanup(emulator_t* emu) {
     if (emu->tapebuf) {
         free(emu->tapebuf);
         emu->tapebuf = NULL;
+    }
+    if (emu->has_castv2) {
+        castv2_disconnect(&emu->castv2_client);
     }
     if (emu->has_cast_server) {
         cast_server_stop(&emu->cast_server);
@@ -655,9 +662,11 @@ int main(int argc, char* argv[]) {
     bool cast_server_enabled = false;
     uint16_t cast_server_port = 0;
     bool cast_discover = false;
+    bool cast_to_enabled = false;
+    const char* cast_to_device = NULL;
 
     /* Long option codes for options without short equivalents */
-    enum { OPT_SCREENSHOT = 256, OPT_SCREENSHOT_AT, OPT_FRAME_DUMP, OPT_FRAME_DUMP_INTERVAL, OPT_TYPE_KEYS, OPT_DISK_ROM, OPT_DISK1, OPT_DISK2, OPT_DISK3, OPT_BREAKPOINT, OPT_DEBUG_BREAK, OPT_CAST_SERVER, OPT_CAST_DISCOVER };
+    enum { OPT_SCREENSHOT = 256, OPT_SCREENSHOT_AT, OPT_FRAME_DUMP, OPT_FRAME_DUMP_INTERVAL, OPT_TYPE_KEYS, OPT_DISK_ROM, OPT_DISK1, OPT_DISK2, OPT_DISK3, OPT_BREAKPOINT, OPT_DEBUG_BREAK, OPT_CAST_SERVER, OPT_CAST_DISCOVER, OPT_CAST_TO };
 
     static struct option long_options[] = {
         {"tape",                required_argument, 0, 't'},
@@ -682,6 +691,7 @@ int main(int argc, char* argv[]) {
         {"debug",               no_argument,       0, 'D'},
         {"break",               required_argument, 0, OPT_DEBUG_BREAK},
         {"cast-server",         optional_argument, 0, OPT_CAST_SERVER},
+        {"cast-to",             optional_argument, 0, OPT_CAST_TO},
         {"cast-discover",       no_argument,       0, OPT_CAST_DISCOVER},
         {"help",                no_argument,       0, '?'},
         {0, 0, 0, 0}
@@ -716,6 +726,10 @@ int main(int argc, char* argv[]) {
             case OPT_CAST_SERVER:
                 cast_server_enabled = true;
                 if (optarg) cast_server_port = (uint16_t)atoi(optarg);
+                break;
+            case OPT_CAST_TO:
+                cast_to_enabled = true;
+                if (optarg) cast_to_device = optarg;
                 break;
             case OPT_CAST_DISCOVER: cast_discover = true; break;
             case '?':
@@ -937,6 +951,11 @@ int main(int argc, char* argv[]) {
         log_info("Debugger breakpoint set at $%04X", addr);
     }
 
+    /* --cast-to implicitly enables --cast-server */
+    if (cast_to_enabled && !cast_server_enabled) {
+        cast_server_enabled = true;
+    }
+
     /* Initialize cast server if requested */
     if (cast_server_enabled) {
 #ifdef HAS_CAST
@@ -944,6 +963,53 @@ int main(int argc, char* argv[]) {
             emu.has_cast_server = true;
         } else {
             log_error("Failed to start cast server");
+        }
+#else
+        fprintf(stderr, "Cast support not compiled in. Build with CAST=1.\n");
+#endif
+    }
+
+    /* Initialize CASTV2 client: discover device and cast */
+    if (cast_to_enabled && emu.has_cast_server) {
+#ifdef HAS_CAST
+        char device_ip[64] = "";
+        bool discovered = false;
+
+        if (cast_to_device && cast_to_device[0]) {
+            /* Try to parse as IP address first */
+            struct in_addr test_addr;
+            if (inet_pton(AF_INET, cast_to_device, &test_addr) == 1) {
+                strncpy(device_ip, cast_to_device, sizeof(device_ip) - 1);
+                discovered = true;
+            }
+        }
+
+        if (!discovered) {
+            discovered = castv2_discover_device(device_ip, cast_to_device, 5000);
+        }
+
+        if (discovered) {
+            /* Build stream URL */
+            char local_ip[64] = "";
+            if (!castv2_get_local_ip(local_ip)) {
+                strncpy(local_ip, "127.0.0.1", sizeof(local_ip));
+            }
+            char stream_url[256];
+            snprintf(stream_url, sizeof(stream_url), "http://%s:%d/",
+                     local_ip, emu.cast_server.port);
+
+            log_info("Casting to %s, stream URL: %s", device_ip, stream_url);
+
+            if (castv2_connect_and_cast(&emu.castv2_client, device_ip, stream_url)) {
+                emu.has_castv2 = true;
+            } else {
+                log_error("Failed to connect CASTV2 to %s", device_ip);
+            }
+        } else {
+            log_error("No Chromecast device found%s%s",
+                      cast_to_device ? " matching '" : "",
+                      cast_to_device ? cast_to_device : "");
+            if (cast_to_device) log_error("'");
         }
 #else
         fprintf(stderr, "Cast support not compiled in. Build with CAST=1.\n");
