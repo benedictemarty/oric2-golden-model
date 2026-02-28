@@ -750,11 +750,12 @@ void castv2_disconnect(castv2_client_t* client) {
 
     log_info("CastV2: disconnecting...");
 
-    /* Stop heartbeat */
+    /* Stop heartbeat thread first — set flag then cancel sleep */
     if (client->heartbeat_running) {
         client->heartbeat_running = false;
+        /* Cancel the thread if it's sleeping */
+        pthread_cancel(client->heartbeat_thread);
         pthread_join(client->heartbeat_thread, NULL);
-        pthread_mutex_destroy(&client->hb_mutex);
     }
 
     /* Send STOP to receiver if we have a transport */
@@ -765,9 +766,13 @@ void castv2_disconnect(castv2_client_t* client) {
         castv2_send(client, "receiver-0", CASTV2_NS_RECEIVER, stop_json);
     }
 
-    /* SSL shutdown */
+    /* Close socket first to unblock any SSL operations */
+    if (client->sock_fd >= 0) {
+        shutdown(client->sock_fd, SHUT_RDWR);
+    }
+
+    /* SSL cleanup (non-blocking since socket is shut down) */
     if (client->ssl) {
-        SSL_shutdown((SSL*)client->ssl);
         SSL_free((SSL*)client->ssl);
         client->ssl = NULL;
     }
@@ -777,11 +782,12 @@ void castv2_disconnect(castv2_client_t* client) {
         client->ssl_ctx = NULL;
     }
 
-    /* Close socket */
     if (client->sock_fd >= 0) {
         close(client->sock_fd);
         client->sock_fd = -1;
     }
+
+    pthread_mutex_destroy(&client->hb_mutex);
 
     client->state = CASTV2_STATE_IDLE;
     log_info("CastV2: disconnected");
