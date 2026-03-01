@@ -16,6 +16,9 @@
 #include <stdbool.h>
 #include <stddef.h>
 
+/* Forward declaration for memory subsystem (avoids circular include) */
+typedef struct memory_s memory_t;
+
 /**
  * @brief CPU status flags (Processor Status Register)
  */
@@ -60,7 +63,7 @@ typedef struct {
     bool     nmi_pending;   /**< Non-Maskable Interrupt pending */
     uint8_t  irq;           /**< IRQ source bitfield (level-triggered) */
 
-    void*    memory;        /**< Pointer to memory subsystem */
+    memory_t* memory;       /**< Pointer to memory subsystem */
 } cpu6502_t;
 
 /**
@@ -88,7 +91,7 @@ typedef enum {
  * @param cpu Pointer to CPU structure
  * @param memory Pointer to memory subsystem
  */
-void cpu_init(cpu6502_t* cpu, void* memory);
+void cpu_init(cpu6502_t* cpu, memory_t* memory);
 
 /**
  * @brief Reset CPU (power-on or reset button)

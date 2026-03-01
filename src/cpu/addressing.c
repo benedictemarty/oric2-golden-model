@@ -10,11 +10,11 @@
 #include "memory/memory.h"
 
 uint8_t cpu_mem_read(cpu6502_t* cpu, uint16_t addr) {
-    return memory_read((memory_t*)cpu->memory, addr);
+    return memory_read(cpu->memory, addr);
 }
 
 void cpu_mem_write(cpu6502_t* cpu, uint16_t addr, uint8_t val) {
-    memory_write((memory_t*)cpu->memory, addr, val);
+    memory_write(cpu->memory, addr, val);
 }
 
 uint8_t cpu_fetch_byte(cpu6502_t* cpu) {

@@ -747,7 +747,7 @@ int main(int argc, char* argv[]) {
     /* Cast discover: standalone mode, list devices and exit */
     if (cast_discover) {
 #ifdef HAS_CAST
-        cast_discover_devices(3000);
+        cast_server_discover_devices(3000);
 #else
         fprintf(stderr, "Cast support not compiled in. Build with CAST=1.\n");
 #endif

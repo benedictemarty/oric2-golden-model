@@ -11,14 +11,14 @@
 #include <stdio.h>
 #include <string.h>
 
-void cpu_init(cpu6502_t* cpu, void* memory) {
+void cpu_init(cpu6502_t* cpu, memory_t* memory) {
     memset(cpu, 0, sizeof(cpu6502_t));
     cpu->memory = memory;
     cpu->P = FLAG_UNUSED | FLAG_INTERRUPT;
 }
 
 void cpu_reset(cpu6502_t* cpu) {
-    memory_t* mem = (memory_t*)cpu->memory;
+    memory_t* mem = cpu->memory;
     cpu->PC = memory_read_word(mem, 0xFFFC);
     cpu->SP = 0xFD;
     cpu->P = FLAG_UNUSED | FLAG_INTERRUPT;
@@ -128,7 +128,7 @@ static const char* addr_mode_fmt(addressing_mode_t mode, uint8_t lo, uint8_t hi)
 }
 
 int cpu_disassemble(const cpu6502_t* cpu, uint16_t address, char* buffer, size_t buffer_size) {
-    memory_t* mem = (memory_t*)cpu->memory;
+    memory_t* mem = cpu->memory;
     uint8_t opcode = memory_read(mem, address);
     const opcode_info_t* info = &opcode_table[opcode];
 

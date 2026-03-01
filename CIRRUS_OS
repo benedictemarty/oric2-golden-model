@@ -2,8 +2,8 @@ CIRRUS_OS - ORIC-1 Emulator Build & Development Status
 ======================================================
 
 Project: ORIC-1 Cycle-Accurate Emulator
-Version: 1.3.1-alpha
-Build Status: ALPHA (WAV Audio Streaming + CASTV2 Client + MJPEG Cast Server)
+Version: 1.3.2-alpha
+Build Status: ALPHA (Type Safety Refactor + WAV Audio + CASTV2 + MJPEG Cast)
 Last Updated: 2026-03-01
 
 ================================================================

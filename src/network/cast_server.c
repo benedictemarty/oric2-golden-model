@@ -41,28 +41,29 @@
 
 typedef struct {
     uint8_t* data;
-    int      len;
-    int      capacity;
+    size_t   len;
+    size_t   capacity;
 } jpeg_buffer_t;
 
 static void jpeg_write_callback(void* context, void* data, int size) {
     jpeg_buffer_t* buf = (jpeg_buffer_t*)context;
-    if (buf->len + size > buf->capacity) {
-        int new_cap = (buf->len + size) * 2;
-        uint8_t* new_data = (uint8_t*)realloc(buf->data, (size_t)new_cap);
+    size_t sz = (size_t)size;
+    if (buf->len + sz > buf->capacity) {
+        size_t new_cap = (buf->len + sz) * 2;
+        uint8_t* new_data = (uint8_t*)realloc(buf->data, new_cap);
         if (!new_data) return;
         buf->data = new_data;
         buf->capacity = new_cap;
     }
-    memcpy(buf->data + buf->len, data, (size_t)size);
-    buf->len += size;
+    memcpy(buf->data + buf->len, data, sz);
+    buf->len += sz;
 }
 
 /* ═══════════════════════════════════════════════════════════════════ */
 /*  UPSCALE                                                            */
 /* ═══════════════════════════════════════════════════════════════════ */
 
-void cast_upscale_nearest(const uint8_t* src, int src_w, int src_h,
+void cast_server_upscale_nearest(const uint8_t* src, int src_w, int src_h,
                           uint8_t* dst, int factor) {
     int dst_w = src_w * factor;
     for (int y = 0; y < src_h; y++) {
@@ -92,7 +93,7 @@ void cast_upscale_nearest(const uint8_t* src, int src_w, int src_h,
  * RIFF header with PCM format: mono, 44100 Hz, 16-bit.
  * Data chunk size set to 0x7FFFFFFF for continuous streaming.
  */
-int cast_build_wav_header(uint8_t* buf, int buf_size) {
+int cast_server_build_wav_header(uint8_t* buf, size_t buf_size) {
     if (buf_size < 44) return -1;
 
     int sample_rate = CAST_AUDIO_RATE;
@@ -137,11 +138,11 @@ int cast_build_wav_header(uint8_t* buf, int buf_size) {
  * @brief Push stereo audio samples to the ring buffer (stereo → mono downmix)
  */
 void cast_server_push_audio(cast_server_t* server, const int16_t* stereo_samples,
-                             int num_samples) {
+                             size_t num_samples) {
     if (!server->active) return;
 
     pthread_mutex_lock(&server->audio_mutex);
-    for (int i = 0; i < num_samples; i++) {
+    for (size_t i = 0; i < num_samples; i++) {
         /* Stereo to mono: average L and R */
         int32_t left = stereo_samples[i * 2];
         int32_t right = stereo_samples[i * 2 + 1];
@@ -181,12 +182,12 @@ static void broadcast_audio(cast_server_t* server) {
     if (server->num_audio_clients == 0) return;
 
     pthread_mutex_lock(&server->audio_mutex);
-    int write_pos = server->audio_write_pos;
+    uint32_t write_pos = server->audio_write_pos;
     pthread_mutex_unlock(&server->audio_mutex);
 
     for (int i = server->num_audio_clients - 1; i >= 0; i--) {
-        int read_pos = server->audio_read_pos[i];
-        int avail;
+        uint32_t read_pos = server->audio_read_pos[i];
+        uint32_t avail;
         if (write_pos >= read_pos) {
             avail = write_pos - read_pos;
         } else {
@@ -200,20 +201,20 @@ static void broadcast_audio(cast_server_t* server) {
             /* Single contiguous chunk */
             ssize_t sent = send(server->audio_clients[i],
                                 server->audio_ring + read_pos,
-                                (size_t)(avail * (int)sizeof(int16_t)), MSG_NOSIGNAL);
+                                (size_t)(avail * sizeof(int16_t)), MSG_NOSIGNAL);
             if (sent <= 0) error = true;
         } else {
             /* Two chunks: read_pos to end, then 0 to write_pos */
-            int chunk1 = CAST_AUDIO_RING_SAMPLES - read_pos;
+            uint32_t chunk1 = CAST_AUDIO_RING_SAMPLES - read_pos;
             ssize_t s1 = send(server->audio_clients[i],
                               server->audio_ring + read_pos,
-                              (size_t)(chunk1 * (int)sizeof(int16_t)), MSG_NOSIGNAL);
+                              (size_t)(chunk1 * sizeof(int16_t)), MSG_NOSIGNAL);
             if (s1 <= 0) {
                 error = true;
             } else if (write_pos > 0) {
                 ssize_t s2 = send(server->audio_clients[i],
                                   server->audio_ring,
-                                  (size_t)(write_pos * (int)sizeof(int16_t)), MSG_NOSIGNAL);
+                                  (size_t)(write_pos * sizeof(int16_t)), MSG_NOSIGNAL);
                 if (s2 <= 0) error = true;
             }
         }
@@ -376,7 +377,7 @@ static void remove_client(cast_server_t* server, int index) {
 /*  HTTP REQUEST PARSING                                               */
 /* ═══════════════════════════════════════════════════════════════════ */
 
-static void handle_new_connection(cast_server_t* server, int client_fd) {
+static void route_http_request(cast_server_t* server, int client_fd) {
     char request[1024];
     ssize_t n = recv(client_fd, request, sizeof(request) - 1, 0);
     if (n <= 0) {
@@ -388,7 +389,7 @@ static void handle_new_connection(cast_server_t* server, int client_fd) {
     if (strstr(request, "GET /audio") != NULL) {
         /* WAV audio stream — send WAV header and keep for streaming */
         uint8_t wav_hdr[44];
-        cast_build_wav_header(wav_hdr, sizeof(wav_hdr));
+        cast_server_build_wav_header(wav_hdr, sizeof(wav_hdr));
 
         const char* http_hdr =
             "HTTP/1.1 200 OK\r\n"
@@ -431,7 +432,7 @@ static void handle_new_connection(cast_server_t* server, int client_fd) {
         int hlen = snprintf(hdr, sizeof(hdr),
             "HTTP/1.1 200 OK\r\n"
             "Content-Type: image/jpeg\r\n"
-            "Content-Length: %d\r\n"
+            "Content-Length: %zu\r\n"
             "Cache-Control: no-cache, no-store\r\n"
             "Connection: close\r\n"
             "Access-Control-Allow-Origin: *\r\n"
@@ -439,7 +440,7 @@ static void handle_new_connection(cast_server_t* server, int client_fd) {
 
         send(client_fd, hdr, (size_t)hlen, MSG_NOSIGNAL);
         if (jbuf.len > 0) {
-            send(client_fd, jbuf.data, (size_t)jbuf.len, MSG_NOSIGNAL);
+            send(client_fd, jbuf.data, jbuf.len, MSG_NOSIGNAL);
         }
         free(jbuf.data);
         close(client_fd);
@@ -491,7 +492,7 @@ static void broadcast_frame(cast_server_t* server) {
     char header[128];
     int hlen = snprintf(header, sizeof(header),
                         "%sContent-Type: image/jpeg\r\n"
-                        "Content-Length: %d\r\n\r\n",
+                        "Content-Length: %zu\r\n\r\n",
                         MJPEG_BOUNDARY, jbuf.len);
 
     /* Send to all stream clients */
@@ -499,7 +500,7 @@ static void broadcast_frame(cast_server_t* server) {
         ssize_t s1 = send(server->clients[i], header, (size_t)hlen, MSG_NOSIGNAL);
         ssize_t s2 = 0;
         if (s1 > 0) {
-            s2 = send(server->clients[i], jbuf.data, (size_t)jbuf.len, MSG_NOSIGNAL);
+            s2 = send(server->clients[i], jbuf.data, jbuf.len, MSG_NOSIGNAL);
         }
         if (s1 <= 0 || s2 <= 0) {
             remove_client(server, i);
@@ -532,7 +533,7 @@ static void* server_thread_func(void* arg) {
             int client_fd = accept(server->listen_fd,
                                    (struct sockaddr*)&client_addr, &addr_len);
             if (client_fd >= 0) {
-                handle_new_connection(server, client_fd);
+                route_http_request(server, client_fd);
             }
         }
 
@@ -587,7 +588,7 @@ bool cast_server_init(cast_server_t* server, uint16_t port) {
 
     /* Allocate JPEG buffer */
     server->jpeg_capacity = CAST_FRAME_W * CAST_FRAME_H * 3;
-    server->jpeg_buf = (uint8_t*)malloc((size_t)server->jpeg_capacity);
+    server->jpeg_buf = (uint8_t*)malloc(server->jpeg_capacity);
     if (!server->jpeg_buf) {
         log_error("Cast: failed to allocate JPEG buffer");
         pthread_mutex_destroy(&server->audio_mutex);
@@ -652,11 +653,11 @@ bool cast_server_init(cast_server_t* server, uint16_t port) {
 }
 
 void cast_server_push_frame(cast_server_t* server, const uint8_t* framebuffer,
-                            int width, int height) {
+                            unsigned int width, unsigned int height) {
     if (!server->active) return;
 
     pthread_mutex_lock(&server->mutex);
-    cast_upscale_nearest(framebuffer, width, height,
+    cast_server_upscale_nearest(framebuffer, width, height,
                          server->upscaled, CAST_UPSCALE_FACTOR);
     server->frame_ready = true;
     pthread_mutex_unlock(&server->mutex);
@@ -699,7 +700,7 @@ void cast_server_stop(cast_server_t* server) {
  *   Header (12 bytes): ID=0, flags=0, QDCOUNT=1
  *   Question: _googlecast._tcp.local, type=PTR(12), class=IN(1)
  */
-int cast_build_mdns_query(uint8_t* buf, int buf_size) {
+int cast_server_build_mdns_query(uint8_t* buf, size_t buf_size) {
     if (buf_size < 64) return -1;
 
     int pos = 0;
@@ -793,7 +794,7 @@ static int dns_read_name(const uint8_t* pkt, int pkt_len, int pos,
     return (next_pos >= 0) ? next_pos : pos;
 }
 
-int cast_discover_devices(int timeout_ms) {
+int cast_server_discover_devices(int timeout_ms) {
     if (timeout_ms <= 0) timeout_ms = 3000;
 
     /* Create UDP socket */
@@ -825,7 +826,7 @@ int cast_discover_devices(int timeout_ms) {
 
     /* Build and send query */
     uint8_t query[64];
-    int query_len = cast_build_mdns_query(query, sizeof(query));
+    int query_len = cast_server_build_mdns_query(query, sizeof(query));
     if (query_len < 0) {
         close(sock);
         return 0;

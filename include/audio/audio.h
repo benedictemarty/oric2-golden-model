@@ -58,7 +58,7 @@ void audio_cleanup(void);
 void audio_pause(bool pause);
 
 /* Cast server audio forwarding */
-struct cast_server_t;  /* forward declaration */
-void audio_set_cast_server(void* server);
+typedef struct cast_server_s cast_server_t;
+void audio_set_cast_server(cast_server_t* server);
 
 #endif

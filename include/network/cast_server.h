@@ -17,6 +17,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <stddef.h>
 
 /* Upscaled resolution: 240x224 * 3 = 720x672 */
 #define CAST_UPSCALE_FACTOR  3
@@ -45,7 +46,7 @@
 
 #include <pthread.h>
 
-typedef struct {
+typedef struct cast_server_s {
     uint16_t port;
     bool     active;
 
@@ -59,8 +60,8 @@ typedef struct {
 
     /* JPEG output buffer */
     uint8_t*  jpeg_buf;
-    int       jpeg_len;
-    int       jpeg_capacity;
+    size_t    jpeg_len;
+    size_t    jpeg_capacity;
 
     /* Client sockets */
     int       clients[CAST_MAX_CLIENTS];
@@ -74,12 +75,12 @@ typedef struct {
 
     /* Audio ring buffer (mono PCM 16-bit) */
     int16_t   audio_ring[CAST_AUDIO_RING_SAMPLES];
-    int       audio_write_pos;
+    uint32_t  audio_write_pos;
     pthread_mutex_t audio_mutex;
 
     /* Audio streaming clients */
     int       audio_clients[CAST_MAX_AUDIO_CLIENTS];
-    int       audio_read_pos[CAST_MAX_AUDIO_CLIENTS];
+    uint32_t  audio_read_pos[CAST_MAX_AUDIO_CLIENTS];
     int       num_audio_clients;
 } cast_server_t;
 
@@ -95,7 +96,7 @@ typedef enum {
 } castv2_state_t;
 
 /* CASTV2 client instance */
-typedef struct {
+typedef struct castv2_client_s {
     castv2_state_t state;
     int            sock_fd;         /* TCP socket to Chromecast */
     void*          ssl_ctx;         /* SSL_CTX* (void* to avoid OpenSSL in header) */
@@ -124,7 +125,7 @@ bool cast_server_init(cast_server_t* server, uint16_t port);
  * @brief Push a new frame to the cast server
  */
 void cast_server_push_frame(cast_server_t* server, const uint8_t* framebuffer,
-                            int width, int height);
+                            unsigned int width, unsigned int height);
 
 /**
  * @brief Push audio samples to the cast server ring buffer
@@ -133,7 +134,7 @@ void cast_server_push_frame(cast_server_t* server, const uint8_t* framebuffer,
  * @param num_samples Number of sample frames (each frame = 2 int16_t)
  */
 void cast_server_push_audio(cast_server_t* server, const int16_t* stereo_samples,
-                             int num_samples);
+                             size_t num_samples);
 
 /**
  * @brief Stop and cleanup the cast server
@@ -145,13 +146,13 @@ void cast_server_stop(cast_server_t* server);
  * @param timeout_ms Discovery timeout in milliseconds (0 = default 3000ms)
  * @return Number of devices found
  */
-int cast_discover_devices(int timeout_ms);
+int cast_server_discover_devices(int timeout_ms);
 
 /* Internal helpers (exposed for testing) */
-void cast_upscale_nearest(const uint8_t* src, int src_w, int src_h,
-                          uint8_t* dst, int factor);
-int  cast_build_mdns_query(uint8_t* buf, int buf_size);
-int  cast_build_wav_header(uint8_t* buf, int buf_size);
+void cast_server_upscale_nearest(const uint8_t* src, int src_w, int src_h,
+                                 uint8_t* dst, int factor);
+int  cast_server_build_mdns_query(uint8_t* buf, size_t buf_size);
+int  cast_server_build_wav_header(uint8_t* buf, size_t buf_size);
 
 /* ═══════════════════════════════════════════════════════════════════ */
 /*  CASTV2 CLIENT API                                                  */
@@ -200,7 +201,7 @@ int castv2_build_message(uint8_t* buf, int buf_size,
 #else /* !HAS_CAST */
 
 /* Stub structure when cast is not compiled in */
-typedef struct {
+typedef struct cast_server_s {
     uint16_t port;
     bool     active;
 } cast_server_t;
@@ -210,7 +211,7 @@ typedef enum {
     CASTV2_STATE_ERROR
 } castv2_state_t;
 
-typedef struct {
+typedef struct castv2_client_s {
     castv2_state_t state;
     char           device_ip[64];
     char           device_name[128];
@@ -222,18 +223,18 @@ static inline bool cast_server_init(cast_server_t* s, uint16_t port) {
 }
 static inline void cast_server_push_frame(cast_server_t* s,
                                           const uint8_t* fb,
-                                          int w, int h) {
+                                          unsigned int w, unsigned int h) {
     (void)s; (void)fb; (void)w; (void)h;
 }
 static inline void cast_server_push_audio(cast_server_t* s,
                                            const int16_t* samples,
-                                           int n) {
+                                           size_t n) {
     (void)s; (void)samples; (void)n;
 }
 static inline void cast_server_stop(cast_server_t* s) {
     (void)s;
 }
-static inline int cast_discover_devices(int timeout_ms) {
+static inline int cast_server_discover_devices(int timeout_ms) {
     (void)timeout_ms;
     return 0;
 }

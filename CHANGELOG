@@ -5,6 +5,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.2-alpha] - 2026-03-01
+
+### Code Quality: Type Safety & Naming Consistency (Sprint 21c)
+
+#### Changed
+- **Named struct tags for forward declarations**: `cast_server_t` (`struct cast_server_s`),
+  `castv2_client_t` (`struct castv2_client_s`), `memory_t` (`struct memory_s`) now support
+  proper C forward declarations instead of relying on `void*` hacks.
+- **`audio_set_cast_server(void*)` → `audio_set_cast_server(cast_server_t*)`**: type-safe
+  parameter replaces opaque `void*`, enabling compile-time type checking.
+- **`cpu6502_t.memory` from `void*` to `memory_t*`**: strongly typed pointer replaces
+  opaque `void*`, eliminating casts in `cpu6502.c` and `addressing.c`.
+- **`cpu_init(cpu6502_t*, void*)` → `cpu_init(cpu6502_t*, memory_t*)`**: type-safe signature.
+- **`pb_encode_enum` → `pb_encode_varint_field`** in `castv2.c`: name now accurately
+  reflects that the function encodes any protobuf varint field, not just enums.
+- **Unified `cast_server_` prefix**: `cast_upscale_nearest` → `cast_server_upscale_nearest`,
+  `cast_build_mdns_query` → `cast_server_build_mdns_query`, `cast_build_wav_header` →
+  `cast_server_build_wav_header`, `cast_discover_devices` → `cast_server_discover_devices`.
+- **`handle_new_connection` → `route_http_request`** in `cast_server.c`: name reflects
+  actual HTTP request routing responsibility.
+- **`int` → `size_t`/`uint32_t` for sizes and positions**: `jpeg_len`/`jpeg_capacity` now
+  `size_t`, `audio_write_pos`/`audio_read_pos` now `uint32_t`, `num_samples` now `size_t`,
+  `buf_size` now `size_t`, `push_frame` width/height now `unsigned int`.
+- **Removed broken forward declaration** `struct cast_server_t;` in `audio.h` (was declaring
+  a different type than the actual typedef), replaced with correct `typedef struct cast_server_s`.
+- **Removed unnecessary `(memory_t*)` casts** in `cpu6502.c` and `addressing.c`.
+- 192 tests, 100% pass rate (no functional change)
+
 ## [1.3.1-alpha] - 2026-03-01
 
 ### WAV Audio Streaming for Chromecast (Sprint 21b)

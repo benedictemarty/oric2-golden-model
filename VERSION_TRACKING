@@ -1,12 +1,23 @@
 VERSION_TRACKING - ORIC-1 Emulator
 =====================================
 
-Current Version: 1.3.1-alpha
+Current Version: 1.3.2-alpha
 Release Date: 2026-03-01
-Status: Alpha (WAV Audio Streaming + CASTV2 Client + MJPEG Cast Server, 192 tests pass)
+Status: Alpha (Type Safety Refactor + WAV Audio + CASTV2 + MJPEG Cast, 192 tests pass)
 
 Version History:
 ----------------
+- 1.3.2-alpha (2026-03-01): Type Safety & Naming Consistency (Sprint 21c)
+  * Named struct tags: cast_server_s, castv2_client_s, memory_s (forward decl support)
+  * audio_set_cast_server(void*) → audio_set_cast_server(cast_server_t*) (type-safe)
+  * cpu6502_t.memory: void* → memory_t* (eliminates casts in cpu6502.c, addressing.c)
+  * pb_encode_enum → pb_encode_varint_field (accurate naming)
+  * Unified cast_server_ prefix for all cast helpers
+  * handle_new_connection → route_http_request (descriptive naming)
+  * int → size_t/uint32_t for buffer sizes, positions, sample counts
+  * Removed broken forward declaration + unnecessary casts
+  * 192 tests, 100% pass rate (no functional change)
+
 - 1.3.1-alpha (2026-03-01): WAV Audio Streaming for Chromecast (Sprint 21b)
   * HTTP endpoint GET /audio: infinite WAV stream (mono PCM 16-bit, 44100 Hz)
   * Audio ring buffer (2s, 88200 samples) with mutex + per-client read pos

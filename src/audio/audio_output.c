@@ -12,8 +12,8 @@
 /* Cast server reference for audio forwarding */
 static cast_server_t* cast_server_ref = NULL;
 
-void audio_set_cast_server(void* server) {
-    cast_server_ref = (cast_server_t*)server;
+void audio_set_cast_server(cast_server_t* server) {
+    cast_server_ref = server;
 }
 
 #ifdef HAS_SDL2

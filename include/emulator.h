@@ -27,7 +27,7 @@
 #include "debugger.h"
 #include "network/cast_server.h"
 
-#define EMU_VERSION "1.3.1-alpha"
+#define EMU_VERSION "1.3.2-alpha"
 #define ORIC_CLOCK_HZ   1000000
 #define ORIC_FRAME_RATE  50
 

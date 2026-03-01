@@ -85,7 +85,7 @@ TEST(test_upscale_single_pixel) {
     uint8_t src[3] = {0xFF, 0x00, 0x80};
     uint8_t dst[3 * 9] = {0}; /* 3x3 = 9 pixels */
 
-    cast_upscale_nearest(src, 1, 1, dst, 3);
+    cast_server_upscale_nearest(src, 1, 1, dst, 3);
 
     /* All 9 pixels should be the same color */
     for (int i = 0; i < 9; i++) {
@@ -107,7 +107,7 @@ TEST(test_upscale_2x2_frame) {
     };
     uint8_t dst[4 * 4 * 3]; /* 4x4 with factor 2 */
 
-    cast_upscale_nearest(src, 2, 2, dst, 2);
+    cast_server_upscale_nearest(src, 2, 2, dst, 2);
 
     /* Top-left 2x2 block should be red */
     ASSERT_EQ(dst[0], 0xFF); ASSERT_EQ(dst[1], 0x00); ASSERT_EQ(dst[2], 0x00);
@@ -132,7 +132,7 @@ TEST(test_upscale_color_preservation) {
     uint8_t src[3] = {0x00, 0xFF, 0x00}; /* green */
     uint8_t dst[3 * 4]; /* factor 2: 2x2 = 4 pixels */
 
-    cast_upscale_nearest(src, 1, 1, dst, 2);
+    cast_server_upscale_nearest(src, 1, 1, dst, 2);
 
     /* All 4 pixels must be green */
     for (int i = 0; i < 4; i++) {
@@ -296,7 +296,7 @@ TEST(test_http_mjpeg_stream) {
 
 TEST(test_mdns_query_build) {
     uint8_t buf[128];
-    int len = cast_build_mdns_query(buf, sizeof(buf));
+    int len = cast_server_build_mdns_query(buf, sizeof(buf));
 
     /* Should be a valid length */
     ASSERT_TRUE(len > 12); /* At least header + question */
@@ -315,7 +315,7 @@ TEST(test_mdns_query_build) {
 
 TEST(test_mdns_query_length) {
     uint8_t buf[128];
-    int len = cast_build_mdns_query(buf, sizeof(buf));
+    int len = cast_server_build_mdns_query(buf, sizeof(buf));
 
     /* Expected: 12 (header) + 1+11 + 1+4 + 1+5 + 1 (null) + 4 (type+class) = 40 */
     ASSERT_EQ(len, 40);
@@ -327,7 +327,7 @@ TEST(test_mdns_query_length) {
 
 TEST(test_mdns_query_too_small) {
     uint8_t buf[10]; /* Too small */
-    int len = cast_build_mdns_query(buf, sizeof(buf));
+    int len = cast_server_build_mdns_query(buf, sizeof(buf));
 
     ASSERT_EQ(len, -1);
 }
@@ -473,7 +473,7 @@ TEST(test_message_protocol_version) {
 /* TEST 22: WAV HEADER VALIDITY */
 TEST(test_wav_header) {
     uint8_t hdr[44];
-    int len = cast_build_wav_header(hdr, sizeof(hdr));
+    int len = cast_server_build_wav_header(hdr, sizeof(hdr));
     ASSERT_EQ(len, 44);
 
     /* RIFF magic */

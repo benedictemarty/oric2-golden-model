@@ -82,8 +82,8 @@ int castv2_decode_varint(const uint8_t* buf, int buf_size, uint64_t* value) {
     return -1;
 }
 
-/* Encode a protobuf varint field: tag + varint value */
-static int pb_encode_enum(uint8_t* buf, int buf_size, int field_num, uint64_t value) {
+/* Encode a protobuf varint field: (field_num << 3 | wire_type=0) + varint value */
+static int pb_encode_varint_field(uint8_t* buf, int buf_size, int field_num, uint64_t value) {
     if (buf_size < 2) return -1;
     int pos = 0;
     /* Tag: field_num << 3 | 0 (varint wire type) */
@@ -124,7 +124,7 @@ int castv2_build_message(uint8_t* buf, int buf_size,
     int n;
 
     /* Field 1: protocol_version = 0 (CASTV2_1_0) */
-    n = pb_encode_enum(buf + pos, buf_size - pos, 1, 0);
+    n = pb_encode_varint_field(buf + pos, buf_size - pos, 1, 0);
     if (n < 0) return -1;
     pos += n;
 
@@ -144,7 +144,7 @@ int castv2_build_message(uint8_t* buf, int buf_size,
     pos += n;
 
     /* Field 5: payload_type = 0 (STRING) */
-    n = pb_encode_enum(buf + pos, buf_size - pos, 5, 0);
+    n = pb_encode_varint_field(buf + pos, buf_size - pos, 5, 0);
     if (n < 0) return -1;
     pos += n;
 
@@ -418,7 +418,7 @@ bool castv2_get_local_ip(char* ip_out) {
 }
 
 /* ═══════════════════════════════════════════════════════════════════ */
-/*  mDNS DISCOVERY (wrapper around existing cast_build_mdns_query)     */
+/*  mDNS DISCOVERY (wrapper around existing cast_server_build_mdns_query)     */
 /* ═══════════════════════════════════════════════════════════════════ */
 
 bool castv2_discover_device(char* ip_out, const char* name_filter,
@@ -445,7 +445,7 @@ bool castv2_discover_device(char* ip_out, const char* name_filter,
 
     /* Build and send query */
     uint8_t query[64];
-    int query_len = cast_build_mdns_query(query, sizeof(query));
+    int query_len = cast_server_build_mdns_query(query, sizeof(query));
     if (query_len < 0) { close(sock); return false; }
 
     struct sockaddr_in mdns_addr;

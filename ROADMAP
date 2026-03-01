@@ -254,6 +254,17 @@ host filesystem sharing and conversion tools for legacy BASIC/machine code progr
 - [x] HTML `<audio autoplay>` in cast viewer page for Chromecast sound
 - [x] 3 new audio streaming tests (192 total, 100% pass)
 
+### Sprint 21c: Type Safety & Naming Consistency (v1.3.2-alpha) - DONE
+- [x] Named struct tags for forward declaration support (cast_server_s, memory_s, etc.)
+- [x] audio_set_cast_server: void* → cast_server_t* (type-safe parameter)
+- [x] cpu6502_t.memory: void* → memory_t* (remove casts in cpu/addressing code)
+- [x] pb_encode_enum → pb_encode_varint_field (accurate naming)
+- [x] Unified cast_server_ prefix for all cast module helpers
+- [x] handle_new_connection → route_http_request (descriptive naming)
+- [x] int → size_t/uint32_t for buffer sizes, positions, sample counts
+- [x] Removed broken forward declaration + unnecessary void* casts
+- [x] 192 tests, 100% pass rate (no functional change)
+
 ## Future Enhancements
 
 ### Advanced Features

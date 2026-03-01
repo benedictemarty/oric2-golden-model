@@ -45,7 +45,7 @@ typedef enum {
 /**
  * @brief Memory subsystem structure
  */
-typedef struct {
+typedef struct memory_s {
     uint8_t ram[RAM_SIZE];      /**< Main RAM */
     uint8_t rom[ROM_SIZE];      /**< ROM (BASIC + Monitor) */
     uint8_t charset[2048];      /**< Character set ROM */
