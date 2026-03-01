@@ -240,13 +240,15 @@ TEST(test_http_html_page) {
 
     /* Wait for response */
     usleep(100000); /* 100ms */
-    char response[4096] = {0};
+    char response[8192] = {0};
     recv(sock, response, sizeof(response) - 1, 0);
 
     /* Check for HTML content */
     ASSERT_TRUE(strstr(response, "text/html") != NULL);
     ASSERT_TRUE(strstr(response, "ORIC-1 Cast") != NULL);
     ASSERT_TRUE(strstr(response, "/snapshot") != NULL);
+    ASSERT_TRUE(strstr(response, "AudioContext") != NULL);
+    ASSERT_TRUE(strstr(response, "/audio") != NULL);
 
     close(sock);
     cast_server_stop(&server);
@@ -465,13 +467,112 @@ TEST(test_message_protocol_version) {
 }
 
 /* ═══════════════════════════════════════════════════════════════════ */
+/*  AUDIO STREAMING TESTS                                              */
+/* ═══════════════════════════════════════════════════════════════════ */
+
+/* TEST 22: WAV HEADER VALIDITY */
+TEST(test_wav_header) {
+    uint8_t hdr[44];
+    int len = cast_build_wav_header(hdr, sizeof(hdr));
+    ASSERT_EQ(len, 44);
+
+    /* RIFF magic */
+    ASSERT_EQ(hdr[0], 'R'); ASSERT_EQ(hdr[1], 'I');
+    ASSERT_EQ(hdr[2], 'F'); ASSERT_EQ(hdr[3], 'F');
+
+    /* WAVE magic */
+    ASSERT_EQ(hdr[8], 'W'); ASSERT_EQ(hdr[9], 'A');
+    ASSERT_EQ(hdr[10], 'V'); ASSERT_EQ(hdr[11], 'E');
+
+    /* fmt sub-chunk */
+    ASSERT_EQ(hdr[12], 'f'); ASSERT_EQ(hdr[13], 'm');
+    ASSERT_EQ(hdr[14], 't'); ASSERT_EQ(hdr[15], ' ');
+
+    /* Audio format = 1 (PCM) */
+    uint16_t audio_fmt;
+    memcpy(&audio_fmt, hdr + 20, 2);
+    ASSERT_EQ(audio_fmt, 1);
+
+    /* Channels = 1 (mono) */
+    uint16_t channels;
+    memcpy(&channels, hdr + 22, 2);
+    ASSERT_EQ(channels, 1);
+
+    /* Sample rate = 44100 */
+    uint32_t sample_rate;
+    memcpy(&sample_rate, hdr + 24, 4);
+    ASSERT_EQ(sample_rate, 44100);
+
+    /* Bits per sample = 16 */
+    uint16_t bps;
+    memcpy(&bps, hdr + 34, 2);
+    ASSERT_EQ(bps, 16);
+
+    /* data sub-chunk */
+    ASSERT_EQ(hdr[36], 'd'); ASSERT_EQ(hdr[37], 'a');
+    ASSERT_EQ(hdr[38], 't'); ASSERT_EQ(hdr[39], 'a');
+}
+
+/* TEST 23: AUDIO RING BUFFER PUSH */
+TEST(test_audio_ring_push) {
+    cast_server_t server;
+    bool ok = cast_server_init(&server, 18090);
+    ASSERT_TRUE(ok);
+
+    /* Initial write position is 0 */
+    ASSERT_EQ(server.audio_write_pos, 0);
+
+    /* Push 4 stereo samples (8 int16_t values) */
+    int16_t stereo[8] = {100, 200, 300, 400, 500, 600, 700, 800};
+    cast_server_push_audio(&server, stereo, 4);
+
+    /* Write position should advance by 4 */
+    ASSERT_EQ(server.audio_write_pos, 4);
+
+    /* Check mono downmix: (L+R)/2 */
+    ASSERT_EQ(server.audio_ring[0], 150);  /* (100+200)/2 */
+    ASSERT_EQ(server.audio_ring[1], 350);  /* (300+400)/2 */
+    ASSERT_EQ(server.audio_ring[2], 550);  /* (500+600)/2 */
+    ASSERT_EQ(server.audio_ring[3], 750);  /* (700+800)/2 */
+
+    cast_server_stop(&server);
+}
+
+/* TEST 24: AUDIO RING BUFFER WRAP-AROUND */
+TEST(test_audio_ring_wrap) {
+    cast_server_t server;
+    bool ok = cast_server_init(&server, 18091);
+    ASSERT_TRUE(ok);
+
+    /* Set write position near the end of the ring buffer */
+    server.audio_write_pos = CAST_AUDIO_RING_SAMPLES - 2;
+
+    /* Push 4 stereo samples — should wrap around */
+    int16_t stereo[8] = {1000, 1000, 2000, 2000, 3000, 3000, 4000, 4000};
+    cast_server_push_audio(&server, stereo, 4);
+
+    /* Write position should have wrapped: (N-2+4) % N = 2 */
+    ASSERT_EQ(server.audio_write_pos, 2);
+
+    /* Check samples at end of buffer */
+    ASSERT_EQ(server.audio_ring[CAST_AUDIO_RING_SAMPLES - 2], 1000);
+    ASSERT_EQ(server.audio_ring[CAST_AUDIO_RING_SAMPLES - 1], 2000);
+
+    /* Check wrapped samples at start of buffer */
+    ASSERT_EQ(server.audio_ring[0], 3000);
+    ASSERT_EQ(server.audio_ring[1], 4000);
+
+    cast_server_stop(&server);
+}
+
+/* ═══════════════════════════════════════════════════════════════════ */
 /*  MAIN                                                               */
 /* ═══════════════════════════════════════════════════════════════════ */
 
 int main(void) {
     printf("\n");
     printf("═══════════════════════════════════════════════════════\n");
-    printf("  Cast Server + CASTV2 Unit Tests\n");
+    printf("  Cast Server + CASTV2 + Audio Streaming Unit Tests\n");
     printf("═══════════════════════════════════════════════════════\n\n");
 
     /* Cast Server tests (13) */
@@ -499,6 +600,12 @@ int main(void) {
     RUN(test_message_contains_source);
     RUN(test_message_buffer_too_small);
     RUN(test_message_protocol_version);
+
+    /* Audio Streaming tests (3) */
+    printf("\n  --- Audio Streaming ---\n");
+    RUN(test_wav_header);
+    RUN(test_audio_ring_push);
+    RUN(test_audio_ring_wrap);
 
     printf("\n═══════════════════════════════════════════════════════\n");
     printf("  Results: %d passed, %d failed\n", tests_passed, tests_failed);

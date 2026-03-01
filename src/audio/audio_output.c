@@ -7,6 +7,14 @@
  */
 
 #include "audio/audio.h"
+#include "network/cast_server.h"
+
+/* Cast server reference for audio forwarding */
+static cast_server_t* cast_server_ref = NULL;
+
+void audio_set_cast_server(void* server) {
+    cast_server_ref = (cast_server_t*)server;
+}
 
 #ifdef HAS_SDL2
 #include <SDL2/SDL.h>
@@ -20,6 +28,11 @@ static void audio_callback(void* userdata, uint8_t* stream, int len) {
     int num_samples = len / (2 * sizeof(int16_t)); /* stereo */
     if (psg_ref) ay_generate(psg_ref, buf, num_samples);
     else memset(stream, 0, len);
+
+    /* Forward audio to cast server if connected */
+    if (cast_server_ref) {
+        cast_server_push_audio(cast_server_ref, buf, num_samples);
+    }
 }
 
 bool audio_init(ay3891x_t* psg) {

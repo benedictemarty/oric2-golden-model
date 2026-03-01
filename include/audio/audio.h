@@ -57,4 +57,8 @@ bool audio_init(ay3891x_t* psg);
 void audio_cleanup(void);
 void audio_pause(bool pause);
 
+/* Cast server audio forwarding */
+struct cast_server_t;  /* forward declaration */
+void audio_set_cast_server(void* server);
+
 #endif

@@ -5,6 +5,51 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.1-alpha] - 2026-03-01
+
+### WAV Audio Streaming for Chromecast (Sprint 21b)
+
+#### Added
+- **WAV audio streaming endpoint** (`GET /audio`): HTTP endpoint serving
+  infinite WAV stream (mono PCM 16-bit, 44100 Hz) from PSG audio output.
+  Enables Chromecast to play ORIC-1 sound via `<audio>` HTML element.
+- **Audio ring buffer** in `cast_server_t`: 2-second circular buffer
+  (`CAST_AUDIO_RING_SAMPLES = 88200`) with mutex-protected write access
+  and per-client read positions (up to 4 audio clients).
+- **Stereo-to-mono downmix**: `cast_server_push_audio()` receives stereo
+  PCM from SDL2 audio callback and writes mono average to ring buffer.
+- **WAV header builder** `cast_build_wav_header()`: generates 44-byte
+  RIFF/WAV header with infinite data size (`0x7FFFFFFF`) for streaming.
+- **Audio forwarding hook**: `audio_set_cast_server()` connects SDL2
+  audio callback to cast server. Called from `audio_callback()` after
+  `ay_generate()` to stream PSG audio in real-time.
+- **HTML `<audio autoplay>`**: cast viewer page at `/` now includes
+  `<audio autoplay><source src="/audio" type="audio/wav">` for automatic
+  sound playback on Chromecast.
+- **3 new audio streaming unit tests**: WAV header validity (44 bytes,
+  RIFF/WAVE/fmt/data, PCM mono 44100 16-bit), ring buffer push (stereo
+  downmix verification), ring buffer wrap-around (circular write).
+- **Web Audio API low-latency playback**: HTML page uses `fetch()` with
+  `ReadableStream` reader + `AudioContext` to decode PCM chunks and
+  schedule playback with ~100ms buffer. Replaces `<audio>` element
+  which had 2-5s browser buffering. Drift correction resets schedule
+  if >500ms ahead. Autoplay with click fallback for Chrome policy.
+
+#### Changed
+- `cast_server.h`: added `CAST_AUDIO_*` constants, audio ring buffer
+  fields, `audio_mutex`, `audio_clients[]`/`audio_read_pos[]` arrays,
+  `cast_server_push_audio()` and `cast_build_wav_header()` declarations,
+  stub for non-CAST builds.
+- `cast_server.c`: `/audio` route with WAV header + streaming, audio
+  client management, `broadcast_audio()` in server loop, audio mutex
+  init/destroy in lifecycle.
+- `audio_output.c`: `audio_set_cast_server()` implementation, cast
+  server push call in SDL2 `audio_callback()`.
+- `audio.h`: `audio_set_cast_server()` declaration.
+- `main.c`: wiring `audio_set_cast_server()` after cast server init.
+- Version updated from 1.3.0-alpha to 1.3.1-alpha.
+- Total test count: 192 tests (189 + 3 audio streaming), 100% pass rate.
+
 ## [1.3.0-alpha] - 2026-02-28
 
 ### Native CASTV2 Client (Sprint 21)

@@ -961,6 +961,8 @@ int main(int argc, char* argv[]) {
 #ifdef HAS_CAST
         if (cast_server_init(&emu.cast_server, cast_server_port)) {
             emu.has_cast_server = true;
+            /* Connect audio output to cast server for WAV streaming */
+            audio_set_cast_server(&emu.cast_server);
         } else {
             log_error("Failed to start cast server");
         }

@@ -83,6 +83,150 @@ void cast_upscale_nearest(const uint8_t* src, int src_w, int src_h,
 }
 
 /* ═══════════════════════════════════════════════════════════════════ */
+/*  WAV AUDIO STREAMING                                                */
+/* ═══════════════════════════════════════════════════════════════════ */
+
+/**
+ * @brief Build a WAV header for infinite streaming (44 bytes)
+ *
+ * RIFF header with PCM format: mono, 44100 Hz, 16-bit.
+ * Data chunk size set to 0x7FFFFFFF for continuous streaming.
+ */
+int cast_build_wav_header(uint8_t* buf, int buf_size) {
+    if (buf_size < 44) return -1;
+
+    int sample_rate = CAST_AUDIO_RATE;
+    int num_channels = 1;
+    int bits_per_sample = 16;
+    int byte_rate = sample_rate * num_channels * bits_per_sample / 8;
+    int block_align = num_channels * bits_per_sample / 8;
+
+    /* RIFF header */
+    memcpy(buf + 0, "RIFF", 4);
+    /* File size - 8 (infinite: 0x7FFFFFFF + 36) */
+    uint32_t riff_size = 0x7FFFFFFF;
+    memcpy(buf + 4, &riff_size, 4);
+    memcpy(buf + 8, "WAVE", 4);
+
+    /* fmt sub-chunk */
+    memcpy(buf + 12, "fmt ", 4);
+    uint32_t fmt_size = 16;
+    memcpy(buf + 16, &fmt_size, 4);
+    uint16_t audio_format = 1; /* PCM */
+    memcpy(buf + 20, &audio_format, 2);
+    uint16_t channels = (uint16_t)num_channels;
+    memcpy(buf + 22, &channels, 2);
+    uint32_t sr = (uint32_t)sample_rate;
+    memcpy(buf + 24, &sr, 4);
+    uint32_t br = (uint32_t)byte_rate;
+    memcpy(buf + 28, &br, 4);
+    uint16_t ba = (uint16_t)block_align;
+    memcpy(buf + 32, &ba, 2);
+    uint16_t bps = (uint16_t)bits_per_sample;
+    memcpy(buf + 34, &bps, 2);
+
+    /* data sub-chunk */
+    memcpy(buf + 36, "data", 4);
+    uint32_t data_size = 0x7FFFFFFF;
+    memcpy(buf + 40, &data_size, 4);
+
+    return 44;
+}
+
+/**
+ * @brief Push stereo audio samples to the ring buffer (stereo → mono downmix)
+ */
+void cast_server_push_audio(cast_server_t* server, const int16_t* stereo_samples,
+                             int num_samples) {
+    if (!server->active) return;
+
+    pthread_mutex_lock(&server->audio_mutex);
+    for (int i = 0; i < num_samples; i++) {
+        /* Stereo to mono: average L and R */
+        int32_t left = stereo_samples[i * 2];
+        int32_t right = stereo_samples[i * 2 + 1];
+        server->audio_ring[server->audio_write_pos] = (int16_t)((left + right) / 2);
+        server->audio_write_pos = (server->audio_write_pos + 1) % CAST_AUDIO_RING_SAMPLES;
+    }
+    pthread_mutex_unlock(&server->audio_mutex);
+}
+
+static void add_audio_client(cast_server_t* server, int fd) {
+    if (server->num_audio_clients >= CAST_MAX_AUDIO_CLIENTS) {
+        close(fd);
+        return;
+    }
+    int idx = server->num_audio_clients;
+    server->audio_clients[idx] = fd;
+    /* Start reading from current write position (no old audio) */
+    pthread_mutex_lock(&server->audio_mutex);
+    server->audio_read_pos[idx] = server->audio_write_pos;
+    pthread_mutex_unlock(&server->audio_mutex);
+    server->num_audio_clients++;
+    log_info("Cast: audio client connected (fd=%d, total=%d)", fd, server->num_audio_clients);
+}
+
+static void remove_audio_client(cast_server_t* server, int index) {
+    if (index < 0 || index >= server->num_audio_clients) return;
+    close(server->audio_clients[index]);
+    log_info("Cast: audio client disconnected (fd=%d)", server->audio_clients[index]);
+    for (int i = index; i < server->num_audio_clients - 1; i++) {
+        server->audio_clients[i] = server->audio_clients[i + 1];
+        server->audio_read_pos[i] = server->audio_read_pos[i + 1];
+    }
+    server->num_audio_clients--;
+}
+
+static void broadcast_audio(cast_server_t* server) {
+    if (server->num_audio_clients == 0) return;
+
+    pthread_mutex_lock(&server->audio_mutex);
+    int write_pos = server->audio_write_pos;
+    pthread_mutex_unlock(&server->audio_mutex);
+
+    for (int i = server->num_audio_clients - 1; i >= 0; i--) {
+        int read_pos = server->audio_read_pos[i];
+        int avail;
+        if (write_pos >= read_pos) {
+            avail = write_pos - read_pos;
+        } else {
+            avail = CAST_AUDIO_RING_SAMPLES - read_pos + write_pos;
+        }
+        if (avail == 0) continue;
+
+        /* Send available samples in up to 2 chunks (ring wrap-around) */
+        bool error = false;
+        if (write_pos >= read_pos) {
+            /* Single contiguous chunk */
+            ssize_t sent = send(server->audio_clients[i],
+                                server->audio_ring + read_pos,
+                                (size_t)(avail * (int)sizeof(int16_t)), MSG_NOSIGNAL);
+            if (sent <= 0) error = true;
+        } else {
+            /* Two chunks: read_pos to end, then 0 to write_pos */
+            int chunk1 = CAST_AUDIO_RING_SAMPLES - read_pos;
+            ssize_t s1 = send(server->audio_clients[i],
+                              server->audio_ring + read_pos,
+                              (size_t)(chunk1 * (int)sizeof(int16_t)), MSG_NOSIGNAL);
+            if (s1 <= 0) {
+                error = true;
+            } else if (write_pos > 0) {
+                ssize_t s2 = send(server->audio_clients[i],
+                                  server->audio_ring,
+                                  (size_t)(write_pos * (int)sizeof(int16_t)), MSG_NOSIGNAL);
+                if (s2 <= 0) error = true;
+            }
+        }
+
+        if (error) {
+            remove_audio_client(server, i);
+        } else {
+            server->audio_read_pos[i] = write_pos;
+        }
+    }
+}
+
+/* ═══════════════════════════════════════════════════════════════════ */
 /*  HTTP RESPONSES                                                     */
 /* ═══════════════════════════════════════════════════════════════════ */
 
@@ -106,6 +250,7 @@ static const char* HTML_PAGE =
     "</style></head><body>\n"
     "<img id=\"screen\" alt=\"ORIC-1\">\n"
     "<script>\n"
+    "/* Video: snapshot polling (50ms) */\n"
     "var img = document.getElementById('screen');\n"
     "function refresh() {\n"
     "  var i = new Image();\n"
@@ -117,6 +262,73 @@ static const char* HTML_PAGE =
     "  i.src = '/snapshot?t=' + Date.now();\n"
     "}\n"
     "refresh();\n"
+    "\n"
+    "/* Audio: Web Audio API streaming with auto-reconnect */\n"
+    "var actx = null;\n"
+    "var nextTime = 0;\n"
+    "function connectAudio() {\n"
+    "  if (!actx) {\n"
+    "    actx = new (window.AudioContext || window.webkitAudioContext)(\n"
+    "      {sampleRate: 44100});\n"
+    "  }\n"
+    "  nextTime = 0;\n"
+    "  fetch('/audio').then(function(resp) {\n"
+    "    var reader = resp.body.getReader();\n"
+    "    var hdrSkip = 0;\n"
+    "    var leftover = new Uint8Array(0);\n"
+    "    function pump() {\n"
+    "      reader.read().then(function(result) {\n"
+    "        if (result.done) {\n"
+    "          setTimeout(connectAudio, 1000);\n"
+    "          return;\n"
+    "        }\n"
+    "        var chunk = result.value;\n"
+    "        if (hdrSkip < 44) {\n"
+    "          var skip = Math.min(44 - hdrSkip, chunk.length);\n"
+    "          chunk = chunk.slice(skip);\n"
+    "          hdrSkip += skip;\n"
+    "        }\n"
+    "        if (chunk.length === 0) { pump(); return; }\n"
+    "        if (leftover.length > 0) {\n"
+    "          var m = new Uint8Array(leftover.length + chunk.length);\n"
+    "          m.set(leftover);\n"
+    "          m.set(chunk, leftover.length);\n"
+    "          chunk = m;\n"
+    "          leftover = new Uint8Array(0);\n"
+    "        }\n"
+    "        var usable = chunk.length & ~1;\n"
+    "        if (chunk.length > usable)\n"
+    "          leftover = chunk.slice(usable);\n"
+    "        var nS = usable / 2;\n"
+    "        if (nS === 0) { pump(); return; }\n"
+    "        var buf = actx.createBuffer(1, nS, 44100);\n"
+    "        var ch = buf.getChannelData(0);\n"
+    "        var dv = new DataView(\n"
+    "          chunk.buffer, chunk.byteOffset, usable);\n"
+    "        for (var s = 0; s < nS; s++)\n"
+    "          ch[s] = dv.getInt16(s * 2, true) / 32768.0;\n"
+    "        var now = actx.currentTime;\n"
+    "        if (nextTime < now) nextTime = now + 0.02;\n"
+    "        var src = actx.createBufferSource();\n"
+    "        src.buffer = buf;\n"
+    "        src.connect(actx.destination);\n"
+    "        src.start(nextTime);\n"
+    "        nextTime += buf.duration;\n"
+    "        if (nextTime - now > 0.5) nextTime = now + 0.02;\n"
+    "        pump();\n"
+    "      }).catch(function() {\n"
+    "        setTimeout(connectAudio, 2000);\n"
+    "      });\n"
+    "    }\n"
+    "    pump();\n"
+    "  }).catch(function() {\n"
+    "    setTimeout(connectAudio, 2000);\n"
+    "  });\n"
+    "}\n"
+    "connectAudio();\n"
+    "document.addEventListener('click', function() {\n"
+    "  if (actx && actx.state === 'suspended') actx.resume();\n"
+    "}, {once: true});\n"
     "</script>\n"
     "</body></html>\n";
 
@@ -173,7 +385,23 @@ static void handle_new_connection(cast_server_t* server, int client_fd) {
     }
     request[n] = '\0';
 
-    if (strstr(request, "GET /stream") != NULL) {
+    if (strstr(request, "GET /audio") != NULL) {
+        /* WAV audio stream — send WAV header and keep for streaming */
+        uint8_t wav_hdr[44];
+        cast_build_wav_header(wav_hdr, sizeof(wav_hdr));
+
+        const char* http_hdr =
+            "HTTP/1.1 200 OK\r\n"
+            "Content-Type: audio/wav\r\n"
+            "Cache-Control: no-cache\r\n"
+            "Connection: keep-alive\r\n"
+            "Access-Control-Allow-Origin: *\r\n"
+            "\r\n";
+        send(client_fd, http_hdr, strlen(http_hdr), MSG_NOSIGNAL);
+        send(client_fd, wav_hdr, 44, MSG_NOSIGNAL);
+        set_nonblocking(client_fd);
+        add_audio_client(server, client_fd);
+    } else if (strstr(request, "GET /stream") != NULL) {
         /* MJPEG stream — send header and keep connection for streaming */
         send(client_fd, MJPEG_HEADER, strlen(MJPEG_HEADER), MSG_NOSIGNAL);
         set_nonblocking(client_fd);
@@ -317,6 +545,9 @@ static void* server_thread_func(void* arg) {
         if (ready) {
             broadcast_frame(server);
         }
+
+        /* Broadcast audio to streaming clients */
+        broadcast_audio(server);
     }
 
     /* Close all client connections */
@@ -324,6 +555,12 @@ static void* server_thread_func(void* arg) {
         close(server->clients[i]);
     }
     server->num_clients = 0;
+
+    /* Close all audio client connections */
+    for (int i = 0; i < server->num_audio_clients; i++) {
+        close(server->audio_clients[i]);
+    }
+    server->num_audio_clients = 0;
 
     return NULL;
 }
@@ -337,9 +574,14 @@ bool cast_server_init(cast_server_t* server, uint16_t port) {
     server->port = (port > 0) ? port : CAST_DEFAULT_PORT;
     server->listen_fd = -1;
 
-    /* Initialize mutex */
+    /* Initialize mutexes */
     if (pthread_mutex_init(&server->mutex, NULL) != 0) {
         log_error("Cast: failed to create mutex");
+        return false;
+    }
+    if (pthread_mutex_init(&server->audio_mutex, NULL) != 0) {
+        log_error("Cast: failed to create audio mutex");
+        pthread_mutex_destroy(&server->mutex);
         return false;
     }
 
@@ -348,6 +590,7 @@ bool cast_server_init(cast_server_t* server, uint16_t port) {
     server->jpeg_buf = (uint8_t*)malloc((size_t)server->jpeg_capacity);
     if (!server->jpeg_buf) {
         log_error("Cast: failed to allocate JPEG buffer");
+        pthread_mutex_destroy(&server->audio_mutex);
         pthread_mutex_destroy(&server->mutex);
         return false;
     }
@@ -357,6 +600,7 @@ bool cast_server_init(cast_server_t* server, uint16_t port) {
     if (server->listen_fd < 0) {
         log_error("Cast: socket() failed: %s", strerror(errno));
         free(server->jpeg_buf);
+        pthread_mutex_destroy(&server->audio_mutex);
         pthread_mutex_destroy(&server->mutex);
         return false;
     }
@@ -375,6 +619,7 @@ bool cast_server_init(cast_server_t* server, uint16_t port) {
                   server->port, strerror(errno));
         close(server->listen_fd);
         free(server->jpeg_buf);
+        pthread_mutex_destroy(&server->audio_mutex);
         pthread_mutex_destroy(&server->mutex);
         return false;
     }
@@ -383,6 +628,7 @@ bool cast_server_init(cast_server_t* server, uint16_t port) {
         log_error("Cast: listen() failed: %s", strerror(errno));
         close(server->listen_fd);
         free(server->jpeg_buf);
+        pthread_mutex_destroy(&server->audio_mutex);
         pthread_mutex_destroy(&server->mutex);
         return false;
     }
@@ -395,6 +641,7 @@ bool cast_server_init(cast_server_t* server, uint16_t port) {
         log_error("Cast: pthread_create() failed: %s", strerror(errno));
         close(server->listen_fd);
         free(server->jpeg_buf);
+        pthread_mutex_destroy(&server->audio_mutex);
         pthread_mutex_destroy(&server->mutex);
         return false;
     }
@@ -432,6 +679,7 @@ void cast_server_stop(cast_server_t* server) {
     }
 
     pthread_mutex_destroy(&server->mutex);
+    pthread_mutex_destroy(&server->audio_mutex);
     server->active = false;
     log_info("Cast: server stopped");
 }

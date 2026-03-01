@@ -732,16 +732,49 @@ bool castv2_connect_and_cast(castv2_client_t* client, const char* device_ip,
     }
     log_info("CastV2: CONNECT sent to transport %s", client->transport_id);
 
-    /* Small delay for transport connection to establish */
-    usleep(500000);
+    /* Wait for transport to be ready — drain messages and respond to PINGs */
+    usleep(1000000); /* 1s initial wait */
+    for (int drain = 0; drain < 10; drain++) {
+        int drd = castv2_recv(client, payload, sizeof(payload));
+        if (drd <= 0) break;
+        log_debug("CastV2: transport drain [%d]: %.80s", drain, payload);
+        if (strstr(payload, "\"PING\"")) {
+            castv2_send(client, client->transport_id,
+                       CASTV2_NS_HEARTBEAT, "{\"type\":\"PONG\"}");
+        }
+    }
 
-    /* Step 7: Send URL to DashCast */
+    /* Step 7: Send URL to DashCast (with retries) */
     char url_json[512];
     snprintf(url_json, sizeof(url_json),
-             "{\"url\":\"%s\",\"force\":true}", stream_url);
+             "{\"url\":\"%s\",\"force\":true,\"reload\":0,\"reloadTime\":0}",
+             stream_url);
 
-    if (!castv2_send(client, client->transport_id,
-                     CASTV2_NS_DASHCAST, url_json)) {
+    bool url_sent = false;
+    for (int retry = 0; retry < 5; retry++) {
+        if (!castv2_send(client, client->transport_id,
+                         CASTV2_NS_DASHCAST, url_json)) {
+            log_warning("CastV2: URL send attempt %d failed", retry + 1);
+            usleep(1000000);
+            continue;
+        }
+        log_info("CastV2: URL sent to DashCast (attempt %d)", retry + 1);
+        url_sent = true;
+
+        /* Wait and check if DashCast acknowledged */
+        usleep(2000000); /* 2s for DashCast to load */
+
+        /* Re-send URL to be sure (DashCast may need it twice) */
+        if (retry == 0) {
+            castv2_send(client, client->transport_id,
+                       CASTV2_NS_DASHCAST, url_json);
+            log_info("CastV2: URL re-sent for confirmation");
+        }
+        break;
+    }
+
+    if (!url_sent) {
+        log_error("CastV2: failed to send URL after retries");
         client->state = CASTV2_STATE_ERROR;
         return false;
     }

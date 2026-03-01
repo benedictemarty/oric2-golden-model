@@ -26,6 +26,12 @@
 #define CAST_DEFAULT_PORT    8080
 #define CAST_JPEG_QUALITY    80
 
+/* Audio streaming constants */
+#define CAST_AUDIO_RATE          44100
+#define CAST_AUDIO_RING_SECS     2
+#define CAST_AUDIO_RING_SAMPLES  (CAST_AUDIO_RATE * CAST_AUDIO_RING_SECS)
+#define CAST_MAX_AUDIO_CLIENTS   4
+
 /* CASTV2 constants */
 #define CASTV2_PORT          8009
 #define CASTV2_HEARTBEAT_SEC 5
@@ -65,6 +71,16 @@ typedef struct {
 
     /* Frame ready flag */
     bool      frame_ready;
+
+    /* Audio ring buffer (mono PCM 16-bit) */
+    int16_t   audio_ring[CAST_AUDIO_RING_SAMPLES];
+    int       audio_write_pos;
+    pthread_mutex_t audio_mutex;
+
+    /* Audio streaming clients */
+    int       audio_clients[CAST_MAX_AUDIO_CLIENTS];
+    int       audio_read_pos[CAST_MAX_AUDIO_CLIENTS];
+    int       num_audio_clients;
 } cast_server_t;
 
 /* CASTV2 client state machine */
@@ -111,6 +127,15 @@ void cast_server_push_frame(cast_server_t* server, const uint8_t* framebuffer,
                             int width, int height);
 
 /**
+ * @brief Push audio samples to the cast server ring buffer
+ * @param server Server instance
+ * @param stereo_samples Interleaved stereo PCM 16-bit samples (L,R,L,R,...)
+ * @param num_samples Number of sample frames (each frame = 2 int16_t)
+ */
+void cast_server_push_audio(cast_server_t* server, const int16_t* stereo_samples,
+                             int num_samples);
+
+/**
  * @brief Stop and cleanup the cast server
  */
 void cast_server_stop(cast_server_t* server);
@@ -126,6 +151,7 @@ int cast_discover_devices(int timeout_ms);
 void cast_upscale_nearest(const uint8_t* src, int src_w, int src_h,
                           uint8_t* dst, int factor);
 int  cast_build_mdns_query(uint8_t* buf, int buf_size);
+int  cast_build_wav_header(uint8_t* buf, int buf_size);
 
 /* ═══════════════════════════════════════════════════════════════════ */
 /*  CASTV2 CLIENT API                                                  */
@@ -198,6 +224,11 @@ static inline void cast_server_push_frame(cast_server_t* s,
                                           const uint8_t* fb,
                                           int w, int h) {
     (void)s; (void)fb; (void)w; (void)h;
+}
+static inline void cast_server_push_audio(cast_server_t* s,
+                                           const int16_t* samples,
+                                           int n) {
+    (void)s; (void)samples; (void)n;
 }
 static inline void cast_server_stop(cast_server_t* s) {
     (void)s;

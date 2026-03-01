@@ -1,12 +1,23 @@
 VERSION_TRACKING - ORIC-1 Emulator
 =====================================
 
-Current Version: 1.3.0-alpha
-Release Date: 2026-02-28
-Status: Alpha (Native CASTV2 Client + MJPEG Cast Server, 189 tests pass)
+Current Version: 1.3.1-alpha
+Release Date: 2026-03-01
+Status: Alpha (WAV Audio Streaming + CASTV2 Client + MJPEG Cast Server, 192 tests pass)
 
 Version History:
 ----------------
+- 1.3.1-alpha (2026-03-01): WAV Audio Streaming for Chromecast (Sprint 21b)
+  * HTTP endpoint GET /audio: infinite WAV stream (mono PCM 16-bit, 44100 Hz)
+  * Audio ring buffer (2s, 88200 samples) with mutex + per-client read pos
+  * Stereo-to-mono downmix in cast_server_push_audio()
+  * WAV header builder cast_build_wav_header() (44 bytes, infinite data size)
+  * audio_set_cast_server() hooks SDL2 audio callback to cast server
+  * Web Audio API low-latency playback (~100ms vs 2-5s with <audio>)
+  * HTML page: fetch() + ReadableStream + AudioContext, drift correction
+  * 3 new audio streaming tests (WAV header, ring push, wrap-around)
+  * 192 tests, 100% pass rate
+
 - 1.3.0-alpha (2026-02-28): Native CASTV2 Client (Sprint 21)
   * Native Google Cast V2 protocol client (src/network/castv2.c)
   * Hand-coded protobuf encoder/decoder (CastMessage, 6 fields)
@@ -180,7 +191,7 @@ MAJOR.MINOR.PATCH-LABEL
 - PATCH: Bug fixes (backward compatible)
 - LABEL: alpha, beta, rc, stable
 
-Next Planned Version: 1.3.0
+Next Planned Version: 1.4.0
 Target Date: TBD
 Planned Features:
   - Save states
