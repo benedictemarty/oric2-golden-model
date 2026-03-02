@@ -29,7 +29,7 @@
 #define SEDORIC_MAX_NAME      9
 #define SEDORIC_MAX_EXT       3
 
-typedef struct {
+typedef struct sedoric_disk_s {
     uint8_t* data;
     uint32_t size;
     uint8_t tracks;
@@ -38,7 +38,7 @@ typedef struct {
     bool modified;
 } sedoric_disk_t;
 
-typedef struct {
+typedef struct sedoric_entry_s {
     char name[SEDORIC_MAX_NAME + 1];
     char ext[SEDORIC_MAX_EXT + 1];
     uint8_t start_track;
@@ -52,7 +52,7 @@ sedoric_disk_t* sedoric_load(const char* filename);
 bool sedoric_save(sedoric_disk_t* disk, const char* filename);
 void sedoric_destroy(sedoric_disk_t* disk);
 uint8_t* sedoric_get_sector(sedoric_disk_t* disk, uint8_t track, uint8_t sector);
-bool sedoric_read_sector(sedoric_disk_t* disk, uint8_t track, uint8_t sector, uint8_t* buffer);
+bool sedoric_read_sector(const sedoric_disk_t* disk, uint8_t track, uint8_t sector, uint8_t* buffer);
 bool sedoric_write_sector(sedoric_disk_t* disk, uint8_t track, uint8_t sector, const uint8_t* buffer);
 
 #endif /* SEDORIC_H */

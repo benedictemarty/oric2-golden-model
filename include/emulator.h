@@ -27,7 +27,7 @@
 #include "debugger.h"
 #include "network/cast_server.h"
 
-#define EMU_VERSION "1.3.2-alpha"
+#define EMU_VERSION "1.3.3-alpha"
 #define ORIC_CLOCK_HZ   1000000
 #define ORIC_FRAME_RATE  50
 
@@ -38,7 +38,7 @@
 #define VSYNC_START_LINE     256
 #define VSYNC_CYCLE          (VSYNC_START_LINE * PAL_CYCLES_PER_LINE)     /* 16384 */
 
-typedef struct {
+typedef struct emulator_s {
     cpu6502_t cpu;
     memory_t memory;
     via6522_t via;

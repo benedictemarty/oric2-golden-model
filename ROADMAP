@@ -265,6 +265,18 @@ host filesystem sharing and conversion tools for legacy BASIC/machine code progr
 - [x] Removed broken forward declaration + unnecessary void* casts
 - [x] 192 tests, 100% pass rate (no functional change)
 
+### Sprint 21d: Full Codebase Type Safety Audit (v1.3.3-alpha) - DONE
+- [x] Named struct tags for ALL 15 remaining typedefs (tap, sedoric, fdc, hostfs, video, microdisc, debugger, opcode_info, via6522, ay3891x, keyboard, emulator)
+- [x] debugger.h: void* emu → emulator_t* with forward declaration
+- [x] debugger.h: int num_breakpoints/num_watchpoints → uint8_t
+- [x] microdisc.h: void* cpu_userdata → emulator_t*, typed IRQ callbacks
+- [x] Const correctness: sedoric_read_sector, video_render_frame, internal helpers
+- [x] Numeric types: fdc cur_sector_len/cur_offset → uint16_t, fdc_ticktock → unsigned int
+- [x] video_export_ascii scale → unsigned int, BMP stride → unsigned int
+- [x] VIA magic numbers → VIA_IER_MASK/VIA_INT_ANY constants
+- [x] Null safety: localtime() check in logging.c
+- [x] 192 tests, 100% pass rate (no functional change)
+
 ## Future Enhancements
 
 ### Advanced Features
@@ -299,6 +311,6 @@ host filesystem sharing and conversion tools for legacy BASIC/machine code progr
 
 ---
 
-**Last Updated**: 2026-03-01
-**Current Version**: 1.3.1-alpha
+**Last Updated**: 2026-03-02
+**Current Version**: 1.3.3-alpha
 **Next Milestone**: 1.4.0 (Advanced features)

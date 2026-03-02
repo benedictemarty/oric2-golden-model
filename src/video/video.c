@@ -58,7 +58,7 @@ static void set_pixel(video_t* vid, int x, int y, uint8_t r, uint8_t g, uint8_t 
  *   TEXT mode:  $B400-$B7FF (standard charset, 128 chars x 8 bytes)
  *   HIRES mode: $9800-$9BFF (charset relocated because $B400 is in HIRES bitmap)
  */
-static uint8_t get_charset_byte(video_t* vid, uint8_t* mem, int char_idx, int row) {
+static uint8_t get_charset_byte(video_t* vid, const uint8_t* mem, int char_idx, int row) {
     if (vid->charset) return vid->charset[char_idx * 8 + row];
     uint16_t base = vid->hires_mode ? 0x9800 : 0xB400;
     return mem[base + char_idx * 8 + row];
@@ -107,7 +107,7 @@ static void render_hires_block(video_t* vid, int x, int y,
 /**
  * Render a single text character block (6x8 pixels).
  */
-static void render_text_char(video_t* vid, uint8_t* mem, int x, int sy,
+static void render_text_char(video_t* vid, const uint8_t* mem, int x, int sy,
                              uint8_t byte, uint8_t ink, uint8_t paper, bool inverse) {
     uint8_t fg = inverse ? paper : ink;
     uint8_t bg = inverse ? ink : paper;
@@ -149,7 +149,7 @@ static void render_attr_block(video_t* vid, int x, int y,
  * - Lines 200-223: always TEXT from $BB80 (rows 25-27)
  * - Serial attributes can change vid_mode mid-frame
  */
-void video_render_frame(video_t* vid, uint8_t* memory) {
+void video_render_frame(video_t* vid, const uint8_t* memory) {
     if (!memory) return;
 
     /* Render lines 0-199: HIRES or TEXT depending on vid_mode */

@@ -5,6 +5,36 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.3-alpha] - 2026-03-02
+
+### Code Quality: Full Codebase Type Safety Audit (Sprint 21d)
+
+#### Changed
+- **Named struct tags for ALL typedefs**: `tap_header_s`, `tap_file_s`, `sedoric_disk_s`,
+  `sedoric_entry_s`, `fdc_s`, `hostfs_handle_s`, `hostfs_s`, `video_s`, `microdisc_s`,
+  `debugger_s`, `opcode_info_s`, `via6522_s`, `ay3891x_s`, `oric_keyboard_s`, `emulator_s`.
+  All typedefs now support proper C forward declarations.
+- **`debugger_should_break/repl/install_watchpoint_trace(void* emu)` → `(emulator_t* emu)`**:
+  type-safe debugger API with forward declaration in `debugger.h`, removing all `void*` casts
+  in `debugger.c`.
+- **`microdisc_t` CPU IRQ callbacks**: `void (*cpu_irq_set)(void*)` → `void (*cpu_irq_set)(emulator_t*)`,
+  `void* cpu_userdata` → `emulator_t* cpu_userdata`. Type-safe IRQ routing.
+- **`debugger_t` counters**: `int num_breakpoints/num_watchpoints` → `uint8_t` (max 16/8).
+- **Const correctness**: `sedoric_read_sector(const sedoric_disk_t*)`,
+  `video_render_frame(video_t*, const uint8_t* memory)` and internal helpers
+  `get_charset_byte`/`render_text_char`.
+- **Numeric types**: `fdc_t.cur_sector_len/cur_offset` → `uint16_t`,
+  `fdc_ticktock()` cycles → `unsigned int`, `video_export_ascii()` scale params → `unsigned int`,
+  BMP export stride → `unsigned int`.
+- **VIA magic numbers**: `0x7F` → `VIA_IER_MASK`, `0x80` → `VIA_INT_ANY` in IER/IFR operations.
+  New `VIA_IER_MASK` constant in `via6522.h`.
+- **Null safety**: `localtime()` return value checked in `logging.c`.
+
+#### Tests
+- 192 tests, 100% pass rate (no functional change)
+
+---
+
 ## [1.3.2-alpha] - 2026-03-01
 
 ### Code Quality: Type Safety & Naming Consistency (Sprint 21c)

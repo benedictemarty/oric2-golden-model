@@ -29,6 +29,7 @@ static void log_message(log_level_t level, const char* level_str, const char* fo
     time_t now;
     time(&now);
     struct tm* timeinfo = localtime(&now);
+    if (!timeinfo) return;
 
     char time_str[32];
     strftime(time_str, sizeof(time_str), "%Y-%m-%d %H:%M:%S", timeinfo);

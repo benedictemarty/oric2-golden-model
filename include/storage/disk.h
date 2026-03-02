@@ -51,7 +51,7 @@ typedef enum {
 /* Callback types for DRQ/INTRQ notification */
 typedef void (*fdc_signal_cb)(void* userdata);
 
-typedef struct {
+typedef struct fdc_s {
     uint8_t status;
     uint8_t command;
     uint8_t track;         /* Track register (r_track) */
@@ -75,8 +75,8 @@ typedef struct {
 
     /* Sector data pointers (into disk_data, like Oricutron's cached sectors) */
     uint8_t* cur_sector_data;  /* Pointer to current sector's 256 bytes */
-    int cur_sector_len;        /* Sector size (256 for size code 1) */
-    int cur_offset;            /* Current byte offset within sector */
+    uint16_t cur_sector_len;   /* Sector size (256 for size code 1) */
+    uint16_t cur_offset;       /* Current byte offset within sector */
     uint8_t sec_type;          /* Record type (0 or FDC_ST_REC_TYPE for deleted) */
 
     /* Delayed DRQ/INTRQ (timing model) */
@@ -99,6 +99,6 @@ void fdc_reset(fdc_t* fdc);
 void fdc_set_disk(fdc_t* fdc, uint8_t* data, uint32_t size);
 uint8_t fdc_read(fdc_t* fdc, uint8_t reg);
 void fdc_write(fdc_t* fdc, uint8_t reg, uint8_t value);
-void fdc_ticktock(fdc_t* fdc, int cycles);
+void fdc_ticktock(fdc_t* fdc, unsigned int cycles);
 
 #endif /* DISK_H */

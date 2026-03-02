@@ -236,13 +236,11 @@ static void irq_callback(bool state, void* userdata) {
 }
 
 /* Microdisc CPU IRQ callbacks - level-triggered: set/clear DISK IRQ source bit */
-static void microdisc_cpu_irq_set(void* userdata) {
-    emulator_t* emu = (emulator_t*)userdata;
+static void microdisc_cpu_irq_set(emulator_t* emu) {
     cpu_irq_set(&emu->cpu, IRQF_DISK);
 }
 
-static void microdisc_cpu_irq_clr(void* userdata) {
-    emulator_t* emu = (emulator_t*)userdata;
+static void microdisc_cpu_irq_clr(emulator_t* emu) {
     cpu_irq_clear(&emu->cpu, IRQF_DISK);
 }
 

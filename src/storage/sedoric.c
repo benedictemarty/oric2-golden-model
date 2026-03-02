@@ -171,11 +171,13 @@ uint8_t* sedoric_get_sector(sedoric_disk_t* disk, uint8_t track, uint8_t sector)
     return &disk->data[offset];
 }
 
-bool sedoric_read_sector(sedoric_disk_t* disk, uint8_t track, uint8_t sector,
+bool sedoric_read_sector(const sedoric_disk_t* disk, uint8_t track, uint8_t sector,
                          uint8_t* buffer) {
-    uint8_t* src = sedoric_get_sector(disk, track, sector);
-    if (!src) return false;
-    memcpy(buffer, src, SEDORIC_SECTOR_SIZE);
+    if (!disk || !disk->data) return false;
+    if (track >= disk->tracks || sector >= disk->sectors || sector == 0) return false;
+    uint32_t offset = (uint32_t)((track * disk->sectors + (sector - 1)) * SEDORIC_SECTOR_SIZE);
+    if (offset + SEDORIC_SECTOR_SIZE > disk->size) return false;
+    memcpy(buffer, &disk->data[offset], SEDORIC_SECTOR_SIZE);
     return true;
 }
 

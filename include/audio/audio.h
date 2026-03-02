@@ -14,7 +14,7 @@
 #define AUDIO_SAMPLE_RATE 44100
 #define AUDIO_BUFFER_SIZE 2048
 
-typedef struct {
+typedef struct ay3891x_s {
     uint8_t registers[AY_NUM_REGISTERS];
     uint8_t selected_reg;
 

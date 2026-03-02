@@ -34,7 +34,7 @@ typedef enum {
 /**
  * @brief File handle
  */
-typedef struct {
+typedef struct hostfs_handle_s {
     bool     in_use;            /**< Handle in use flag */
     char     host_path[HOSTFS_MAX_PATH];  /**< Host filesystem path */
     char     oric_name[HOSTFS_MAX_NAME];  /**< ORIC filename */
@@ -47,7 +47,7 @@ typedef struct {
 /**
  * @brief Host filesystem context
  */
-typedef struct {
+typedef struct hostfs_s {
     char     mount_path[HOSTFS_MAX_PATH];   /**< Mounted directory path */
     bool     mounted;                       /**< Mount status */
     bool     read_only;                     /**< Read-only mode */

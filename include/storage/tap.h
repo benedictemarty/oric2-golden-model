@@ -36,7 +36,7 @@ typedef enum {
 /**
  * @brief TAP file header
  */
-typedef struct {
+typedef struct tap_header_s {
     uint8_t  sync_len;              /**< Number of sync bytes */
     char     name[TAP_NAME_LEN];    /**< Program name */
     uint8_t  type;                  /**< Program type */
@@ -49,7 +49,7 @@ typedef struct {
 /**
  * @brief TAP file context
  */
-typedef struct {
+typedef struct tap_file_s {
     FILE*    file;          /**< File handle */
     bool     writing;       /**< Write mode flag */
     uint32_t position;      /**< Current position in tape */

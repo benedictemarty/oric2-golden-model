@@ -22,6 +22,9 @@
 #include <stdbool.h>
 #include "storage/disk.h"
 
+/* Forward declaration for emulator (avoids circular include) */
+typedef struct emulator_s emulator_t;
+
 /* Microdisc I/O addresses */
 #define MICRODISC_BASE     0x0310
 #define MICRODISC_FDC_BASE 0x0310  /* $0310-$0313: WD1793 registers */
@@ -38,7 +41,7 @@
 
 #define MICRODISC_MAX_DRIVES 4
 
-typedef struct {
+typedef struct microdisc_s {
     fdc_t fdc;                  /* WD1793 FDC */
 
     /* Microdisc status (active-low convention matching Oricutron) */
@@ -64,9 +67,9 @@ typedef struct {
     uint32_t diskrom_size;
 
     /* CPU IRQ routing */
-    void (*cpu_irq_set)(void* userdata);
-    void (*cpu_irq_clr)(void* userdata);
-    void* cpu_userdata;
+    void (*cpu_irq_set)(emulator_t* emu);
+    void (*cpu_irq_clr)(emulator_t* emu);
+    emulator_t* cpu_userdata;
 } microdisc_t;
 
 void microdisc_init(microdisc_t* md);

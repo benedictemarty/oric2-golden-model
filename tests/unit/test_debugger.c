@@ -10,6 +10,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include "debugger.h"
+#include "emulator.h"
 #include "cpu/cpu6502.h"
 #include "memory/memory.h"
 
@@ -195,12 +196,8 @@ TEST(test_step_mode) {
     debugger_t dbg;
     debugger_init(&dbg);
 
-    /* Use a minimal emulator-like struct with just cpu.PC */
-    /* We'll create a minimal struct matching what debugger_should_break needs */
-    struct {
-        cpu6502_t cpu;
-        memory_t memory;
-    } fake_emu;
+    /* Use a real emulator_t struct */
+    emulator_t fake_emu;
     memset(&fake_emu, 0, sizeof(fake_emu));
     memory_init(&fake_emu.memory);
     cpu_init(&fake_emu.cpu, &fake_emu.memory);

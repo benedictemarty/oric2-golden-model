@@ -18,12 +18,15 @@
 #define DEBUGGER_MAX_BREAKPOINTS 16
 #define DEBUGGER_MAX_WATCHPOINTS 8
 
-typedef struct {
+/* Forward declaration for emulator (avoids circular include) */
+typedef struct emulator_s emulator_t;
+
+typedef struct debugger_s {
     uint16_t breakpoints[DEBUGGER_MAX_BREAKPOINTS];
-    int      num_breakpoints;
+    uint8_t  num_breakpoints;
 
     uint16_t watchpoints[DEBUGGER_MAX_WATCHPOINTS];
-    int      num_watchpoints;
+    uint8_t  num_watchpoints;
 
     bool     watch_triggered;    /* Set by memory trace callback */
     uint16_t watch_addr_hit;     /* Which watchpoint address was hit */
@@ -48,7 +51,7 @@ void debugger_init(debugger_t* dbg);
  * should enter REPL mode (breakpoint hit, watchpoint triggered,
  * step mode, etc.)
  */
-bool debugger_should_break(debugger_t* dbg, void* emu);
+bool debugger_should_break(debugger_t* dbg, emulator_t* emu);
 
 /**
  * @brief Interactive REPL command loop
@@ -56,7 +59,7 @@ bool debugger_should_break(debugger_t* dbg, void* emu);
  * Reads commands from stdin and executes them.
  * Returns when the user continues execution (c/continue).
  */
-void debugger_repl(debugger_t* dbg, void* emu);
+void debugger_repl(debugger_t* dbg, emulator_t* emu);
 
 /**
  * @brief Add a PC breakpoint
@@ -90,6 +93,6 @@ bool debugger_is_breakpoint(const debugger_t* dbg, uint16_t pc);
 /**
  * @brief Install memory trace callback for watchpoints
  */
-void debugger_install_watchpoint_trace(debugger_t* dbg, void* emu);
+void debugger_install_watchpoint_trace(debugger_t* dbg, emulator_t* emu);
 
 #endif /* DEBUGGER_H */

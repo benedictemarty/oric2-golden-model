@@ -36,7 +36,7 @@ bool video_export_bmp(const video_t* vid, const char* filename);
  * @param scale_y Vertical pixel grouping (e.g. 2 = half height)
  * @return true on success
  */
-bool video_export_ascii(const video_t* vid, FILE* fp, int scale_x, int scale_y);
+bool video_export_ascii(const video_t* vid, FILE* fp, unsigned int scale_x, unsigned int scale_y);
 
 /**
  * @brief Auto-detect format from filename extension and export

@@ -37,11 +37,11 @@ bool video_export_bmp(const video_t* vid, const char* filename) {
     FILE* fp = fopen(filename, "wb");
     if (!fp) return false;
 
-    int w = ORIC_SCREEN_W;
-    int h = ORIC_SCREEN_H;
-    int row_stride = w * 3;
-    int row_padding = (4 - (row_stride % 4)) % 4;
-    int padded_row = row_stride + row_padding;
+    unsigned int w = ORIC_SCREEN_W;
+    unsigned int h = ORIC_SCREEN_H;
+    unsigned int row_stride = w * 3;
+    unsigned int row_padding = (4 - (row_stride % 4)) % 4;
+    unsigned int padded_row = row_stride + row_padding;
     uint32_t pixel_data_size = (uint32_t)(padded_row * h);
     uint32_t file_size = 54 + pixel_data_size;
 
@@ -75,9 +75,9 @@ bool video_export_bmp(const video_t* vid, const char* filename) {
 
     /* Pixel data: BMP is bottom-up, BGR order */
     uint8_t pad[3] = {0, 0, 0};
-    for (int y = h - 1; y >= 0; y--) {
-        for (int x = 0; x < w; x++) {
-            int off = (y * w + x) * 3;
+    for (int y = (int)h - 1; y >= 0; y--) {
+        for (unsigned int x = 0; x < w; x++) {
+            unsigned int off = ((unsigned int)y * w + x) * 3;
             uint8_t bgr[3];
             bgr[0] = vid->framebuffer[off + 2]; /* B */
             bgr[1] = vid->framebuffer[off + 1]; /* G */
@@ -93,13 +93,13 @@ bool video_export_bmp(const video_t* vid, const char* filename) {
     return true;
 }
 
-bool video_export_ascii(const video_t* vid, FILE* fp, int scale_x, int scale_y) {
+bool video_export_ascii(const video_t* vid, FILE* fp, unsigned int scale_x, unsigned int scale_y) {
     if (!vid || !fp) return false;
-    if (scale_x < 1) scale_x = 2;
-    if (scale_y < 1) scale_y = 2;
+    if (scale_x == 0) scale_x = 2;
+    if (scale_y == 0) scale_y = 2;
 
-    for (int y = 0; y < ORIC_SCREEN_H; y += scale_y) {
-        for (int x = 0; x < ORIC_SCREEN_W; x += scale_x) {
+    for (unsigned int y = 0; y < ORIC_SCREEN_H; y += scale_y) {
+        for (unsigned int x = 0; x < ORIC_SCREEN_W; x += scale_x) {
             int off = (y * ORIC_SCREEN_W + x) * 3;
             uint8_t r = vid->framebuffer[off];
             uint8_t g = vid->framebuffer[off + 1];

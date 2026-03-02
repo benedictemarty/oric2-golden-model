@@ -30,7 +30,7 @@ uint8_t cpu_pull(cpu6502_t* cpu);
 void cpu_push_word(cpu6502_t* cpu, uint16_t val);
 uint16_t cpu_pull_word(cpu6502_t* cpu);
 
-typedef struct {
+typedef struct opcode_info_s {
     const char* name;
     uint8_t cycles;
     uint8_t size;

@@ -116,13 +116,12 @@ static void watchpoint_trace_callback(uint16_t address, uint8_t value, mem_acces
     }
 }
 
-void debugger_install_watchpoint_trace(debugger_t* dbg, void* emu) {
-    emulator_t* e = (emulator_t*)emu;
+void debugger_install_watchpoint_trace(debugger_t* dbg, emulator_t* emu) {
     g_trace_debugger = dbg;
     if (dbg->num_watchpoints > 0) {
-        memory_set_trace(&e->memory, true, watchpoint_trace_callback);
+        memory_set_trace(&emu->memory, true, watchpoint_trace_callback);
     } else {
-        memory_set_trace(&e->memory, false, NULL);
+        memory_set_trace(&emu->memory, false, NULL);
     }
 }
 
@@ -130,9 +129,8 @@ void debugger_install_watchpoint_trace(debugger_t* dbg, void* emu) {
 /*  SHOULD BREAK CHECK                                                 */
 /* ═══════════════════════════════════════════════════════════════════ */
 
-bool debugger_should_break(debugger_t* dbg, void* emu) {
-    emulator_t* e = (emulator_t*)emu;
-    uint16_t pc = e->cpu.PC;
+bool debugger_should_break(debugger_t* dbg, emulator_t* emu) {
+    uint16_t pc = emu->cpu.PC;
 
     /* Step mode: always break */
     if (dbg->step_mode)
@@ -312,9 +310,7 @@ static void show_help(void) {
 /*  REPL COMMAND LOOP                                                  */
 /* ═══════════════════════════════════════════════════════════════════ */
 
-void debugger_repl(debugger_t* dbg, void* emu_ptr) {
-    emulator_t* emu = (emulator_t*)emu_ptr;
-
+void debugger_repl(debugger_t* dbg, emulator_t* emu) {
     dbg->active = true;
     dbg->step_mode = false;
 

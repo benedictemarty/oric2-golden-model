@@ -1,12 +1,25 @@
 VERSION_TRACKING - ORIC-1 Emulator
 =====================================
 
-Current Version: 1.3.2-alpha
-Release Date: 2026-03-01
-Status: Alpha (Type Safety Refactor + WAV Audio + CASTV2 + MJPEG Cast, 192 tests pass)
+Current Version: 1.3.3-alpha
+Release Date: 2026-03-02
+Status: Alpha (Full Codebase Type Safety Audit + WAV Audio + CASTV2 + MJPEG Cast, 192 tests pass)
 
 Version History:
 ----------------
+- 1.3.3-alpha (2026-03-02): Full Codebase Type Safety Audit (Sprint 21d)
+  * Named struct tags for ALL 15 remaining typedefs (forward decl support)
+  * debugger.h: void* emu → emulator_t* (type-safe, forward decl)
+  * debugger.h: int num_breakpoints/num_watchpoints → uint8_t
+  * microdisc.h: void* cpu_userdata → emulator_t*, typed callback signatures
+  * sedoric_read_sector: const sedoric_disk_t* parameter
+  * video_render_frame: const uint8_t* memory parameter + internal helpers
+  * disk.h: cur_sector_len/cur_offset → uint16_t, fdc_ticktock → unsigned int
+  * export.h: video_export_ascii scale params → unsigned int, BMP stride → unsigned int
+  * via6522.h: VIA_IER_MASK constant, replaced 0x7F/0x80 magic numbers
+  * logging.c: localtime() null safety check
+  * 192 tests, 100% pass rate (no functional change)
+
 - 1.3.2-alpha (2026-03-01): Type Safety & Naming Consistency (Sprint 21c)
   * Named struct tags: cast_server_s, castv2_client_s, memory_s (forward decl support)
   * audio_set_cast_server(void*) → audio_set_cast_server(cast_server_t*) (type-safe)

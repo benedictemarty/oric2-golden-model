@@ -29,7 +29,7 @@
 #define ORIC_CYAN    6
 #define ORIC_WHITE   7
 
-typedef struct {
+typedef struct video_s {
     uint8_t framebuffer[ORIC_SCREEN_W * ORIC_SCREEN_H * 3]; /* RGB888 */
     bool hires_mode;
     bool need_refresh;
@@ -43,7 +43,7 @@ bool video_init(video_t* vid);
 void video_cleanup(video_t* vid);
 void video_reset(video_t* vid);
 void video_set_mode(video_t* vid, bool hires);
-void video_render_frame(video_t* vid, uint8_t* memory);
+void video_render_frame(video_t* vid, const uint8_t* memory);
 void video_get_rgb(uint8_t oric_color, uint8_t* r, uint8_t* g, uint8_t* b);
 
 #endif

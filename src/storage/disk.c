@@ -99,7 +99,7 @@ static void fdc_seek_track(fdc_t* fdc, uint8_t target) {
  * Process FDC timer ticks. Must be called with CPU cycle count
  * after each instruction to handle delayed DRQ/INTRQ.
  */
-void fdc_ticktock(fdc_t* fdc, int cycles) {
+void fdc_ticktock(fdc_t* fdc, unsigned int cycles) {
     /* Delayed INTRQ */
     if (fdc->delayed_int > 0) {
         fdc->delayed_int -= cycles;

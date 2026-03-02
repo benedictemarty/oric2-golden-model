@@ -37,7 +37,7 @@ typedef enum {
  * @brief ORIC keyboard matrix (8 columns x 8 rows)
  * Active low: 0xFF = no keys, bit clear = key pressed.
  */
-typedef struct {
+typedef struct oric_keyboard_s {
     uint8_t matrix[8];
     oric_kb_layout_t layout;
 #ifdef HAS_SDL2

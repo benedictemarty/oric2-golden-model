@@ -46,11 +46,12 @@
 #define VIA_INT_T2      0x20
 #define VIA_INT_T1      0x40
 #define VIA_INT_ANY     0x80
+#define VIA_IER_MASK    0x7F  /**< Lower 7 bits: individual interrupt enable/flag bits */
 
 /**
  * @brief VIA 6522 state structure
  */
-typedef struct {
+typedef struct via6522_s {
     /* I/O Registers */
     uint8_t ora;        /**< Output Register A */
     uint8_t orb;        /**< Output Register B */

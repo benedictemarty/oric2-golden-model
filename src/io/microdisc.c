@@ -14,6 +14,7 @@
  */
 
 #include "io/microdisc.h"
+#include "emulator.h"
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>

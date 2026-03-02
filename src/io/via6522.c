@@ -10,7 +10,7 @@
 #include <string.h>
 
 static void via_check_irq(via6522_t* via) {
-    bool irq = (via->ifr & via->ier & 0x7F) != 0;
+    bool irq = (via->ifr & via->ier & VIA_IER_MASK) != 0;
     if (irq) via->ifr |= VIA_INT_ANY;
     else via->ifr &= ~VIA_INT_ANY;
 
@@ -104,7 +104,7 @@ uint8_t via_read(via6522_t* via, uint8_t reg) {
     case VIA_ACR: return via->acr;
     case VIA_PCR: return via->pcr;
     case VIA_IFR: return via->ifr;
-    case VIA_IER: return via->ier | 0x80;
+    case VIA_IER: return via->ier | VIA_INT_ANY;
     case VIA_ORA_NH: {
         uint8_t input = 0xFF;
         if (via->porta_read) input = via->porta_read(via->userdata);
@@ -174,12 +174,12 @@ void via_write(via6522_t* via, uint8_t reg, uint8_t value) {
     case VIA_ACR: via->acr = value; break;
     case VIA_PCR: via->pcr = value; break;
     case VIA_IFR:
-        via->ifr &= ~(value & 0x7F);
+        via->ifr &= ~(value & VIA_IER_MASK);
         via_check_irq(via);
         break;
     case VIA_IER:
-        if (value & 0x80) via->ier |= (value & 0x7F);
-        else via->ier &= ~(value & 0x7F);
+        if (value & VIA_INT_ANY) via->ier |= (value & VIA_IER_MASK);
+        else via->ier &= ~(value & VIA_IER_MASK);
         via_check_irq(via);
         break;
     case VIA_ORA_NH:
