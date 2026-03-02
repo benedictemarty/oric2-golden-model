@@ -1,8 +1,8 @@
-# ROADMAP - ORIC-1 Emulator
+# ROADMAP - Phosphoric
 
 ## Vision
-Create a cycle-accurate ORIC-1 emulator in C with modern features including
-host filesystem sharing and conversion tools for legacy BASIC/machine code programs.
+Phosphoric: create a cycle-accurate ORIC-1/Atmos emulator in C with modern features
+including host filesystem sharing and conversion tools for legacy BASIC/machine code programs.
 
 ---
 
@@ -289,10 +289,20 @@ host filesystem sharing and conversion tools for legacy BASIC/machine code progr
 - [x] Internal pointer restoration after load (cpu.memory, video.screen_ram, fdc)
 - [x] 8 save state unit tests (176 via make tests, 100% pass)
 
+### Sprint 23: ORIC Atmos Support (v1.5.0-alpha) - DONE
+- [x] oric_model_t enum (ORIC_MODEL_ORIC1, ORIC_MODEL_ATMOS) in emulator.h
+- [x] ROM auto-detection: detect_rom_version() inspects JMP target at ROM offset 0
+- [x] rom_patches_t struct with ROM-version-specific tape patch addresses
+- [x] Static tables: rom_patches_basic10 (ORIC-1), rom_patches_basic11 (Atmos)
+- [x] CLI: --model / -m (oric1, atmos, 1.0, 1.1) overrides auto-detection
+- [x] tape_patches() refactored to use rom_patches table (both ROMs work)
+- [x] emulator_t: model field, rom_patches pointer
+- [x] 10 new Atmos unit tests (186 total, 100% pass)
+
 ## Future Enhancements
 
 ### Advanced Features
-- [ ] ORIC Atmos support
+- [x] ORIC Atmos support
 - [ ] Telestrat support
 - [x] Save states
 - [ ] Joystick support
@@ -316,7 +326,7 @@ host filesystem sharing and conversion tools for legacy BASIC/machine code progr
 - [ ] <5% CPU overhead on modern hardware
 
 ### Quality
-- [x] 176 tests passing (make tests)
+- [x] 186 tests passing (make tests)
 - [x] Zero critical bugs in test suite
 - [x] API documentation complete
 - [ ] Comprehensive user guide
@@ -324,5 +334,5 @@ host filesystem sharing and conversion tools for legacy BASIC/machine code progr
 ---
 
 **Last Updated**: 2026-03-02
-**Current Version**: 1.4.0-alpha
-**Next Milestone**: 1.5.0 (Advanced features)
+**Current Version**: 1.5.0-alpha
+**Next Milestone**: 1.6.0 (Advanced features)

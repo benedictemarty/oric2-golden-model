@@ -1,9 +1,39 @@
-# CHANGELOG - ORIC-1 Emulator
+# CHANGELOG - Phosphoric
 
 All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [1.5.0-alpha] - 2026-03-02
+
+### ORIC Atmos Support (Sprint 23)
+
+#### Added
+- **ORIC Atmos model support**: `oric_model_t` enum (`ORIC_MODEL_ORIC1`, `ORIC_MODEL_ATMOS`)
+  in `emulator.h` for machine model selection
+- **ROM auto-detection**: `detect_rom_version()` inspects JMP target at ROM offset 0
+  ($EA59 = BASIC 1.0 / ORIC-1, $ECCC = BASIC 1.1 / Atmos) to automatically select model
+- **ROM patch tables**: `rom_patches_t` struct with named ROM-version-specific tape loading
+  addresses (getsync, readbyte, loop recovery). Two static tables:
+  `rom_patches_basic10` (ORIC-1) and `rom_patches_basic11` (Atmos)
+- **CLI `--model` / `-m`**: manual model selection (`oric1`, `atmos`, `1.0`, `1.1`)
+  overrides auto-detection
+- **10 new Atmos unit tests** in `tests/unit/test_atmos.c`: model enum, ROM detect
+  basic10/basic11, patch tables ORIC-1/Atmos, real ROM detection, patch address differences,
+  default model, rom_patches_t struct layout
+- **`make test-atmos`** target in Makefile
+
+#### Changed
+- **`tape_patches()`** refactored to use `emu->rom_patches->` table instead of
+  hardcoded ORIC-1 addresses — both ORIC-1 and Atmos tape loading now works
+- **`emulator_t`**: added `oric_model_t model` and `const rom_patches_t* rom_patches`
+- Version updated from 1.4.0-alpha to 1.5.0-alpha
+
+#### Tests
+- 186 tests via `make tests` (176 existing + 10 new), 100% pass rate
+
+---
 
 ## [1.4.0-alpha] - 2026-03-02
 
@@ -735,7 +765,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Test framework structure
 - Documentation skeleton
 
-[1.0.0-beta.2]: https://github.com/bmarty/oric1-emulator/compare/v1.0.0-beta...v1.0.0-beta.2
-[1.0.0-beta]: https://github.com/bmarty/oric1-emulator/compare/v1.0.0-alpha...v1.0.0-beta
-[1.0.0-alpha]: https://github.com/bmarty/oric1-emulator/compare/v0.1.0-alpha...v1.0.0-alpha
-[0.1.0-alpha]: https://github.com/bmarty/oric1-emulator/releases/tag/v0.1.0-alpha
+[1.0.0-beta.2]: https://github.com/bmarty/phosphoric/compare/v1.0.0-beta...v1.0.0-beta.2
+[1.0.0-beta]: https://github.com/bmarty/phosphoric/compare/v1.0.0-alpha...v1.0.0-beta
+[1.0.0-alpha]: https://github.com/bmarty/phosphoric/compare/v0.1.0-alpha...v1.0.0-alpha
+[0.1.0-alpha]: https://github.com/bmarty/phosphoric/releases/tag/v0.1.0-alpha

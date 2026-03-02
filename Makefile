@@ -1,4 +1,4 @@
-# ORIC-1 Emulator Makefile
+# Phosphoric — ORIC-1 Emulator Makefile
 # Complete build system for emulator, tools, and tests
 
 CC = gcc
@@ -75,10 +75,10 @@ TOOLS = bas2tap bin2tap tap2sedoric
 # Install paths
 PREFIX ?= /usr/local
 BINDIR = $(PREFIX)/bin
-DATADIR = $(PREFIX)/share/oric1-emulator
-DOCDIR = $(PREFIX)/share/doc/oric1-emulator
+DATADIR = $(PREFIX)/share/phosphoric
+DOCDIR = $(PREFIX)/share/doc/phosphoric
 
-.PHONY: all clean tools tests test-cpu test-memory test-io test-storage test-system test-rom test-video test-audio test-debugger test-cast test-savestate valgrind static-analysis install uninstall help
+.PHONY: all clean tools tests test-cpu test-memory test-io test-storage test-system test-rom test-video test-audio test-debugger test-cast test-savestate test-atmos valgrind static-analysis install uninstall help
 
 all: $(TARGET)
 
@@ -189,7 +189,14 @@ test-savestate: $(TEST_SAVESTATE_SRCS)
 	@$(CC) $(CFLAGS) $(TEST_SAVESTATE_SRCS) $(LDFLAGS) -o test_savestate
 	@./test_savestate
 
-tests: test-cpu test-memory test-io test-storage test-system test-video test-audio test-debugger test-savestate
+TEST_ATMOS_SRCS = tests/unit/test_atmos.c src/memory/memory.c \
+                  src/memory/banking.c src/utils/logging.c
+
+test-atmos: $(TEST_ATMOS_SRCS)
+	@$(CC) $(CFLAGS) $(TEST_ATMOS_SRCS) $(LDFLAGS) -o test_atmos
+	@./test_atmos
+
+tests: test-cpu test-memory test-io test-storage test-system test-video test-audio test-debugger test-savestate test-atmos
 	@echo ""
 	@echo "═══════════════════════════════════════════════════════"
 	@echo "  All test suites completed!"
@@ -241,11 +248,11 @@ uninstall:
 
 clean:
 	rm -f $(OBJECTS) $(TARGET) $(TOOLS)
-	rm -f test_cpu test_memory test_io test_storage test_system test_rom test_video test_audio test_debugger test_cast test_savestate
+	rm -f test_cpu test_memory test_io test_storage test_system test_rom test_video test_audio test_debugger test_cast test_savestate test_atmos
 	rm -f tools/*.o
 
 help:
-	@echo "ORIC-1 Emulator Makefile"
+	@echo "Phosphoric — ORIC-1 Emulator Makefile"
 	@echo ""
 	@echo "Targets:"
 	@echo "  all          - Build emulator (default)"
@@ -261,6 +268,7 @@ help:
 	@echo "  test-audio   - Run PSG audio tests"
 	@echo "  test-debugger- Run debugger tests"
 	@echo "  test-savestate - Run save state tests"
+	@echo "  test-atmos   - Run Atmos support tests"
 	@echo "  test-cast    - Run cast server tests (requires CAST=1)"
 	@echo "  valgrind     - Run all tests under Valgrind"
 	@echo "  static-analysis - Run static analysis"

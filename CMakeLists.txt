@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.15)
-project(oric1-emulator VERSION 1.0.0 LANGUAGES C CXX)
+project(phosphoric VERSION 1.0.0 LANGUAGES C CXX)
 
 # C/C++ Standards
 set(CMAKE_C_STANDARD 11)
@@ -184,16 +184,16 @@ install(TARGETS oric1-emu
     RUNTIME DESTINATION bin)
 
 install(DIRECTORY roms/
-    DESTINATION share/oric1-emulator/roms
+    DESTINATION share/phosphoric/roms
     FILES_MATCHING PATTERN "*.rom")
 
 install(FILES docs/user-guide/README.md
-    DESTINATION share/doc/oric1-emulator)
+    DESTINATION share/doc/phosphoric)
 
 # CPack configuration
-set(CPACK_PACKAGE_NAME "oric1-emulator")
+set(CPACK_PACKAGE_NAME "phosphoric")
 set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")
-set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Cycle-accurate ORIC-1 emulator")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Phosphoric — Cycle-accurate ORIC-1/Atmos emulator")
 set(CPACK_PACKAGE_CONTACT "bmarty <bmarty@mailo.com>")
 set(CPACK_GENERATOR "DEB;RPM;TGZ")
 
@@ -201,7 +201,7 @@ include(CPack)
 
 # Print configuration summary
 message(STATUS "")
-message(STATUS "ORIC-1 Emulator Configuration:")
+message(STATUS "Phosphoric Configuration:")
 message(STATUS "  Version: ${PROJECT_VERSION}")
 message(STATUS "  Build type: ${CMAKE_BUILD_TYPE}")
 message(STATUS "  C Compiler: ${CMAKE_C_COMPILER}")

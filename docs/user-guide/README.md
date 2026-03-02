@@ -1,4 +1,4 @@
-# ORIC-1 Emulator User Guide
+# Phosphoric User Guide
 
 ## Installation
 

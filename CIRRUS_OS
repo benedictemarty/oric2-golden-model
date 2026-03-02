@@ -1,9 +1,9 @@
-CIRRUS_OS - ORIC-1 Emulator Build & Development Status
+CIRRUS_OS - Phosphoric Build & Development Status
 ======================================================
 
-Project: ORIC-1 Cycle-Accurate Emulator
-Version: 1.4.0-alpha
-Build Status: ALPHA (Save States + Full Type Safety + WAV Audio + CASTV2 + MJPEG Cast)
+Project: Phosphoric — ORIC-1/Atmos Cycle-Accurate Emulator
+Version: 1.5.0-alpha
+Build Status: ALPHA (Atmos Support + Save States + Full Type Safety + WAV Audio + CASTV2 + MJPEG Cast)
 Last Updated: 2026-03-02
 
 ================================================================
@@ -46,8 +46,9 @@ BUILD STATUS
 [V] CASTV2 Client         - Complete (native Google Cast V2, TLS, protobuf, heartbeat)
 [V] Audio Streaming       - Complete (WAV endpoint /audio, ring buffer, stereo→mono)
 [V] Save States           - Complete (.ost format, CRC32, F2/F4 hotkeys, CLI options)
-[V] Test Suite            - Complete (176 tests via make tests, 100% pass)
-[V] ROM Compatibility     - Validated (ORIC-1 BASIC 1.0 ROM)
+[V] ORIC Atmos Support    - Complete (model enum, ROM auto-detect, patch tables, --model CLI)
+[V] Test Suite            - Complete (186 tests via make tests, 100% pass)
+[V] ROM Compatibility     - Validated (ORIC-1 BASIC 1.0 + Atmos BASIC 1.1 ROMs)
 [V] Performance           - Benchmarked (~90+ MHz, target met)
 [V] Static Analysis       - Run (no critical issues)
 [V] Documentation         - Complete
@@ -58,13 +59,15 @@ Legend: [V] Complete [*] In Progress [ ] Not Started [X] Failed
 
 TEST RESULTS
 ------------
-Unit Tests: 163/163 passed (100%)
+Unit Tests: 186/186 passed (100%)
 Integration Tests: 7/7 passed (100%)
 ROM Compatibility: 12/12 passed (100%)
 Video Export Tests: 11/11 passed (100%)
 Audio PSG Tests: 8/8 passed (100%)
 Debugger Tests: 8/8 passed (100%)
-Cast Tests: 21/21 passed (100%)
+Save State Tests: 8/8 passed (100%)
+Atmos Tests: 10/10 passed (100%)
+Cast Tests: 24/24 passed (100%)
 Last Test Run: 2026-03-02
 
 CPU Tests:          74/74 passed
@@ -76,6 +79,8 @@ ROM Tests:          12/12 passed
 Video Tests:        11/11 passed
 Audio Tests:         8/8  passed
 Debugger Tests:      8/8  passed
+Save State Tests:    8/8  passed
+Atmos Tests:        10/10 passed
 Cast Tests:         24/24 passed
 
 ================================================================
@@ -83,7 +88,7 @@ Cast Tests:         24/24 passed
 CODE METRICS
 ------------
 Total Source Files: 27 (.c) + 15 (.h)
-Total Test Files: 10
+Total Test Files: 11
 Lines of Code: ~4500+ (source) + ~2500 (tests)
 Build Warnings: 0 critical (informational conversion warnings with strict flags)
 Memory Leaks: 0 (Valgrind clean)
@@ -93,7 +98,7 @@ Performance: ~90+ MHz equivalent (target: 10x real-time met)
 
 QUALITY GATES
 -------------
-[V] All unit tests pass (192/192)
+[V] All unit tests pass (186/186 via make tests)
 [V] No compiler errors
 [ ] Code coverage > 80% (measurement pending)
 [V] No critical warnings
@@ -107,8 +112,8 @@ QUALITY GATES
 
 SPRINT STATUS
 -------------
-Current Sprint: Sprint 21d completed
-Sprint Progress: 100% (Full Codebase Type Safety Audit v1.3.3-alpha)
+Current Sprint: Sprint 23 completed
+Sprint Progress: 100% (ORIC Atmos Support v1.5.0-alpha)
 
 Completed Sprints:
 - [V] Sprint 0: Infrastructure setup
@@ -135,10 +140,12 @@ Completed Sprints:
 - [V] Sprint 21: Native CASTV2 Client (protobuf, TLS, DashCast, 189 tests)
 - [V] Sprint 21b: WAV Audio Streaming for Chromecast (192 tests)
 - [V] Sprint 21d: Full Codebase Type Safety Audit (192 tests)
+- [V] Sprint 22: Save States (176 tests)
+- [V] Sprint 23: ORIC Atmos Support (186 tests)
 
 Remaining:
-- [ ] Save states
-- [ ] ORIC Atmos support
+- [ ] Telestrat support
+- [ ] Joystick support
 
 ================================================================
 
@@ -201,4 +208,4 @@ License: Not specified yet
 ================================================================
 
 End of CIRRUS_OS Status Report
-Generated: 2026-03-02 (Sprint 21d)
+Generated: 2026-03-02 (Sprint 23)

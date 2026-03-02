@@ -1,6 +1,6 @@
 /**
  * @file main.c
- * @brief ORIC-1 Emulator main entry point - full emulation loop
+ * @brief Phosphoric — ORIC-1 Emulator main entry point - full emulation loop
  * @author bmarty <bmarty@mailo.com>
  * @date 2026-02-22
  * @version 1.0.0-beta.2
@@ -52,8 +52,59 @@ static void signal_handler(int sig) {
     g_running = false;
 }
 
+/* ═══════════════════════════════════════════════════════════════════ */
+/*  ROM patch tables (version-specific tape loading addresses)         */
+/* ═══════════════════════════════════════════════════════════════════ */
+
+static const rom_patches_t rom_patches_basic10 = {
+    .name           = "BASIC 1.0 (ORIC-1)",
+    .getsync_entry  = 0xE696,
+    .getsync_end    = 0xE6B9,
+    .getsync_loop   = 0xE681,
+    .readbyte_entry = 0xE630,
+    .readbyte_end   = 0xE65B,
+    .readbyte_store = 0x002F
+};
+
+static const rom_patches_t rom_patches_basic11 = {
+    .name           = "BASIC 1.1 (ORIC Atmos)",
+    .getsync_entry  = 0xE735,
+    .getsync_end    = 0xE759,
+    .getsync_loop   = 0xE720,
+    .readbyte_entry = 0xE6C9,
+    .readbyte_end   = 0xE6FB,
+    .readbyte_store = 0x002F
+};
+
+/**
+ * @brief Auto-detect ROM version from loaded ROM data
+ *
+ * Checks the JMP target at ROM offset 0 (address $C000):
+ * - BASIC 1.0: JMP $EA59 (4C 59 EA)
+ * - BASIC 1.1: JMP $ECCC (4C CC EC)
+ *
+ * @return Detected model, or ORIC_MODEL_ORIC1 as default
+ */
+static oric_model_t detect_rom_version(const memory_t* mem) {
+    /* ROM starts at $C000, which is rom[0] */
+    if (mem->rom[0] == 0x4C) {  /* JMP instruction */
+        uint16_t target = (uint16_t)mem->rom[1] | ((uint16_t)mem->rom[2] << 8);
+        if (target == 0xECCC) {
+            return ORIC_MODEL_ATMOS;
+        }
+    }
+    return ORIC_MODEL_ORIC1;
+}
+
+static const rom_patches_t* get_rom_patches(oric_model_t model) {
+    switch (model) {
+        case ORIC_MODEL_ATMOS: return &rom_patches_basic11;
+        default:               return &rom_patches_basic10;
+    }
+}
+
 static void print_usage(const char* program_name) {
-    printf("ORIC-1 Emulator v%s\n", EMU_VERSION);
+    printf("Phosphoric v%s\n", EMU_VERSION);
     printf("Usage: %s [options]\n\n", program_name);
     printf("Options:\n");
     printf("  -t, --tape FILE            Load .TAP tape file\n");
@@ -72,6 +123,7 @@ static void print_usage(const char* program_name) {
     printf("      --screenshot-at C:FILE Screenshot after C cycles to FILE\n");
     printf("      --frame-dump DIR       Dump frames to directory\n");
     printf("      --frame-dump-interval N  Dump every Nth frame (default: 50)\n");
+    printf("  -m, --model MODEL          Machine model: oric1 or atmos (default: auto-detect)\n");
     printf("  -k, --keyboard LAYOUT      Keyboard layout: qwerty (default) or azerty\n");
     printf("      --type-keys C:TEXT     Auto-type TEXT after C cycles (\\n=Return, \\pN=pause N sec)\n");
     printf("  -b, --breakpoint ADDR      Break when PC reaches address (hex, e.g. ED8A)\n");
@@ -250,7 +302,7 @@ static void microdisc_cpu_irq_clr(emulator_t* emu) {
 }
 
 static bool emulator_init(emulator_t* emu) {
-    log_info("Initializing ORIC-1 emulator v%s", EMU_VERSION);
+    log_info("Initializing Phosphoric v%s", EMU_VERSION);
 
     if (!memory_init(&emu->memory)) {
         log_error("Failed to initialize memory");
@@ -358,33 +410,18 @@ static void emulator_cleanup(emulator_t* emu) {
  * data directly into CPU registers and skip to the routine's RTS.
  * This is the same approach used by Oricutron.
  *
- * ROM addresses (ORIC-1 BASIC 1.0):
- *   getsync:      $E696 (entry) -> $E6B9 (RTS)
- *   readbyte:     $E630 (entry) -> $E65B (RTS)
- *   readbyte_store: $002F (RAM byte store location)
- */
-/**
- * ROM patching approach (matching Oricutron):
- *
- * getsync ($E696): Scan forward to first 0x16 byte, leave tapeoffs
- *   pointing AT the 0x16. The ROM's getsync confirmation loop will
- *   then call readbyte to read the remaining sync bytes + marker.
- *   Jump PC to $E6B9 (getsync RTS).
- *
- * readbyte ($E630): Read tapebuf[tapeoffs++] into A, store at $002F,
- *   set Z flag, clear carry (success). Jump PC to $E65B which does
- *   LDA $2F then RTS — this is what Oricutron uses as readbyte_end.
- *
- * getsync_loop ($E681): If CPU gets stuck polling CB1 in wait_edge,
- *   recover by restoring SP and forcing a getsync patch.
+ * Addresses are ROM-version-specific, loaded from emu->rom_patches:
+ *   BASIC 1.0 (ORIC-1):  getsync=$E696, readbyte=$E630, loop=$E681
+ *   BASIC 1.1 (Atmos):   getsync=$E735, readbyte=$E6C9, loop=$E720
  */
 static void tape_patches(emulator_t* emu) {
-    if (!emu->tape_loaded)
+    if (!emu->tape_loaded || !emu->rom_patches)
         return;
 
+    const rom_patches_t* p = emu->rom_patches;
     uint16_t pc = emu->cpu.PC;
 
-    if (pc == 0xE696) {
+    if (pc == p->getsync_entry) {
         /* getsync: scan forward to first 0x16 sync byte.
          * Leave tapeoffs pointing AT the 0x16 so readbyte will
          * read the sync bytes (ROM confirmation loop needs them). */
@@ -399,8 +436,8 @@ static void tape_patches(emulator_t* emu) {
         /* Save stack pointer for sync loop recovery */
         emu->tape_syncstack = emu->cpu.SP;
         /* Jump to end of getsync */
-        emu->cpu.PC = 0xE6B9;
-    } else if (pc == 0xE630) {
+        emu->cpu.PC = p->getsync_end;
+    } else if (pc == p->readbyte_entry) {
         /* readbyte: read next byte from tape buffer */
         if (emu->tapeoffs < emu->tapelen) {
             uint8_t byte = emu->tapebuf[emu->tapeoffs++];
@@ -412,13 +449,13 @@ static void tape_patches(emulator_t* emu) {
                 emu->cpu.P &= ~FLAG_ZERO;
             /* Clear carry = success */
             emu->cpu.P &= ~FLAG_CARRY;
-            /* Store byte at $002F (ROM side effect) */
-            memory_write(&emu->memory, 0x002F, byte);
-            /* Jump to $E65B (LDA $2F; RTS) — matches Oricutron readbyte_end */
-            emu->cpu.PC = 0xE65B;
+            /* Store byte at readbyte_store (ROM side effect) */
+            memory_write(&emu->memory, p->readbyte_store, byte);
+            /* Jump to readbyte end (LDA store; RTS) */
+            emu->cpu.PC = p->readbyte_end;
         }
         /* If tape exhausted, let ROM handle (will timeout) */
-    } else if (pc == 0xE681) {
+    } else if (pc == p->getsync_loop) {
         /* Sync loop recovery: CPU is stuck polling VIA CB1 in wait_edge.
          * This happens if getsync's confirmation readbyte calls enter
          * the real ROM code. Recover by restoring SP and forcing getsync. */
@@ -436,7 +473,7 @@ static void tape_patches(emulator_t* emu) {
                     return;
                 }
             }
-            emu->cpu.PC = 0xE6B9;
+            emu->cpu.PC = p->getsync_end;
         }
     }
 }
@@ -683,9 +720,10 @@ int main(int argc, char* argv[]) {
     const char* cast_to_device = NULL;
     const char* save_state_file = NULL;
     const char* load_state_file = NULL;
+    const char* model_arg = NULL;
 
     /* Long option codes for options without short equivalents */
-    enum { OPT_SCREENSHOT = 256, OPT_SCREENSHOT_AT, OPT_FRAME_DUMP, OPT_FRAME_DUMP_INTERVAL, OPT_TYPE_KEYS, OPT_DISK_ROM, OPT_DISK1, OPT_DISK2, OPT_DISK3, OPT_BREAKPOINT, OPT_DEBUG_BREAK, OPT_CAST_SERVER, OPT_CAST_DISCOVER, OPT_CAST_TO, OPT_SAVE_STATE, OPT_LOAD_STATE };
+    enum { OPT_SCREENSHOT = 256, OPT_SCREENSHOT_AT, OPT_FRAME_DUMP, OPT_FRAME_DUMP_INTERVAL, OPT_TYPE_KEYS, OPT_DISK_ROM, OPT_DISK1, OPT_DISK2, OPT_DISK3, OPT_BREAKPOINT, OPT_DEBUG_BREAK, OPT_CAST_SERVER, OPT_CAST_DISCOVER, OPT_CAST_TO, OPT_SAVE_STATE, OPT_LOAD_STATE, OPT_MODEL };
 
     static struct option long_options[] = {
         {"tape",                required_argument, 0, 't'},
@@ -714,6 +752,7 @@ int main(int argc, char* argv[]) {
         {"cast-discover",       no_argument,       0, OPT_CAST_DISCOVER},
         {"save-state",          required_argument, 0, OPT_SAVE_STATE},
         {"load-state",          required_argument, 0, OPT_LOAD_STATE},
+        {"model",               required_argument, 0, 'm'},
         {"help",                no_argument,       0, '?'},
         {0, 0, 0, 0}
     };
@@ -721,7 +760,7 @@ int main(int argc, char* argv[]) {
     int opt;
     int option_index = 0;
 
-    while ((opt = getopt_long(argc, argv, "t:d:r:h:fnc:vk:b:D?", long_options, &option_index)) != -1) {
+    while ((opt = getopt_long(argc, argv, "t:d:r:h:fnc:vm:k:b:D?", long_options, &option_index)) != -1) {
         switch (opt) {
             case 't': tape_file = optarg; break;
             case 'd': disk_files[0] = optarg; break;
@@ -755,6 +794,7 @@ int main(int argc, char* argv[]) {
             case OPT_CAST_DISCOVER: cast_discover = true; break;
             case OPT_SAVE_STATE: save_state_file = optarg; break;
             case OPT_LOAD_STATE: load_state_file = optarg; break;
+            case 'm': model_arg = optarg; break;
             case '?':
             default:
                 print_usage(argv[0]);
@@ -850,6 +890,29 @@ int main(int argc, char* argv[]) {
             return 1;
         }
     }
+
+    /* Detect or set machine model */
+    if (model_arg) {
+        if (strcasecmp(model_arg, "atmos") == 0 || strcmp(model_arg, "1.1") == 0) {
+            emu.model = ORIC_MODEL_ATMOS;
+        } else if (strcasecmp(model_arg, "oric1") == 0 || strcmp(model_arg, "1.0") == 0) {
+            emu.model = ORIC_MODEL_ORIC1;
+        } else {
+            log_error("Unknown model '%s'. Use: oric1, atmos, 1.0, or 1.1", model_arg);
+            emulator_cleanup(&emu);
+            return 1;
+        }
+        log_info("Machine model: %s (user-specified)",
+                 emu.model == ORIC_MODEL_ATMOS ? "ORIC Atmos" : "ORIC-1");
+    } else if (rom_file) {
+        emu.model = detect_rom_version(&emu.memory);
+        log_info("Machine model: %s (auto-detected from ROM)",
+                 emu.model == ORIC_MODEL_ATMOS ? "ORIC Atmos" : "ORIC-1");
+    } else {
+        emu.model = ORIC_MODEL_ORIC1;
+    }
+    emu.rom_patches = get_rom_patches(emu.model);
+    log_info("ROM patches: %s", emu.rom_patches->name);
 
     /* Mount host filesystem */
     if (hostfs_path) {
@@ -1057,7 +1120,7 @@ int main(int argc, char* argv[]) {
 
     if (!headless) {
         printf("\n");
-        printf("ORIC-1 Emulator v%s\n", EMU_VERSION);
+        printf("Phosphoric v%s\n", EMU_VERSION);
         printf("Press Ctrl+C to quit\n\n");
     }
 

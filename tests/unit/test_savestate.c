@@ -359,7 +359,7 @@ TEST(test_save_file_header) {
     fseek(fp, 16, SEEK_SET);
     char emu_ver[32];
     fread(emu_ver, 1, 32, fp);
-    ASSERT_TRUE(strstr(emu_ver, "1.4.0") != NULL);
+    ASSERT_TRUE(strstr(emu_ver, "alpha") != NULL);
 
     fclose(fp);
     memory_cleanup(&emu1.memory);

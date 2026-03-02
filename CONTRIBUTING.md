@@ -1,6 +1,6 @@
-# Contributing to ORIC-1 Emulator
+# Contributing to Phosphoric
 
-Thank you for your interest in contributing to the ORIC-1 emulator project.
+Thank you for your interest in contributing to the Phosphoric project.
 
 ## Building from Source
 

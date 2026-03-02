@@ -789,7 +789,7 @@ bool castv2_connect_and_cast(castv2_client_t* client, const char* device_ip,
 
     client->state = CASTV2_STATE_RUNNING;
     log_info("CastV2: URL sent to DashCast: %s", stream_url);
-    log_info("CastV2: Chromecast should now display the ORIC-1 emulator");
+    log_info("CastV2: Chromecast should now display Phosphoric");
 
     return true;
 }

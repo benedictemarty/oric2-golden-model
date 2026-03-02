@@ -68,7 +68,7 @@ bool config_save(const char* filename) {
     FILE* fp = fopen(filename, "w");
     if (!fp) return false;
 
-    fprintf(fp, "# ORIC-1 Emulator Configuration\n\n");
+    fprintf(fp, "# Phosphoric Configuration\n\n");
     for (int i = 0; i < config_count; i++) {
         fprintf(fp, "%s = %s\n", config_items[i].key, config_items[i].value);
     }

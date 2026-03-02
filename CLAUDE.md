@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Oric-1 cycle-accurate emulator written in C11. Emulates the complete ORIC-1 8-bit computer (1983): MOS 6502 CPU, 64KB memory with ROM/RAM banking, VIA 6522, AY-3-8910 PSG audio, ULA video (text 40x28 + HIRES 240x200), Microdisc WD1793 FDC, and cassette TAP format. Optional SDL2 for display/audio/input.
+**Phosphoric** — Cycle-accurate ORIC-1/Atmos emulator written in C11. Emulates the complete ORIC 8-bit computer (1983): MOS 6502 CPU, 64KB memory with ROM/RAM banking, VIA 6522, AY-3-8910 PSG audio, ULA video (text 40x28 + HIRES 240x200), Microdisc WD1793 FDC, and cassette TAP format. Supports both ORIC-1 (BASIC 1.0) and Atmos (BASIC 1.1) with ROM auto-detection. Optional SDL2 for display/audio/input.
 
 ## Build Commands
 
@@ -19,7 +19,7 @@ make install PREFIX=/usr/local
 ## Testing
 
 ```bash
-make tests               # All 176 tests (must all pass before commit)
+make tests               # All 186 tests (must all pass before commit)
 make test-cpu            # 74 CPU tests
 make test-memory         # 19 memory tests
 make test-io             # 29 VIA/I/O tests
@@ -29,6 +29,7 @@ make test-video          # 11 video export tests
 make test-audio          # 8 PSG audio tests
 make test-debugger       # 8 debugger tests
 make test-savestate      # 8 save state tests
+make test-atmos          # 10 Atmos support tests
 make valgrind            # Memory leak detection
 make static-analysis     # Compiler warnings analysis
 ```

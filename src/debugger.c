@@ -1,6 +1,6 @@
 /**
  * @file debugger.c
- * @brief Interactive debugger for ORIC-1 emulator
+ * @brief Interactive debugger for Phosphoric
  * @author bmarty <bmarty@mailo.com>
  * @date 2026-02-24
  * @version 1.1.0-alpha

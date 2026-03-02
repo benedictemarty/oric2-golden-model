@@ -1,8 +1,17 @@
-# ORIC-1 Emulator
+# Phosphoric
 
-A cycle-accurate ORIC-1 (8-bit computer, 1983) emulator written in C.
+A cycle-accurate ORIC-1 / Atmos emulator written in C11.
 
-**Version: 1.0.0-rc** | **Status: Release Candidate** | **155 tests, 100% pass**
+**Version: 1.5.0-alpha** | **186 tests, 100% pass** | **Zero memory leaks**
+
+```
+ ____  _                      _                _
+|  _ \| |__   ___  ___ _ __ | |__   ___  _ __(_) ___
+| |_) | '_ \ / _ \/ __| '_ \| '_ \ / _ \| '__| |/ __|
+|  __/| | | | (_) \__ \ |_) | | | | (_) | |  | | (__
+|_|   |_| |_|\___/|___/ .__/|_| |_|\___/|_|  |_|\___|
+                       |_|
+```
 
 ## Quick Start
 
@@ -10,206 +19,224 @@ A cycle-accurate ORIC-1 (8-bit computer, 1983) emulator written in C.
 # Install dependencies (Debian/Ubuntu)
 sudo apt-get install build-essential libsdl2-dev
 
-# Build
+# Build with SDL2
 make SDL2=1
 
-# Run with ROM
+# Boot ORIC-1 BASIC
 ./oric1-emu -r roms/basic10.rom
 
+# Boot ORIC Atmos BASIC (auto-detected)
+./oric1-emu -r roms/basic11b.rom
+
 # Load a tape program
-./oric1-emu -r roms/basic10.rom -t program.tap
+./oric1-emu -r roms/basic10.rom -t program.tap -f
 
 # Boot Sedoric from disk
-./oric1-emu -r roms/basic10.rom --disk-rom roms/microdis.rom -d disk.dsk
+./oric1-emu -r roms/basic10.rom --disk-rom roms/microdis.rom -d SEDO40u.DSK
 ```
 
 ## Features
 
 ### Core Emulation
-- **6502 CPU**: Cycle-accurate emulation of all 151 official opcodes
-- **Memory**: 64KB addressable space with ROM/RAM banking
-- **VIA 6522**: I/O controller with timers, interrupts, keyboard scanning
-- **Video**: Text mode (40x28) and HIRES graphics (240x200, 6 colors)
-- **Audio**: AY-3-8910 PSG sound chip (3 tone channels, noise, 16 envelope shapes)
-- **Storage**: Cassette (.TAP) and disk (Sedoric .DSK) support
-- **Microdisc**: WD1793 FDC controller with 4 drives, overlay ROM
+- **MOS 6502 CPU** — Cycle-accurate, 151 official opcodes, 13 addressing modes, BCD, level-triggered IRQ
+- **64KB Memory** — RAM ($0000-$BFFF), ROM ($C000-$FFFF), banking, I/O routing
+- **VIA 6522** — 16 registers, Timer 1/2, IFR/IER interrupts, edge-triggered CB1, keyboard matrix
+- **ULA Video** — Text mode (40x28) + HIRES (240x200), serial attributes, PAL timing (312 lines x 64 cycles)
+- **AY-3-8910 PSG** — 3 tone channels, noise, 16 envelope shapes, SDL2 audio output
+- **Microdisc** — WD1793 FDC, 4 drives (A-D), overlay ROM, Sedoric disk boot
+- **Cassette** — TAP format, CLOAD via ROM patching, fast load mode
 
-### BASIC Loading
-- `CLOAD` command supported via ROM patching
-- Fast load mode with `-f` flag (direct memory injection)
-- Sedoric disk boot with full SYSTEM.DOS loading
+### ORIC-1 & Atmos Support
+- **ROM auto-detection** — Detects BASIC 1.0 (ORIC-1) or 1.1 (Atmos) from ROM header
+- **`--model` CLI flag** — Force model selection (`oric1`, `atmos`, `1.0`, `1.1`)
+- **ROM-specific tape patching** — Correct patch addresses for both ROM versions
+
+### Save States
+- **`.ost` format** — Binary save state with CRC32 integrity check
+- **10 sections** — CPU, MEM, VIA, PSG, VID, KBD, FDC, MDC, TAP, META
+- **Hotkeys** — F2 (quick save), F4 (quick load)
+- **CLI** — `--save-state FILE`, `--load-state FILE`
+
+### Interactive Debugger
+- **Breakpoints** — Up to 16 PC breakpoints
+- **Watchpoints** — Up to 8 memory write watchpoints
+- **Commands** — step, next, continue, registers, disassembly, memory dump, stack, VIA, PSG
+- **CLI** — `--debug` (break at start), `--break ADDR`
+
+### Chromecast Streaming
+- **MJPEG server** — HTTP stream at `/stream` (720x672, 3x upscale)
+- **WAV audio** — Real-time PSG audio streaming at `/audio`
+- **Native CASTV2** — Direct Chromecast control via `--cast-to`
+- **mDNS discovery** — `--cast-discover`
 
 ### Modern Features
-- **Host Filesystem**: Share files between host and emulator (`--hostfs`)
-- **Conversion Tools**: `bas2tap`, `bin2tap`, `tap2sedoric`
-- **Video Export**: Screenshot in PPM/BMP format (`--screenshot`)
-- **Keyboard Layouts**: QWERTY and AZERTY (`--keyboard azerty`)
-- **Headless Mode**: Run without display for testing/automation
+- **Video export** — PPM, BMP, ASCII screenshots
+- **Keyboard layouts** — QWERTY, AZERTY (`--keyboard azerty`)
+- **Headless mode** — No display, for CI/automation
+- **Host filesystem** — Share files with `--hostfs DIR`
+- **Conversion tools** — `bas2tap`, `bin2tap`, `tap2sedoric`
+- **Keyboard automation** — `--type-keys CYCLES:TEXT`
 
 ## Building
 
 ### Prerequisites
+
 ```bash
 # Debian/Ubuntu
-sudo apt-get install build-essential cmake libsdl2-dev
+sudo apt-get install build-essential libsdl2-dev
 
 # Fedora
-sudo dnf install gcc cmake SDL2-devel
+sudo dnf install gcc SDL2-devel
 
 # Arch
-sudo pacman -S base-devel cmake sdl2
+sudo pacman -S base-devel sdl2
+
+# Optional: Chromecast support
+sudo apt-get install libssl-dev
 ```
 
-### With Make (primary)
+### Build
+
 ```bash
-# Build with SDL2 (display + audio)
-make SDL2=1
-
-# Build headless (no display)
-make
-
-# Debug build
-make DEBUG=1 SDL2=1
-
-# Install
-sudo make install
-```
-
-### With CMake
-```bash
-mkdir build && cd build
-cmake ..
-make -j$(nproc)
-sudo make install
+make SDL2=1                    # Standard build with SDL2
+make                           # Headless build (no SDL2)
+make DEBUG=1 SDL2=1            # Debug build (-g -O0)
+make SDL2=1 CAST=1             # With Chromecast support
+make tools                     # Conversion tools (bas2tap, bin2tap, tap2sedoric)
+sudo make install              # Install to /usr/local
 ```
 
 ## Usage
 
-### Command Line Options
 ```
 ./oric1-emu [OPTIONS]
 
-  -r, --rom FILE          Load BASIC ROM (required)
-  -t, --tape FILE         Load .TAP cassette file
-  -f, --fast-load         Fast load tape (direct memory injection)
-  -d, --disk FILE         Load .DSK disk image (drive A)
-  --disk-rom FILE         Load Microdisc ROM for disk boot
-  --disk1/2/3 FILE        Load disk for drives B/C/D
-  --hostfs DIR            Mount host directory
-  --keyboard LAYOUT       Keyboard layout: qwerty (default), azerty
-  --headless              Run without display
-  --cycles N              Run N cycles then exit (headless)
-  --screenshot FILE       Screenshot at exit (.ppm or .bmp)
-  --screenshot-at N:FILE  Screenshot after N cycles
-  --type-keys N:TEXT      Simulate keyboard input after N cycles
-  -v, --verbose           Enable debug logging
+ROM & Model:
+  -r, --rom FILE            Load BASIC ROM (required)
+  -m, --model MODEL         Force model: oric1, atmos, 1.0, 1.1
+
+Tape & Disk:
+  -t, --tape FILE           Load .TAP cassette file
+  -f, --fast-load           Fast load (direct memory injection)
+  -d, --disk FILE           Load .DSK disk image (drive A)
+  --disk-rom FILE           Load Microdisc ROM
+  --disk1/2/3 FILE          Drives B/C/D
+
+Save States:
+  --save-state FILE         Save state on exit
+  --load-state FILE         Load state at startup
+
+Debugger:
+  -D, --debug               Start in debugger
+  --break ADDR              Set initial breakpoint
+
+Chromecast:
+  --cast-server[=PORT]      Start MJPEG server (default 8080)
+  --cast-to[=DEVICE]        Cast to Chromecast
+  --cast-discover           Discover Chromecast devices
+
+Display & Export:
+  --keyboard LAYOUT         qwerty (default) or azerty
+  --headless                No display
+  --cycles N                Run N cycles then exit
+  --screenshot FILE         Screenshot at exit (.ppm/.bmp)
+  --screenshot-at N:FILE    Screenshot after N cycles
+  --type-keys N:TEXT        Simulate keyboard input
+  -v, --verbose             Debug logging
 ```
 
 ### Key Bindings
+
 | Key | Function |
 |-----|----------|
-| F4 | Cold reset |
+| F2 | Quick save state |
+| F4 | Quick load state |
 | F5 | Warm reset |
+| F9 | Enter debugger |
 | F10 | Quit |
 | F11 | Fullscreen |
 | F12 | Screenshot |
 
-### ORIC Keyboard
-Standard PC keyboard maps to ORIC-1 layout. The ORIC has 48 keys arranged in an 8x8 matrix. Shift and CTRL modifiers are supported.
-
-### Loading Programs
-
-**From tape (CLOAD):**
-```bash
-./oric1-emu -r basic10.rom -t game.tap
-# Then type CLOAD in BASIC
-```
-
-**From tape (fast load):**
-```bash
-./oric1-emu -r basic10.rom -t game.tap -f
-```
-
-**From Sedoric disk:**
-```bash
-./oric1-emu -r basic10.rom --disk-rom microdis.rom -d SEDORIC.DSK
-```
-
-## Conversion Tools
-
-```bash
-# Convert BASIC text file to .TAP
-bas2tap program.bas -o program.tap
-
-# Convert binary to .TAP with load/exec address
-bin2tap program.bin --start 0x0400 --exec 0x0400 -o program.tap
-
-# Convert .TAP to Sedoric disk
-tap2sedoric program.tap -o disk.dsk
-```
-
 ## Testing
 
 ```bash
-# Run all tests (155 tests)
-make tests
-
-# Run specific test suite
-make test-cpu       # 74 CPU tests
-make test-memory    # 19 memory tests
-make test-io        # 24 VIA/I/O tests
-make test-storage   # 12 storage tests
-make test-system    # 7 integration tests
-make test-video     # 11 video export tests
-make test-audio     # 8 PSG audio tests
-
-# Memory leak check
-make valgrind
-
-# Static analysis
-make static-analysis
+make tests               # All 186 tests (100% pass)
+make test-cpu            # 74 CPU tests
+make test-memory         # 19 memory tests
+make test-io             # 29 VIA/I/O tests
+make test-storage        # 12 storage tests
+make test-system         # 7 integration tests
+make test-video          # 11 video export tests
+make test-audio          # 8 PSG audio tests
+make test-debugger       # 8 debugger tests
+make test-savestate      # 8 save state tests
+make test-atmos          # 10 Atmos support tests
+make valgrind            # Memory leak detection
+make static-analysis     # Compiler warnings analysis
 ```
 
 ## Architecture
 
 ```
-+---------------------------------------------+
-|              ORIC-1 Emulator                |
-+---------------------------------------------+
-|  +--------+  +-------+  +----------------+ |
-|  |  6502  |<-|  BUS  |->|  Memory (64KB) | |
-|  |  CPU   |  +---+---+  +----------------+ |
-|  +--------+      |                          |
-|                   +---> VIA 6522 (I/O)      |
-|                   +---> Video System        |
-|                   +---> AY-3-8910 (Audio)   |
-|                   +---> Microdisc (FDC)     |
-|                   +---> Host Filesystem     |
-+---------------------------------------------+
-|            SDL2 (Display/Audio/Input)       |
-+---------------------------------------------+
++-----------------------------------------------+
+|                  Phosphoric                    |
++-----------------------------------------------+
+|  +--------+  +-------+  +------------------+  |
+|  |  6502  |<-|  BUS  |->|  Memory (64KB)   |  |
+|  |  CPU   |  +---+---+  |  RAM/ROM/Banking |  |
+|  +--------+      |      +------------------+  |
+|                   |                             |
+|   +---------------+------------------+          |
+|   |               |                  |          |
+|   v               v                  v          |
+|  VIA 6522      Video ULA       AY-3-8910       |
+|  (I/O+IRQ)     (Text+HIRES)   (3ch+Noise)     |
+|   |               |                  |          |
+|   v               v                  v          |
+|  Keyboard      Framebuffer       SDL2 Audio    |
+|  Microdisc     PPM/BMP Export                   |
+|  Cassette      MJPEG Cast                       |
++-----------------------------------------------+
+|        SDL2 (Display / Audio / Input)          |
++-----------------------------------------------+
 ```
 
 ## Project Structure
 
 ```
-Oric1/
-  src/
-    cpu/          # 6502 CPU emulation
-    memory/       # Memory management + banking
-    io/           # VIA 6522, keyboard, cassette, microdisc
-    video/        # Video (text + HIRES) + export
-    audio/        # AY-3-8910 PSG + SDL2 output
-    storage/      # TAP, Sedoric, FDC WD1793
-    hostfs/       # Host filesystem + VFS
-    utils/        # Logging, config
-  include/        # Header files
-  tests/unit/     # Unit tests (155 tests)
-  tools/          # Conversion tools
-  examples/       # Example BASIC programs
-  docs/           # Documentation
-  roms/           # ROM files (not distributed)
+src/
+  cpu/           6502 CPU (opcodes, addressing modes)
+  memory/        64KB memory map, ROM/RAM banking
+  io/            VIA 6522, keyboard, cassette, Microdisc
+  video/         ULA rendering (text+HIRES), export (PPM/BMP/ASCII)
+  audio/         AY-3-8910 PSG, SDL2 audio output
+  storage/       TAP cassette, Sedoric filesystem, WD1793 FDC
+  network/       MJPEG cast server, CASTV2 Chromecast client
+  hostfs/        Host filesystem sharing, VFS abstraction
+  utils/         Logging, INI config parser
+  main.c         Emulation loop, CLI, I/O wiring
+  savestate.c    Save/load state (.ost format)
+  debugger.c     Interactive REPL debugger
+
+include/         Public headers
+tests/unit/      11 test files, 186 tests
+tools/           bas2tap, bin2tap, tap2sedoric
+examples/        Example BASIC programs (.bas + .tap)
+roms/            ROM files (not distributed)
+docs/            User guide, compatibility list, agile plan
 ```
+
+## ORIC Hardware Reference
+
+| Component | Chip | Details |
+|-----------|------|---------|
+| CPU | MOS 6502 | 1 MHz, 8-bit |
+| RAM | — | 48 KB |
+| ROM | — | 16 KB (BASIC 1.0 or 1.1) |
+| Video | ULA | Text 40x28, HIRES 240x200 |
+| Sound | AY-3-8910 | 3 channels + noise + envelopes |
+| I/O | MOS 6522 VIA | Timers, interrupts, keyboard |
+| FDC | WD1793 | Microdisc controller (optional) |
 
 ## Documentation
 
@@ -219,26 +246,19 @@ Oric1/
 - [Changelog](CHANGELOG)
 - [Roadmap](ROADMAP)
 
-## Contributing
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for build instructions, coding style, and contribution guidelines.
-
 ## Credits
 
-### ORIC-1 Hardware (1983)
-- **CPU**: MOS Technology 6502 @ 1 MHz
-- **RAM**: 48 KB
-- **ROM**: 16 KB (BASIC 1.0)
-- **Video**: ULA (Uncommitted Logic Array)
-- **Sound**: General Instrument AY-3-8910
-- **I/O**: MOS Technology 6522 VIA
+- **Oricutron** — Reference implementation for PSG, keyboard, ULA timing
+- **Defence Force** — ORIC technical documentation
+- **Fabrice Frances** — EUPHORIC emulator (pioneering work)
 
-### References
-- ORIC-1 Technical Manual
-- 6502 Programming Manual
-- Defence Force documentation
-- Fabrice Frances' EUPHORIC emulator
-- Oricutron (reference implementation for PSG, keyboard, ULA)
+## Repository
+
+```bash
+git clone https://git.nagominosato.fr:6775/chipinette/Phosphoric.git
+cd Phosphoric
+make SDL2=1
+```
 
 ## License
 
@@ -251,4 +271,4 @@ To be determined.
 
 ---
 
-Current Version: **1.0.0-rc** | Last Updated: **2026-02-24**
+Phosphoric v1.5.0-alpha | 186 tests | ORIC-1 + Atmos | 2026-03-02

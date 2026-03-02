@@ -1,12 +1,22 @@
-VERSION_TRACKING - ORIC-1 Emulator
+VERSION_TRACKING - Phosphoric
 =====================================
 
-Current Version: 1.4.0-alpha
+Current Version: 1.5.0-alpha
 Release Date: 2026-03-02
-Status: Alpha (Save States + Full Type Safety + WAV Audio + CASTV2 + MJPEG Cast, 176 tests pass)
+Status: Alpha (Atmos Support + Save States + Full Type Safety + WAV Audio + CASTV2 + MJPEG Cast, 186 tests pass)
 
 Version History:
 ----------------
+- 1.5.0-alpha (2026-03-02): ORIC Atmos Support (Sprint 23)
+  * oric_model_t enum (ORIC_MODEL_ORIC1, ORIC_MODEL_ATMOS)
+  * ROM auto-detection: JMP target at offset 0 ($EA59=1.0, $ECCC=1.1)
+  * rom_patches_t struct with ROM-version-specific tape patch addresses
+  * Static tables: rom_patches_basic10 (ORIC-1), rom_patches_basic11 (Atmos)
+  * CLI: --model / -m (oric1, atmos, 1.0, 1.1) overrides auto-detection
+  * tape_patches() refactored to use rom_patches table (both ROMs work)
+  * emulator_t: model field, rom_patches pointer
+  * 10 new Atmos unit tests (186 via make tests, 100% pass)
+
 - 1.4.0-alpha (2026-03-02): Save States (Sprint 22)
   * .ost (Oric Save sTate) binary format with CRC32 integrity
   * 10 sections: CPU, MEM, VIA, PSG, VID, KBD, FDC, MDC, TAP, META
@@ -225,9 +235,9 @@ MAJOR.MINOR.PATCH-LABEL
 - PATCH: Bug fixes (backward compatible)
 - LABEL: alpha, beta, rc, stable
 
-Next Planned Version: 1.4.0
+Next Planned Version: 1.6.0
 Target Date: TBD
 Planned Features:
-  - Save states
-  - ORIC Atmos support
+  - Telestrat support
+  - Joystick support
   - Additional game compatibility testing

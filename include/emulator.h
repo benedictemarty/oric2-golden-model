@@ -1,6 +1,6 @@
 /**
  * @file emulator.h
- * @brief ORIC-1 Emulator core structure and API
+ * @brief Phosphoric — ORIC-1 Emulator core structure and API
  * @author bmarty <bmarty@mailo.com>
  * @date 2026-02-24
  * @version 1.1.0-alpha
@@ -27,7 +27,32 @@
 #include "debugger.h"
 #include "network/cast_server.h"
 
-#define EMU_VERSION "1.4.0-alpha"
+#define EMU_VERSION "1.5.0-alpha"
+
+/**
+ * @brief ORIC machine model
+ */
+typedef enum {
+    ORIC_MODEL_ORIC1  = 0,  /**< ORIC-1 with BASIC 1.0 */
+    ORIC_MODEL_ATMOS  = 1   /**< ORIC Atmos with BASIC 1.1 */
+} oric_model_t;
+
+/**
+ * @brief ROM-version-specific tape patch addresses
+ *
+ * Addresses used to intercept ROM cassette loading routines for
+ * fast tape loading (CLOAD patching). Different ROM versions
+ * have different routine addresses.
+ */
+typedef struct rom_patches_s {
+    const char* name;           /**< ROM version name (e.g. "BASIC 1.0") */
+    uint16_t getsync_entry;     /**< getsync() entry point */
+    uint16_t getsync_end;       /**< getsync() RTS address */
+    uint16_t getsync_loop;      /**< getsync() recovery loop address */
+    uint16_t readbyte_entry;    /**< readbyte() entry point */
+    uint16_t readbyte_end;      /**< readbyte() RTS address */
+    uint16_t readbyte_store;    /**< readbyte() byte store address in RAM */
+} rom_patches_t;
 #define ORIC_CLOCK_HZ   1000000
 #define ORIC_FRAME_RATE  50
 
@@ -39,6 +64,10 @@
 #define VSYNC_CYCLE          (VSYNC_START_LINE * PAL_CYCLES_PER_LINE)     /* 16384 */
 
 typedef struct emulator_s {
+    /* Machine model */
+    oric_model_t model;
+    const rom_patches_t* rom_patches;
+
     cpu6502_t cpu;
     memory_t memory;
     via6522_t via;

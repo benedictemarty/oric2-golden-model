@@ -1,7 +1,7 @@
-# PLAN AGILE - Emulateur ORIC-1
+# PLAN AGILE - Phosphoric
 ## Document de Planification Agile Complet
 
-**Projet**: Emulateur ORIC-1 Cycle-Accurate
+**Projet**: Phosphoric — Emulateur ORIC-1/Atmos Cycle-Accurate
 **Version du document**: 1.0.0
 **Date de création**: 2026-02-22
 **Responsable**: bmarty <bmarty@mailo.com>
@@ -12,9 +12,9 @@
 
 ## Vision Produit
 
-> Créer un émulateur ORIC-1 fidèle au cycle près, écrit en C, intégrant des
-> fonctionnalités modernes (partage de fichiers hôte, outils de conversion) pour
-> préserver et faire revivre l'écosystème logiciel de l'ORIC-1 (1983).
+> Créer Phosphoric, un émulateur ORIC-1/Atmos fidèle au cycle près, écrit en C,
+> intégrant des fonctionnalités modernes (partage de fichiers hôte, outils de
+> conversion) pour préserver et faire revivre l'écosystème logiciel de l'ORIC (1983).
 
 ---
 

@@ -1,6 +1,6 @@
 # Compatibility List
 
-Programs tested with the ORIC-1 emulator v1.0.0-rc.
+Programs tested with Phosphoric v1.0.0-rc.
 
 ## Operating Systems
 

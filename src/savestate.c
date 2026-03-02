@@ -1,6 +1,6 @@
 /**
  * @file savestate.c
- * @brief ORIC-1 Emulator save state serialization/deserialization
+ * @brief Phosphoric save state serialization/deserialization
  * @author bmarty <bmarty@mailo.com>
  * @date 2026-03-02
  * @version 1.4.0-alpha
