@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.10.0-alpha] - 2026-03-02
+
+### CPU Trace Logging (Sprint 28)
+
+#### Added
+- **CPU trace logging** (`--trace FILE`): log every CPU instruction with
+  disassembly and full register state to a file for debugging and analysis
+- **`--trace-max N`**: limit trace to N instructions (default: unlimited)
+- **`cpu_trace_t`** structure in `emulator_t` for trace state management
+- **`trace_init()`**, **`trace_open()`**, **`trace_attach()`**,
+  **`trace_log_instruction()`**, **`trace_close()`**, **`trace_set_max()`** API
+- **Trace output format**: `CYCLES  PC  BYTES  DISASM  A=XX X=XX Y=XX SP=XX P=XX`
+  (one line per instruction, human-readable)
+- **10 new CPU trace tests**: init, open/close, invalid file, attach, log instruction,
+  multiple instructions, max count, register state, inactive no-op, cycle count
+- **`make test-trace`** target in Makefile
+
+#### Changed
+- **emulator.h**: added `cpu_trace_t trace` field and `#include "utils/trace.h"`
+- **main.c**: trace integration in emulation loop (before `cpu_step`), CLI parsing,
+  trace cleanup on exit
+
 ## [1.9.0-alpha] - 2026-03-02
 
 ### Display Scaling (Sprint 27)

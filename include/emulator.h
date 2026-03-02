@@ -27,9 +27,10 @@
 #include "storage/sedoric.h"
 #include "hostfs/hostfs.h"
 #include "debugger.h"
+#include "utils/trace.h"
 #include "network/cast_server.h"
 
-#define EMU_VERSION "1.9.0-alpha"
+#define EMU_VERSION "1.10.0-alpha"
 
 /**
  * @brief ORIC machine model
@@ -127,6 +128,9 @@ typedef struct emulator_s {
 
     /* Interactive debugger */
     debugger_t debugger;
+
+    /* CPU trace logging */
+    cpu_trace_t trace;
 
     /* Cast server (MJPEG streaming) */
     cast_server_t cast_server;

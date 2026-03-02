@@ -31,6 +31,7 @@
 #include "io/printer.h"
 #include "debugger.h"
 #include "savestate.h"
+#include "utils/trace.h"
 #ifdef HAS_SDL2
 #include <SDL2/SDL.h>
 #endif
@@ -140,6 +141,8 @@ static void print_usage(const char* program_name) {
     printf("      --cast-server[=PORT]   Start MJPEG cast server (default port: 8080)\n");
     printf("      --cast-to[=DEVICE]     Cast to Chromecast (native CASTV2 protocol)\n");
     printf("      --cast-discover        Discover Chromecast devices on network\n");
+    printf("      --trace FILE           Log CPU instruction trace to FILE\n");
+    printf("      --trace-max N          Max instructions to trace (default: unlimited)\n");
     printf("      --save-state FILE      Save emulator state to FILE on exit\n");
     printf("      --load-state FILE      Load emulator state from FILE at startup\n");
     printf("  -?, --help                 Show this help\n");
@@ -531,6 +534,9 @@ static void emulator_run(emulator_t* emu) {
                 if (!emu->running) break;
             }
 
+            /* CPU trace logging (before step, captures pre-execution state) */
+            trace_log_instruction(&emu->trace, &emu->cpu);
+
             tape_patches(emu);
             int step = cpu_step(&emu->cpu);
             frame_cycles += step;
@@ -776,9 +782,11 @@ int main(int argc, char* argv[]) {
     const char* printer_file = NULL;
     const char* printer_type_arg = NULL;
     int scale_factor = 3;
+    const char* trace_file = NULL;
+    int64_t trace_max = 0;
 
     /* Long option codes for options without short equivalents */
-    enum { OPT_SCREENSHOT = 256, OPT_SCREENSHOT_AT, OPT_FRAME_DUMP, OPT_FRAME_DUMP_INTERVAL, OPT_TYPE_KEYS, OPT_DISK_ROM, OPT_DISK1, OPT_DISK2, OPT_DISK3, OPT_BREAKPOINT, OPT_DEBUG_BREAK, OPT_CAST_SERVER, OPT_CAST_DISCOVER, OPT_CAST_TO, OPT_SAVE_STATE, OPT_LOAD_STATE, OPT_MODEL, OPT_JOYSTICK, OPT_PRINTER, OPT_PRINTER_TYPE, OPT_SCALE };
+    enum { OPT_SCREENSHOT = 256, OPT_SCREENSHOT_AT, OPT_FRAME_DUMP, OPT_FRAME_DUMP_INTERVAL, OPT_TYPE_KEYS, OPT_DISK_ROM, OPT_DISK1, OPT_DISK2, OPT_DISK3, OPT_BREAKPOINT, OPT_DEBUG_BREAK, OPT_CAST_SERVER, OPT_CAST_DISCOVER, OPT_CAST_TO, OPT_SAVE_STATE, OPT_LOAD_STATE, OPT_MODEL, OPT_JOYSTICK, OPT_PRINTER, OPT_PRINTER_TYPE, OPT_SCALE, OPT_TRACE, OPT_TRACE_MAX };
 
     static struct option long_options[] = {
         {"tape",                required_argument, 0, 't'},
@@ -812,6 +820,8 @@ int main(int argc, char* argv[]) {
         {"printer",             required_argument, 0, 'p'},
         {"printer-type",        required_argument, 0, OPT_PRINTER_TYPE},
         {"scale",               required_argument, 0, OPT_SCALE},
+        {"trace",               required_argument, 0, OPT_TRACE},
+        {"trace-max",           required_argument, 0, OPT_TRACE_MAX},
         {"help",                no_argument,       0, '?'},
         {0, 0, 0, 0}
     };
@@ -864,6 +874,8 @@ int main(int argc, char* argv[]) {
                     return 1;
                 }
                 break;
+            case OPT_TRACE: trace_file = optarg; break;
+            case OPT_TRACE_MAX: trace_max = atoll(optarg); break;
             case '?':
             default:
                 print_usage(argv[0]);
@@ -1226,6 +1238,17 @@ int main(int argc, char* argv[]) {
         printf("Press Ctrl+C to quit\n\n");
     }
 
+    /* CPU trace logging */
+    trace_init(&emu.trace);
+    if (trace_file) {
+        if (trace_max > 0) {
+            trace_set_max(&emu.trace, (uint64_t)trace_max);
+        }
+        if (!trace_open(&emu.trace, trace_file)) {
+            log_error("Failed to open trace file: %s", trace_file);
+        }
+    }
+
     /* Run emulation */
     emulator_run(&emu);
 
@@ -1235,6 +1258,7 @@ int main(int argc, char* argv[]) {
         savestate_save(&emu, save_state_file);
     }
 
+    trace_close(&emu.trace);
     emulator_cleanup(&emu);
     log_cleanup();
 

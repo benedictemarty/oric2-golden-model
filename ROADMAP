@@ -343,6 +343,15 @@ including host filesystem sharing and conversion tools for legacy BASIC/machine 
 - [x] Fullscreen mode preserved (window resize skipped in fullscreen)
 - [x] 10 new display scaling tests (226 total, 100% pass)
 
+### Sprint 28: CPU Trace Logging (v1.10.0-alpha) - DONE
+- [x] `--trace FILE`: log every CPU instruction with disassembly + register state
+- [x] `--trace-max N`: limit trace to N instructions (0 = unlimited)
+- [x] `cpu_trace_t` structure: fp, active, count, max_count, owns_fp
+- [x] `trace_init/open/attach/log_instruction/close/set_max` API
+- [x] Output format: `CYCLES  PC  BYTES  DISASM  A=XX X=XX Y=XX SP=XX P=XX`
+- [x] Integration in emulation loop (before cpu_step, captures pre-execution state)
+- [x] 10 new trace tests (236 total, 100% pass)
+
 ## Future Enhancements
 
 ### Advanced Features
@@ -352,7 +361,7 @@ including host filesystem sharing and conversion tools for legacy BASIC/machine 
 - [x] Joystick support
 - [x] Printer emulation (text + MCP-40 plotter)
 - [x] Display scaling (x1, x2, x3, x4)
-- [ ] Trace logging
+- [x] Trace logging
 
 ### Developer Tools
 - [x] Memory viewer (debugger: m command)
@@ -379,5 +388,5 @@ including host filesystem sharing and conversion tools for legacy BASIC/machine 
 ---
 
 **Last Updated**: 2026-03-02
-**Current Version**: 1.9.0-alpha
+**Current Version**: 1.10.0-alpha
 **Next Milestone**: 2.0.0 (Telestrat / stable release)

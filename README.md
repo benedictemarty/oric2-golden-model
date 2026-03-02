@@ -2,7 +2,7 @@
 
 A cycle-accurate ORIC-1 / Atmos emulator written in C11.
 
-**Version: 1.9.0-alpha** | **226 tests, 100% pass** | **Zero memory leaks**
+**Version: 1.10.0-alpha** | **236 tests, 100% pass** | **Zero memory leaks**
 
 ```
  ____  _                      _                _
@@ -89,6 +89,11 @@ make SDL2=1
 - **Runtime toggle** — F3 cycles through scale factors
 - **CLI** — `--scale N` (1, 2, 3, 4)
 
+### CPU Trace Logging
+- **Instruction trace** — Log every CPU instruction with disassembly and register state
+- **CLI** — `--trace FILE` to enable, `--trace-max N` to limit
+- **Output** — `CYCLES  PC  BYTES  DISASM  A=XX X=XX Y=XX SP=XX P=XX`
+
 ### Modern Features
 - **Video export** — PPM, BMP, ASCII screenshots
 - **Keyboard layouts** — QWERTY, AZERTY (`--keyboard azerty`)
@@ -156,6 +161,10 @@ Printer:
 Display:
   --scale N                 Display scale: 1, 2, 3 (default), 4
 
+Trace:
+  --trace FILE              Log CPU instruction trace to FILE
+  --trace-max N             Max instructions to trace (default: unlimited)
+
 Debugger:
   -D, --debug               Start in debugger
   --break ADDR              Set initial breakpoint
@@ -191,7 +200,7 @@ Display & Export:
 ## Testing
 
 ```bash
-make tests               # All 226 tests (100% pass)
+make tests               # All 236 tests (100% pass)
 make test-cpu            # 74 CPU tests
 make test-memory         # 19 memory tests
 make test-io             # 29 VIA/I/O tests
@@ -206,6 +215,7 @@ make test-joystick       # 10 joystick tests
 make test-printer        # 10 printer tests
 make test-mcp40          # 10 MCP-40 plotter tests
 make test-renderer       # 10 display scaling tests
+make test-trace          # 10 CPU trace logging tests
 make valgrind            # Memory leak detection
 make static-analysis     # Compiler warnings analysis
 ```
@@ -254,7 +264,7 @@ src/
   debugger.c     Interactive REPL debugger
 
 include/         Public headers
-tests/unit/      15 test files, 226 tests
+tests/unit/      16 test files, 236 tests
 tools/           bas2tap, bin2tap, tap2sedoric
 examples/        Example BASIC programs (.bas + .tap)
 roms/            ROM files (not distributed)
@@ -374,4 +384,4 @@ This project is licensed under the [MIT License](LICENSE).
 
 ---
 
-Phosphoric v1.9.0-alpha | 226 tests | ORIC-1 + Atmos | Display Scaling + MCP-40 Plotter + Printer + Joystick | 2026-03-02
+Phosphoric v1.10.0-alpha | 236 tests | ORIC-1 + Atmos | CPU Trace + Display Scaling + MCP-40 Plotter + Printer + Joystick | 2026-03-02
