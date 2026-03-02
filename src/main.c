@@ -29,6 +29,7 @@
 #include "audio/audio.h"
 #include "io/keyboard.h"
 #include "debugger.h"
+#include "savestate.h"
 #ifdef HAS_SDL2
 #include <SDL2/SDL.h>
 #endif
@@ -79,10 +80,14 @@ static void print_usage(const char* program_name) {
     printf("      --cast-server[=PORT]   Start MJPEG cast server (default port: 8080)\n");
     printf("      --cast-to[=DEVICE]     Cast to Chromecast (native CASTV2 protocol)\n");
     printf("      --cast-discover        Discover Chromecast devices on network\n");
+    printf("      --save-state FILE      Save emulator state to FILE on exit\n");
+    printf("      --load-state FILE      Load emulator state from FILE at startup\n");
     printf("  -?, --help                 Show this help\n");
     printf("\n");
     printf("Controls:\n");
     printf("  F1  - Help menu\n");
+    printf("  F2  - Quick save state\n");
+    printf("  F4  - Quick load state\n");
     printf("  F5  - Reset\n");
     printf("  F9  - Enter debugger\n");
     printf("  F10 - Quit\n");
@@ -551,6 +556,20 @@ static void emulator_run(emulator_t* emu) {
                 case SDL_KEYDOWN:
                     /* F5 = Reset, F10 = Quit, F11 = Fullscreen, F12 = Screenshot */
                     switch (event.key.keysym.sym) {
+                    case SDLK_F2:
+                        if (savestate_save(emu, "oric1_quicksave.ost")) {
+                            log_info("Quick save state saved (F2)");
+                        } else {
+                            log_error("Quick save state failed (F2)");
+                        }
+                        break;
+                    case SDLK_F4:
+                        if (savestate_load(emu, "oric1_quicksave.ost")) {
+                            log_info("Quick save state loaded (F4)");
+                        } else {
+                            log_error("Quick save state load failed (F4)");
+                        }
+                        break;
                     case SDLK_F5:
                         cpu_reset(&emu->cpu);
                         break;
@@ -662,9 +681,11 @@ int main(int argc, char* argv[]) {
     bool cast_discover = false;
     bool cast_to_enabled = false;
     const char* cast_to_device = NULL;
+    const char* save_state_file = NULL;
+    const char* load_state_file = NULL;
 
     /* Long option codes for options without short equivalents */
-    enum { OPT_SCREENSHOT = 256, OPT_SCREENSHOT_AT, OPT_FRAME_DUMP, OPT_FRAME_DUMP_INTERVAL, OPT_TYPE_KEYS, OPT_DISK_ROM, OPT_DISK1, OPT_DISK2, OPT_DISK3, OPT_BREAKPOINT, OPT_DEBUG_BREAK, OPT_CAST_SERVER, OPT_CAST_DISCOVER, OPT_CAST_TO };
+    enum { OPT_SCREENSHOT = 256, OPT_SCREENSHOT_AT, OPT_FRAME_DUMP, OPT_FRAME_DUMP_INTERVAL, OPT_TYPE_KEYS, OPT_DISK_ROM, OPT_DISK1, OPT_DISK2, OPT_DISK3, OPT_BREAKPOINT, OPT_DEBUG_BREAK, OPT_CAST_SERVER, OPT_CAST_DISCOVER, OPT_CAST_TO, OPT_SAVE_STATE, OPT_LOAD_STATE };
 
     static struct option long_options[] = {
         {"tape",                required_argument, 0, 't'},
@@ -691,6 +712,8 @@ int main(int argc, char* argv[]) {
         {"cast-server",         optional_argument, 0, OPT_CAST_SERVER},
         {"cast-to",             optional_argument, 0, OPT_CAST_TO},
         {"cast-discover",       no_argument,       0, OPT_CAST_DISCOVER},
+        {"save-state",          required_argument, 0, OPT_SAVE_STATE},
+        {"load-state",          required_argument, 0, OPT_LOAD_STATE},
         {"help",                no_argument,       0, '?'},
         {0, 0, 0, 0}
     };
@@ -730,6 +753,8 @@ int main(int argc, char* argv[]) {
                 if (optarg) cast_to_device = optarg;
                 break;
             case OPT_CAST_DISCOVER: cast_discover = true; break;
+            case OPT_SAVE_STATE: save_state_file = optarg; break;
+            case OPT_LOAD_STATE: load_state_file = optarg; break;
             case '?':
             default:
                 print_usage(argv[0]);
@@ -809,6 +834,12 @@ int main(int argc, char* argv[]) {
     if (frame_dump_dir) {
         mkdir(frame_dump_dir, 0755);
     }
+
+    /* Store file paths for save state metadata */
+    emu.rom_path = rom_file;
+    emu.disk_path = disk_files[0];
+    emu.diskrom_path = disk_rom_file;
+    emu.tape_path = tape_file;
 
     /* Load ROM if specified */
     if (rom_file) {
@@ -1016,6 +1047,14 @@ int main(int argc, char* argv[]) {
 #endif
     }
 
+    /* Load save state if specified */
+    if (load_state_file) {
+        log_info("Loading save state: %s", load_state_file);
+        if (!savestate_load(&emu, load_state_file)) {
+            log_error("Failed to load save state: %s", load_state_file);
+        }
+    }
+
     if (!headless) {
         printf("\n");
         printf("ORIC-1 Emulator v%s\n", EMU_VERSION);
@@ -1024,6 +1063,12 @@ int main(int argc, char* argv[]) {
 
     /* Run emulation */
     emulator_run(&emu);
+
+    /* Save state on exit if specified */
+    if (save_state_file) {
+        log_info("Saving state on exit: %s", save_state_file);
+        savestate_save(&emu, save_state_file);
+    }
 
     emulator_cleanup(&emu);
     log_cleanup();

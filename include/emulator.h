@@ -27,7 +27,7 @@
 #include "debugger.h"
 #include "network/cast_server.h"
 
-#define EMU_VERSION "1.3.3-alpha"
+#define EMU_VERSION "1.4.0-alpha"
 #define ORIC_CLOCK_HZ   1000000
 #define ORIC_FRAME_RATE  50
 
@@ -95,6 +95,12 @@ typedef struct emulator_s {
     /* CASTV2 client (native Chromecast control) */
     castv2_client_t castv2_client;
     bool has_castv2;
+
+    /* Loaded file paths (for save state metadata) */
+    const char* rom_path;
+    const char* disk_path;
+    const char* diskrom_path;
+    const char* tape_path;
 } emulator_t;
 
 #endif /* EMULATOR_H */

@@ -2,8 +2,8 @@ CIRRUS_OS - ORIC-1 Emulator Build & Development Status
 ======================================================
 
 Project: ORIC-1 Cycle-Accurate Emulator
-Version: 1.3.3-alpha
-Build Status: ALPHA (Full Codebase Type Safety Audit + WAV Audio + CASTV2 + MJPEG Cast)
+Version: 1.4.0-alpha
+Build Status: ALPHA (Save States + Full Type Safety + WAV Audio + CASTV2 + MJPEG Cast)
 Last Updated: 2026-03-02
 
 ================================================================
@@ -45,7 +45,8 @@ BUILD STATUS
 [V] Cast Server           - Complete (MJPEG HTTP server, mDNS Chromecast discovery)
 [V] CASTV2 Client         - Complete (native Google Cast V2, TLS, protobuf, heartbeat)
 [V] Audio Streaming       - Complete (WAV endpoint /audio, ring buffer, stereo→mono)
-[V] Test Suite            - Complete (192 tests, 100% pass)
+[V] Save States           - Complete (.ost format, CRC32, F2/F4 hotkeys, CLI options)
+[V] Test Suite            - Complete (176 tests via make tests, 100% pass)
 [V] ROM Compatibility     - Validated (ORIC-1 BASIC 1.0 ROM)
 [V] Performance           - Benchmarked (~90+ MHz, target met)
 [V] Static Analysis       - Run (no critical issues)

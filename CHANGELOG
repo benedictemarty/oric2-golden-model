@@ -5,6 +5,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.0-alpha] - 2026-03-02
+
+### Save States (Sprint 22)
+
+#### Added
+- **Save state system**: Complete emulator state serialization/deserialization
+  to `.ost` (Oric Save sTate) binary format with CRC32 integrity check
+- **New files**: `include/savestate.h`, `src/savestate.c` — public API
+  `savestate_save()` / `savestate_load()` with 10 hardware sections
+  (CPU, MEM, VIA, PSG, VID, KBD, FDC, MDC, TAP, META)
+- **48-byte file header**: magic "OST1", format version, file size, CRC32,
+  emulator version string
+- **Forward-compatible section parsing**: unknown sections are skipped
+- **CLI options**: `--save-state FILE` (save on exit), `--load-state FILE`
+  (load at startup)
+- **SDL2 hotkeys**: F2 = quick save, F4 = quick load (`oric1_quicksave.ost`)
+- **File path tracking**: `rom_path`, `disk_path`, `diskrom_path`, `tape_path`
+  fields in `emulator_t` for save state metadata
+- **8 new unit tests**: CPU roundtrip, memory roundtrip, VIA roundtrip,
+  PSG roundtrip, full emulator roundtrip, file header validation,
+  invalid file rejection, Microdisc state preservation
+- **`make test-savestate`** target in Makefile
+
+#### Tests
+- 176 tests via `make tests` (168 existing + 8 new), 100% pass rate
+
+---
+
 ## [1.3.3-alpha] - 2026-03-02
 
 ### Code Quality: Full Codebase Type Safety Audit (Sprint 21d)

@@ -50,6 +50,7 @@ SOURCES = src/main.c \
           src/storage/disk.c \
           src/hostfs/hostfs.c \
           src/hostfs/vfs.c \
+          src/savestate.c \
           src/debugger.c \
           src/utils/logging.c \
           src/utils/config.c
@@ -77,7 +78,7 @@ BINDIR = $(PREFIX)/bin
 DATADIR = $(PREFIX)/share/oric1-emulator
 DOCDIR = $(PREFIX)/share/doc/oric1-emulator
 
-.PHONY: all clean tools tests test-cpu test-memory test-io test-storage test-system test-rom test-video test-audio test-debugger test-cast valgrind static-analysis install uninstall help
+.PHONY: all clean tools tests test-cpu test-memory test-io test-storage test-system test-rom test-video test-audio test-debugger test-cast test-savestate valgrind static-analysis install uninstall help
 
 all: $(TARGET)
 
@@ -176,7 +177,19 @@ test-cast: $(TEST_CAST_SRCS)
 	@$(CC) $(CFLAGS) -DHAS_CAST $(TEST_CAST_SRCS) $(LDFLAGS) -lpthread -lssl -lcrypto -o test_cast
 	@./test_cast
 
-tests: test-cpu test-memory test-io test-storage test-system test-video test-audio test-debugger
+TEST_SAVESTATE_SRCS = tests/unit/test_savestate.c src/savestate.c \
+                      src/cpu/cpu6502.c src/cpu/opcodes.c src/cpu/addressing.c \
+                      src/memory/memory.c src/memory/banking.c \
+                      src/io/via6522.c src/io/keyboard.c src/io/microdisc.c \
+                      src/audio/ay3891x.c src/video/video.c \
+                      src/storage/disk.c src/storage/sedoric.c \
+                      src/utils/logging.c
+
+test-savestate: $(TEST_SAVESTATE_SRCS)
+	@$(CC) $(CFLAGS) $(TEST_SAVESTATE_SRCS) $(LDFLAGS) -o test_savestate
+	@./test_savestate
+
+tests: test-cpu test-memory test-io test-storage test-system test-video test-audio test-debugger test-savestate
 	@echo ""
 	@echo "═══════════════════════════════════════════════════════"
 	@echo "  All test suites completed!"
@@ -228,7 +241,7 @@ uninstall:
 
 clean:
 	rm -f $(OBJECTS) $(TARGET) $(TOOLS)
-	rm -f test_cpu test_memory test_io test_storage test_system test_rom test_video test_audio test_debugger test_cast
+	rm -f test_cpu test_memory test_io test_storage test_system test_rom test_video test_audio test_debugger test_cast test_savestate
 	rm -f tools/*.o
 
 help:
@@ -247,6 +260,7 @@ help:
 	@echo "  test-video   - Run video export tests"
 	@echo "  test-audio   - Run PSG audio tests"
 	@echo "  test-debugger- Run debugger tests"
+	@echo "  test-savestate - Run save state tests"
 	@echo "  test-cast    - Run cast server tests (requires CAST=1)"
 	@echo "  valgrind     - Run all tests under Valgrind"
 	@echo "  static-analysis - Run static analysis"

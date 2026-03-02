@@ -1,12 +1,22 @@
 VERSION_TRACKING - ORIC-1 Emulator
 =====================================
 
-Current Version: 1.3.3-alpha
+Current Version: 1.4.0-alpha
 Release Date: 2026-03-02
-Status: Alpha (Full Codebase Type Safety Audit + WAV Audio + CASTV2 + MJPEG Cast, 192 tests pass)
+Status: Alpha (Save States + Full Type Safety + WAV Audio + CASTV2 + MJPEG Cast, 176 tests pass)
 
 Version History:
 ----------------
+- 1.4.0-alpha (2026-03-02): Save States (Sprint 22)
+  * .ost (Oric Save sTate) binary format with CRC32 integrity
+  * 10 sections: CPU, MEM, VIA, PSG, VID, KBD, FDC, MDC, TAP, META
+  * 48-byte header: magic "OST1", version, file size, CRC32, emu version
+  * Forward-compatible section parsing (unknown sections skipped)
+  * CLI: --save-state FILE, --load-state FILE
+  * SDL2 hotkeys: F2 (quick save), F4 (quick load)
+  * emulator_t: rom_path/disk_path/diskrom_path/tape_path metadata fields
+  * 8 new unit tests (176 via make tests, 100% pass)
+
 - 1.3.3-alpha (2026-03-02): Full Codebase Type Safety Audit (Sprint 21d)
   * Named struct tags for ALL 15 remaining typedefs (forward decl support)
   * debugger.h: void* emu → emulator_t* (type-safe, forward decl)

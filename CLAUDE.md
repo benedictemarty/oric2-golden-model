@@ -19,15 +19,16 @@ make install PREFIX=/usr/local
 ## Testing
 
 ```bash
-make tests               # All 168 tests (must all pass before commit)
+make tests               # All 176 tests (must all pass before commit)
 make test-cpu            # 74 CPU tests
 make test-memory         # 19 memory tests
-make test-io             # 24 VIA/I/O tests
+make test-io             # 29 VIA/I/O tests
 make test-storage        # 12 storage tests
 make test-system         # 7 integration tests
 make test-video          # 11 video export tests
 make test-audio          # 8 PSG audio tests
 make test-debugger       # 8 debugger tests
+make test-savestate      # 8 save state tests
 make valgrind            # Memory leak detection
 make static-analysis     # Compiler warnings analysis
 ```
