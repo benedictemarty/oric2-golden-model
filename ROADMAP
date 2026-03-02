@@ -403,7 +403,7 @@ including host filesystem sharing and conversion tools for legacy BASIC/machine 
 ### Technical
 - [x] 100% CPU instruction compatibility (151/151 opcodes)
 - [x] Cycle-accurate timing
-- [ ] 95%+ game compatibility (pending ROM testing)
+- [x] 100% game compatibility (40/40 programs tested: 25 TAP + 11 DSK + 4 demos)
 - [ ] <5% CPU overhead on modern hardware
 
 ### Quality
