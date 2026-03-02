@@ -37,6 +37,7 @@ SOURCES = src/main.c \
           src/io/via6522.c \
           src/io/keyboard.c \
           src/io/joystick.c \
+          src/io/printer.c \
           src/io/cassette.c \
           src/io/microdisc.c \
           src/video/video.c \
@@ -79,7 +80,7 @@ BINDIR = $(PREFIX)/bin
 DATADIR = $(PREFIX)/share/phosphoric
 DOCDIR = $(PREFIX)/share/doc/phosphoric
 
-.PHONY: all clean tools tests test-cpu test-memory test-io test-storage test-system test-rom test-video test-audio test-debugger test-cast test-savestate test-atmos test-joystick valgrind static-analysis install uninstall help
+.PHONY: all clean tools tests test-cpu test-memory test-io test-storage test-system test-rom test-video test-audio test-debugger test-cast test-savestate test-atmos test-joystick test-printer valgrind static-analysis install uninstall help
 
 all: $(TARGET)
 
@@ -197,13 +198,19 @@ test-atmos: $(TEST_ATMOS_SRCS)
 	@$(CC) $(CFLAGS) $(TEST_ATMOS_SRCS) $(LDFLAGS) -o test_atmos
 	@./test_atmos
 
+TEST_PRINTER_SRCS = tests/unit/test_printer.c src/io/printer.c src/utils/logging.c
+
+test-printer: $(TEST_PRINTER_SRCS)
+	@$(CC) $(CFLAGS) $(TEST_PRINTER_SRCS) $(LDFLAGS) -o test_printer
+	@./test_printer
+
 TEST_JOYSTICK_SRCS = tests/unit/test_joystick.c src/io/joystick.c src/utils/logging.c
 
 test-joystick: $(TEST_JOYSTICK_SRCS)
 	@$(CC) $(CFLAGS) $(TEST_JOYSTICK_SRCS) $(LDFLAGS) -o test_joystick
 	@./test_joystick
 
-tests: test-cpu test-memory test-io test-storage test-system test-video test-audio test-debugger test-savestate test-atmos test-joystick
+tests: test-cpu test-memory test-io test-storage test-system test-video test-audio test-debugger test-savestate test-atmos test-joystick test-printer
 	@echo ""
 	@echo "═══════════════════════════════════════════════════════"
 	@echo "  All test suites completed!"
@@ -255,7 +262,7 @@ uninstall:
 
 clean:
 	rm -f $(OBJECTS) $(TARGET) $(TOOLS)
-	rm -f test_cpu test_memory test_io test_storage test_system test_rom test_video test_audio test_debugger test_cast test_savestate test_atmos test_joystick
+	rm -f test_cpu test_memory test_io test_storage test_system test_rom test_video test_audio test_debugger test_cast test_savestate test_atmos test_joystick test_printer
 	rm -f tools/*.o
 
 help:
@@ -277,6 +284,7 @@ help:
 	@echo "  test-savestate - Run save state tests"
 	@echo "  test-atmos   - Run Atmos support tests"
 	@echo "  test-joystick- Run joystick tests"
+	@echo "  test-printer - Run printer tests"
 	@echo "  test-cast    - Run cast server tests (requires CAST=1)"
 	@echo "  valgrind     - Run all tests under Valgrind"
 	@echo "  static-analysis - Run static analysis"

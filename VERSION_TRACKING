@@ -1,12 +1,19 @@
 VERSION_TRACKING - Phosphoric
 =====================================
 
-Current Version: 1.6.0-alpha
+Current Version: 1.7.0-alpha
 Release Date: 2026-03-02
-Status: Alpha (Joystick + Atmos + Save States + Full Type Safety + WAV Audio + CASTV2 + MJPEG Cast, 196 tests pass)
+Status: Alpha (Printer + Joystick + Atmos + Save States + Full Type Safety + WAV Audio + CASTV2 + MJPEG Cast, 206 tests pass)
 
 Version History:
 ----------------
+- 1.7.0-alpha (2026-03-02): Centronics Printer Emulation (Sprint 25)
+  * Centronics parallel printer interface (src/io/printer.c, include/io/printer.h)
+  * VIA Port A data capture with CA2 STROBE detection (PCR forced low→high)
+  * CLI: -p/--printer FILE (capture LPRINT/LLIST output)
+  * Automatic flush on newline for real-time output viewing
+  * 10 new printer unit tests (206 via make tests, 100% pass)
+
 - 1.6.0-alpha (2026-03-02): IJK Joystick Support (Sprint 24)
   * IJK joystick interface (src/io/joystick.c, include/io/joystick.h)
   * PSG Port A active low: bit 0=Left, 1=Right, 3=Down, 4=Up, 5=Fire
@@ -245,7 +252,7 @@ MAJOR.MINOR.PATCH-LABEL
 - PATCH: Bug fixes (backward compatible)
 - LABEL: alpha, beta, rc, stable
 
-Next Planned Version: 1.7.0
+Next Planned Version: 1.8.0
 Target Date: TBD
 Planned Features:
   - Telestrat support

@@ -2,8 +2,8 @@ CIRRUS_OS - Phosphoric Build & Development Status
 ======================================================
 
 Project: Phosphoric — ORIC-1/Atmos Cycle-Accurate Emulator
-Version: 1.6.0-alpha
-Build Status: ALPHA (Joystick + Atmos + Save States + Full Type Safety + WAV Audio + CASTV2 + MJPEG Cast)
+Version: 1.7.0-alpha
+Build Status: ALPHA (Printer + Joystick + Atmos + Save States + Full Type Safety + WAV Audio + CASTV2 + MJPEG Cast)
 Last Updated: 2026-03-02
 
 ================================================================
@@ -48,7 +48,8 @@ BUILD STATUS
 [V] Save States           - Complete (.ost format, CRC32, F2/F4 hotkeys, CLI options)
 [V] ORIC Atmos Support    - Complete (model enum, ROM auto-detect, patch tables, --model CLI)
 [V] IJK Joystick          - Complete (keyboard/gamepad modes, Port A blending, hot-plug)
-[V] Test Suite            - Complete (196 tests via make tests, 100% pass)
+[V] Printer Emulation     - Complete (Centronics parallel, LPRINT/LLIST capture)
+[V] Test Suite            - Complete (206 tests via make tests, 100% pass)
 [V] ROM Compatibility     - Validated (ORIC-1 BASIC 1.0 + Atmos BASIC 1.1 ROMs)
 [V] Performance           - Benchmarked (~90+ MHz, target met)
 [V] Static Analysis       - Run (no critical issues)
@@ -60,7 +61,7 @@ Legend: [V] Complete [*] In Progress [ ] Not Started [X] Failed
 
 TEST RESULTS
 ------------
-Unit Tests: 196/196 passed (100%)
+Unit Tests: 206/206 passed (100%)
 Integration Tests: 7/7 passed (100%)
 ROM Compatibility: 12/12 passed (100%)
 Video Export Tests: 11/11 passed (100%)
@@ -83,14 +84,15 @@ Debugger Tests:      8/8  passed
 Save State Tests:    8/8  passed
 Atmos Tests:        10/10 passed
 Joystick Tests:     10/10 passed
+Printer Tests:      10/10 passed
 Cast Tests:         24/24 passed
 
 ================================================================
 
 CODE METRICS
 ------------
-Total Source Files: 28 (.c) + 16 (.h)
-Total Test Files: 12
+Total Source Files: 29 (.c) + 17 (.h)
+Total Test Files: 13
 Lines of Code: ~4500+ (source) + ~2500 (tests)
 Build Warnings: 0 critical (informational conversion warnings with strict flags)
 Memory Leaks: 0 (Valgrind clean)
@@ -100,7 +102,7 @@ Performance: ~90+ MHz equivalent (target: 10x real-time met)
 
 QUALITY GATES
 -------------
-[V] All unit tests pass (196/196 via make tests)
+[V] All unit tests pass (206/206 via make tests)
 [V] No compiler errors
 [ ] Code coverage > 80% (measurement pending)
 [V] No critical warnings
@@ -114,8 +116,8 @@ QUALITY GATES
 
 SPRINT STATUS
 -------------
-Current Sprint: Sprint 24 completed
-Sprint Progress: 100% (IJK Joystick Support v1.6.0-alpha)
+Current Sprint: Sprint 25 completed
+Sprint Progress: 100% (Centronics Printer Emulation v1.7.0-alpha)
 
 Completed Sprints:
 - [V] Sprint 0: Infrastructure setup
@@ -145,10 +147,10 @@ Completed Sprints:
 - [V] Sprint 22: Save States (176 tests)
 - [V] Sprint 23: ORIC Atmos Support (186 tests)
 - [V] Sprint 24: IJK Joystick Support (196 tests)
+- [V] Sprint 25: Centronics Printer Emulation (206 tests)
 
 Remaining:
 - [ ] Telestrat support
-- [ ] Printer emulation
 
 ================================================================
 
@@ -180,6 +182,7 @@ src/network/cast_server.c - MJPEG HTTP server + mDNS Chromecast discovery
 src/network/castv2.c      - Native CASTV2 client (protobuf, TLS, DashCast)
 src/utils/config.c      - INI configuration parser
 src/utils/logging.c     - Logging system
+src/io/printer.c          - Centronics parallel printer (LPRINT/LLIST capture)
 src/main.c              - Emulation loop + CLI
 
 ================================================================
@@ -211,4 +214,4 @@ License: Not specified yet
 ================================================================
 
 End of CIRRUS_OS Status Report
-Generated: 2026-03-02 (Sprint 24)
+Generated: 2026-03-02 (Sprint 25)

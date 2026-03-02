@@ -2,7 +2,7 @@
 
 A cycle-accurate ORIC-1 / Atmos emulator written in C11.
 
-**Version: 1.6.0-alpha** | **196 tests, 100% pass** | **Zero memory leaks**
+**Version: 1.7.0-alpha** | **206 tests, 100% pass** | **Zero memory leaks**
 
 ```
  ____  _                      _                _
@@ -57,6 +57,11 @@ make SDL2=1
 - **Gamepad mode** — SDL2 game controller with D-pad, analog stick, A/B/X fire (`-j gamepad`)
 - **Hot-plug** — Game controllers detected automatically
 - **Blending** — Joystick and keyboard signals combined on Port A
+
+### Centronics Printer
+- **LPRINT/LLIST capture** — Printer output saved to text file (`-p output.txt`)
+- **Centronics protocol** — VIA Port A data + CA2 STROBE edge detection
+- **Real-time output** — Auto-flush on newline for live monitoring
 
 ### Save States
 - **`.ost` format** — Binary save state with CRC32 integrity check
@@ -136,6 +141,9 @@ Save States:
 Joystick:
   -j, --joystick MODE       Joystick mode: keys, gamepad
 
+Printer:
+  -p, --printer FILE        Capture printer output to FILE (LPRINT/LLIST)
+
 Debugger:
   -D, --debug               Start in debugger
   --break ADDR              Set initial breakpoint
@@ -170,7 +178,7 @@ Display & Export:
 ## Testing
 
 ```bash
-make tests               # All 196 tests (100% pass)
+make tests               # All 206 tests (100% pass)
 make test-cpu            # 74 CPU tests
 make test-memory         # 19 memory tests
 make test-io             # 29 VIA/I/O tests
@@ -182,6 +190,7 @@ make test-debugger       # 8 debugger tests
 make test-savestate      # 8 save state tests
 make test-atmos          # 10 Atmos support tests
 make test-joystick       # 10 joystick tests
+make test-printer        # 10 printer tests
 make valgrind            # Memory leak detection
 make static-analysis     # Compiler warnings analysis
 ```
@@ -230,7 +239,7 @@ src/
   debugger.c     Interactive REPL debugger
 
 include/         Public headers
-tests/unit/      12 test files, 196 tests
+tests/unit/      13 test files, 206 tests
 tools/           bas2tap, bin2tap, tap2sedoric
 examples/        Example BASIC programs (.bas + .tap)
 roms/            ROM files (not distributed)
@@ -282,4 +291,4 @@ This project is licensed under the [MIT License](LICENSE).
 
 ---
 
-Phosphoric v1.6.0-alpha | 196 tests | ORIC-1 + Atmos | IJK Joystick | 2026-03-02
+Phosphoric v1.7.0-alpha | 206 tests | ORIC-1 + Atmos | Printer + Joystick | 2026-03-02

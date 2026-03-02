@@ -28,6 +28,7 @@
 #include "io/microdisc.h"
 #include "audio/audio.h"
 #include "io/keyboard.h"
+#include "io/printer.h"
 #include "debugger.h"
 #include "savestate.h"
 #ifdef HAS_SDL2
@@ -126,6 +127,7 @@ static void print_usage(const char* program_name) {
     printf("  -m, --model MODEL          Machine model: oric1 or atmos (default: auto-detect)\n");
     printf("  -k, --keyboard LAYOUT      Keyboard layout: qwerty (default) or azerty\n");
     printf("  -j, --joystick MODE        Joystick: keys (arrow keys), gamepad (SDL2 controller)\n");
+    printf("  -p, --printer FILE         Capture printer output to FILE (LPRINT/LLIST)\n");
     printf("      --type-keys C:TEXT     Auto-type TEXT after C cycles (\\n=Return, \\pN=pause N sec)\n");
     printf("  -b, --breakpoint ADDR      Break when PC reaches address (hex, e.g. ED8A)\n");
     printf("  -D, --debug                Start in debugger mode (break at first instruction)\n");
@@ -271,6 +273,9 @@ static void io_write_callback(uint16_t address, uint8_t value, void* userdata) {
          * depends on BDIR/BC1 which are set via ORB. */
     }
 
+    /* Capture old PCR before VIA write (for printer strobe edge detection) */
+    uint8_t old_pcr = emu->via.pcr;
+
     via_write(&emu->via, reg, value);
 
     /* Decode PSG bus state ONLY when control lines change.
@@ -283,6 +288,8 @@ static void io_write_callback(uint16_t address, uint8_t value, void* userdata) {
      *   3. Write PCR to clear BDIR/BC1 */
     if (reg == VIA_PCR) {
         psg_decode(emu);
+        /* Check for Centronics printer STROBE (CA2 forced low → high) */
+        oric_printer_check_strobe(&emu->printer, old_pcr, value, emu->via.ora);
     }
 }
 
@@ -323,6 +330,9 @@ static bool emulator_init(emulator_t* emu) {
 
     /* Initialize joystick (disabled by default) */
     oric_joystick_init(&emu->joystick);
+
+    /* Initialize printer (disabled by default) */
+    oric_printer_init(&emu->printer);
 
     /* Initialize PSG (AY-3-8912) with keyboard input callback */
     ay_init(&emu->psg, ORIC_CLOCK_HZ);
@@ -397,6 +407,7 @@ static void emulator_cleanup(emulator_t* emu) {
     if (emu->has_cast_server) {
         cast_server_stop(&emu->cast_server);
     }
+    oric_printer_close(&emu->printer);
 #ifdef HAS_SDL2
     oric_joystick_close_sdl(&emu->joystick);
 #endif
@@ -752,9 +763,10 @@ int main(int argc, char* argv[]) {
     const char* load_state_file = NULL;
     const char* model_arg = NULL;
     const char* joystick_mode = NULL;
+    const char* printer_file = NULL;
 
     /* Long option codes for options without short equivalents */
-    enum { OPT_SCREENSHOT = 256, OPT_SCREENSHOT_AT, OPT_FRAME_DUMP, OPT_FRAME_DUMP_INTERVAL, OPT_TYPE_KEYS, OPT_DISK_ROM, OPT_DISK1, OPT_DISK2, OPT_DISK3, OPT_BREAKPOINT, OPT_DEBUG_BREAK, OPT_CAST_SERVER, OPT_CAST_DISCOVER, OPT_CAST_TO, OPT_SAVE_STATE, OPT_LOAD_STATE, OPT_MODEL, OPT_JOYSTICK };
+    enum { OPT_SCREENSHOT = 256, OPT_SCREENSHOT_AT, OPT_FRAME_DUMP, OPT_FRAME_DUMP_INTERVAL, OPT_TYPE_KEYS, OPT_DISK_ROM, OPT_DISK1, OPT_DISK2, OPT_DISK3, OPT_BREAKPOINT, OPT_DEBUG_BREAK, OPT_CAST_SERVER, OPT_CAST_DISCOVER, OPT_CAST_TO, OPT_SAVE_STATE, OPT_LOAD_STATE, OPT_MODEL, OPT_JOYSTICK, OPT_PRINTER };
 
     static struct option long_options[] = {
         {"tape",                required_argument, 0, 't'},
@@ -785,6 +797,7 @@ int main(int argc, char* argv[]) {
         {"load-state",          required_argument, 0, OPT_LOAD_STATE},
         {"model",               required_argument, 0, 'm'},
         {"joystick",            required_argument, 0, 'j'},
+        {"printer",             required_argument, 0, 'p'},
         {"help",                no_argument,       0, '?'},
         {0, 0, 0, 0}
     };
@@ -792,7 +805,7 @@ int main(int argc, char* argv[]) {
     int opt;
     int option_index = 0;
 
-    while ((opt = getopt_long(argc, argv, "t:d:r:h:fnc:vm:k:j:b:D?", long_options, &option_index)) != -1) {
+    while ((opt = getopt_long(argc, argv, "t:d:r:h:fnc:vm:k:j:p:b:D?", long_options, &option_index)) != -1) {
         switch (opt) {
             case 't': tape_file = optarg; break;
             case 'd': disk_files[0] = optarg; break;
@@ -828,6 +841,7 @@ int main(int argc, char* argv[]) {
             case OPT_LOAD_STATE: load_state_file = optarg; break;
             case 'm': model_arg = optarg; break;
             case 'j': joystick_mode = optarg; break;
+            case 'p': printer_file = optarg; break;
             case '?':
             default:
                 print_usage(argv[0]);
@@ -884,6 +898,13 @@ int main(int argc, char* argv[]) {
 #endif
         } else {
             log_error("Unknown joystick mode '%s'. Use: keys, gamepad", joystick_mode);
+        }
+    }
+
+    /* Open printer output file if requested */
+    if (printer_file) {
+        if (!oric_printer_open(&emu.printer, printer_file)) {
+            log_error("Failed to open printer output: %s", printer_file);
         }
     }
 

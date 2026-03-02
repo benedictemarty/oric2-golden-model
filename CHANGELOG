@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.0-alpha] - 2026-03-02
+
+### Centronics Printer Emulation (Sprint 25)
+
+#### Added
+- **Centronics printer interface** (`src/io/printer.c`, `include/io/printer.h`):
+  captures LPRINT/LLIST output to a text file via VIA Port A data + CA2 STROBE
+- **STROBE detection**: monitors VIA PCR CA2 mode transitions (forced low → forced
+  high) to detect Centronics handshake, matching real hardware protocol
+- **CLI `-p` / `--printer FILE`**: capture all printer output to the specified file
+- **Automatic flush**: output flushed on newline/carriage return for real-time viewing
+- **10 new printer unit tests**: init state, open/close, single byte, string output,
+  disabled mode, strobe sequence validation, CA2 bit extraction, flush, reopen, LPRINT
+  simulation
+- **`make test-printer`** target in Makefile
+
+#### Changed
+- **Version**: 1.6.0-alpha → 1.7.0-alpha
+- **Test count**: 196 → 206 (10 new printer tests)
+
 ## [1.6.0-alpha] - 2026-03-02
 
 ### IJK Joystick Support (Sprint 24)
