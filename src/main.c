@@ -361,7 +361,7 @@ static bool emulator_init(emulator_t* emu) {
 
     /* Initialize renderer if not headless */
     if (!emu->headless) {
-        renderer_init(scale_factor);
+        renderer_init(emu->scale_factor > 0 ? emu->scale_factor : 3);
 #ifdef HAS_SDL2
         SDL_StartTextInput();  /* Enable TEXTINPUT events for symbolic keyboard */
 #endif
@@ -886,8 +886,9 @@ int main(int argc, char* argv[]) {
         return 0;
     }
 
-    /* Set headless before init so renderer is not started */
+    /* Set headless and scale before init so renderer is configured correctly */
     emu.headless = headless;
+    emu.scale_factor = scale_factor;
 
     if (!emulator_init(&emu)) {
         log_error("Failed to initialize emulator");

@@ -122,6 +122,9 @@ typedef struct emulator_s {
     /* Breakpoint (legacy single breakpoint, -1 = none) */
     int32_t breakpoint;
 
+    /* Display scaling (1-4, default 3) */
+    int scale_factor;
+
     /* Interactive debugger */
     debugger_t debugger;
 
