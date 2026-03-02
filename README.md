@@ -301,13 +301,48 @@ docs/            User guide, compatibility list, agile plan
 
 Utilisation à vos propres risques. Les contributions et revues de code sont bienvenues.
 
-## Credits
+## Crédits et sources
 
+### Auteurs
 - **Claude Opus 4.6 (Anthropic)** — Génération IA du code (architecture, implémentation, tests, documentation)
 - **bmarty** — Direction du projet, supervision, tests sur matériel réel
-- **Oricutron** — Reference implementation for PSG, keyboard, ULA timing
-- **Defence Force** — ORIC technical documentation
-- **Fabrice Frances** — EUPHORIC emulator (pioneering work)
+
+### Émulateurs de référence
+
+Le comportement de Phosphoric s'appuie largement sur l'étude de ces émulateurs :
+
+- **[Oricutron](https://github.com/pete-gordon/oricutron)** (Pete Gordon) — Émulateur ORIC de référence, source principale d'inspiration pour :
+  - Table de volume logarithmique du PSG AY-3-8910 (courbe DAC réelle)
+  - Diviseurs d'horloge du PSG (TONETIME=8, ENVTIME=16)
+  - Décodage du bus PSG via BDIR/BC1 sur PCR
+  - Mapping clavier SDL2 (64 touches, matrice QWERTY)
+  - Feedback PB3 du scan clavier VIA
+  - Pattern d'initialisation RAM (128x 0x00 + 128x 0xFF par page de 256 octets)
+  - Détection des attributs série HIRES (masque `(byte & 0x60) == 0`)
+  - Timing ULA et rendu vidéo texte/HIRES
+- **[EUPHORIC](http://music.riskweb.fr/Fabrice.Frances/Euphoric/english.html)** (Fabrice Frances) — Émulateur ORIC pionnier, travail fondateur sur l'émulation ORIC-1/Atmos
+
+### Documentation technique
+
+- **[MOS 6502 Programming Manual](http://archive.6502.org/datasheets/mos_6502_mpu.pdf)** — Jeu d'instructions, modes d'adressage, timing cycles, mode BCD, bug JMP indirect page boundary
+- **[MOS 6522 VIA Datasheet](http://archive.6502.org/datasheets/mos_6522_via.pdf)** — 16 registres, Timer 1/2, IFR/IER, Shift Register, contrôle CA1/CA2/CB1/CB2, protocole handshake Centronics
+- **[AY-3-8910 Datasheet](https://f.rdw.se/AY-3-8910-datasheet.pdf)** — PSG : 3 canaux tonaux, générateur de bruit (LFSR 17 bits), 16 formes d'enveloppe, registres I/O
+- **[WD1793 FDC Datasheet](https://www.datasheetarchive.com/WD1793-datasheet.html)** — Contrôleur disquette : commandes Type I-IV, registres status/track/sector/data, DRQ/INTRQ
+- **[Defence Force / oric.org](https://www.defence-force.org/)** — Documentation technique ORIC (mémoire, ULA, I/O, Microdisc, Sedoric)
+- **[ORIC Technical Manual](https://library.defence-force.org/books/)** — Schémas matériels, carte mémoire, interface clavier 8x8
+- **[Sedoric documentation](http://music.riskweb.fr/Fabrice.Frances/Sedoric/english.html)** — Système de fichiers disque : 42 pistes x 17 secteurs x 256 octets, structure SED
+- **[MCP-40 / CGP-115 Manual](https://www.manualslib.com/manual/1070534/Sharp-Ce-150.html)** — Table traçante 4 couleurs : protocole commandes (H, D, M, J, P, I, L, Q), résolution, interface Centronics
+- **[Google Cast V2 Protocol](https://github.com/niccoloterreri/chromecast-protocol)** — Protocole CASTV2 : framing protobuf, TLS, namespaces, CONNECT/LAUNCH/LOAD, heartbeat PING/PONG
+
+### Bibliothèques tierces
+
+- **[stb_image_write.h](https://github.com/nothings/stb)** (Sean Barrett) — Encodeur JPEG header-only, domaine public (v1.16). Utilisé pour le streaming MJPEG du serveur cast.
+
+### Communauté ORIC
+
+- **[Forum Defence Force](https://forum.defence-force.org/)** — Discussions techniques sur le matériel ORIC
+- **[CEO (Club Europe ORIC)](http://music.riskweb.fr/)** — Archives de programmes et documentation
+- **[ORIC International](https://www.oric.org/)** — Préservation du patrimoine ORIC
 
 ## Repository
 
