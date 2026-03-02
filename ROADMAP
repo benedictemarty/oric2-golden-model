@@ -319,6 +319,27 @@ including host filesystem sharing and conversion tools for legacy BASIC/machine 
 - [x] Integration: io_write_callback intercepts PCR writes for strobe detection
 - [x] 10 new printer unit tests (206 total, 100% pass)
 
+### Sprint 26: MCP-40 Plotter Emulation (v1.8.0-alpha) - DONE
+- [x] MCP-40 4-color pen plotter module (src/io/mcp40.c, include/io/mcp40.h)
+- [x] Command parser: H (Home), D (Draw), M (Move), J (Color), P (Print), I (Init), L (LineType), Q (CharSize)
+- [x] 480x400 RGB framebuffer with Bresenham line drawing
+- [x] 4 pen colors: black (0), blue (1), green (2), red (3)
+- [x] Built-in 5x7 bitmap font (95 ASCII glyphs) with scalable char size
+- [x] 5 line types: solid + 4 dashed patterns
+- [x] BMP export (24-bit uncompressed, bottom-up BGR)
+- [x] Command chaining (multiple commands per line) and multi-coordinate polylines
+- [x] Printer type routing: PRINTER_NONE/PRINTER_TEXT/PRINTER_MCP40
+- [x] CLI: --printer-type (text, mcp40) to select printer mode
+- [x] Integration with Centronics STROBE capture (Sprint 25)
+- [x] 10 new MCP-40 unit tests (216 total, 100% pass)
+
+### Sprint 27: Display Scaling (v1.9.0-alpha) - PLANNED
+- [ ] Window scaling x2 (480x448) and x4 (960x896)
+- [ ] Nearest-neighbor upscale (pixel-perfect retro look)
+- [ ] CLI: --scale N (1, 2, 4) or --scale auto
+- [ ] SDL2 renderer scaling via SDL_RenderSetLogicalSize or manual blit
+- [ ] Fullscreen retains integer scaling (no stretching)
+
 ## Future Enhancements
 
 ### Advanced Features
@@ -326,7 +347,8 @@ including host filesystem sharing and conversion tools for legacy BASIC/machine 
 - [ ] Telestrat support
 - [x] Save states
 - [x] Joystick support
-- [x] Printer emulation
+- [x] Printer emulation (text + MCP-40 plotter)
+- [ ] Display scaling (x2, x4)
 - [ ] Trace logging
 
 ### Developer Tools
@@ -346,7 +368,7 @@ including host filesystem sharing and conversion tools for legacy BASIC/machine 
 - [ ] <5% CPU overhead on modern hardware
 
 ### Quality
-- [x] 206 tests passing (make tests)
+- [x] 216 tests passing (make tests)
 - [x] Zero critical bugs in test suite
 - [x] API documentation complete
 - [ ] Comprehensive user guide
@@ -354,5 +376,5 @@ including host filesystem sharing and conversion tools for legacy BASIC/machine 
 ---
 
 **Last Updated**: 2026-03-02
-**Current Version**: 1.7.0-alpha
-**Next Milestone**: 1.8.0 (Advanced features)
+**Current Version**: 1.8.0-alpha
+**Next Milestone**: 1.9.0 (Display scaling)

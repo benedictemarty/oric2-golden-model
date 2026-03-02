@@ -128,6 +128,7 @@ static void print_usage(const char* program_name) {
     printf("  -k, --keyboard LAYOUT      Keyboard layout: qwerty (default) or azerty\n");
     printf("  -j, --joystick MODE        Joystick: keys (arrow keys), gamepad (SDL2 controller)\n");
     printf("  -p, --printer FILE         Capture printer output to FILE (LPRINT/LLIST)\n");
+    printf("      --printer-type TYPE    Printer type: text (default) or mcp40 (4-color plotter)\n");
     printf("      --type-keys C:TEXT     Auto-type TEXT after C cycles (\\n=Return, \\pN=pause N sec)\n");
     printf("  -b, --breakpoint ADDR      Break when PC reaches address (hex, e.g. ED8A)\n");
     printf("  -D, --debug                Start in debugger mode (break at first instruction)\n");
@@ -764,9 +765,10 @@ int main(int argc, char* argv[]) {
     const char* model_arg = NULL;
     const char* joystick_mode = NULL;
     const char* printer_file = NULL;
+    const char* printer_type_arg = NULL;
 
     /* Long option codes for options without short equivalents */
-    enum { OPT_SCREENSHOT = 256, OPT_SCREENSHOT_AT, OPT_FRAME_DUMP, OPT_FRAME_DUMP_INTERVAL, OPT_TYPE_KEYS, OPT_DISK_ROM, OPT_DISK1, OPT_DISK2, OPT_DISK3, OPT_BREAKPOINT, OPT_DEBUG_BREAK, OPT_CAST_SERVER, OPT_CAST_DISCOVER, OPT_CAST_TO, OPT_SAVE_STATE, OPT_LOAD_STATE, OPT_MODEL, OPT_JOYSTICK, OPT_PRINTER };
+    enum { OPT_SCREENSHOT = 256, OPT_SCREENSHOT_AT, OPT_FRAME_DUMP, OPT_FRAME_DUMP_INTERVAL, OPT_TYPE_KEYS, OPT_DISK_ROM, OPT_DISK1, OPT_DISK2, OPT_DISK3, OPT_BREAKPOINT, OPT_DEBUG_BREAK, OPT_CAST_SERVER, OPT_CAST_DISCOVER, OPT_CAST_TO, OPT_SAVE_STATE, OPT_LOAD_STATE, OPT_MODEL, OPT_JOYSTICK, OPT_PRINTER, OPT_PRINTER_TYPE };
 
     static struct option long_options[] = {
         {"tape",                required_argument, 0, 't'},
@@ -798,6 +800,7 @@ int main(int argc, char* argv[]) {
         {"model",               required_argument, 0, 'm'},
         {"joystick",            required_argument, 0, 'j'},
         {"printer",             required_argument, 0, 'p'},
+        {"printer-type",        required_argument, 0, OPT_PRINTER_TYPE},
         {"help",                no_argument,       0, '?'},
         {0, 0, 0, 0}
     };
@@ -842,6 +845,7 @@ int main(int argc, char* argv[]) {
             case 'm': model_arg = optarg; break;
             case 'j': joystick_mode = optarg; break;
             case 'p': printer_file = optarg; break;
+            case OPT_PRINTER_TYPE: printer_type_arg = optarg; break;
             case '?':
             default:
                 print_usage(argv[0]);
@@ -901,8 +905,15 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    /* Open printer output file if requested */
+    /* Set printer type and open output */
     if (printer_file) {
+        if (printer_type_arg && strcasecmp(printer_type_arg, "mcp40") == 0) {
+            emu.printer.type = PRINTER_MCP40;
+            log_info("Printer type: MCP-40 plotter");
+        } else {
+            emu.printer.type = PRINTER_TEXT;
+            log_info("Printer type: text");
+        }
         if (!oric_printer_open(&emu.printer, printer_file)) {
             log_error("Failed to open printer output: %s", printer_file);
         }

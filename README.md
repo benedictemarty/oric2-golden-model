@@ -2,7 +2,7 @@
 
 A cycle-accurate ORIC-1 / Atmos emulator written in C11.
 
-**Version: 1.7.0-alpha** | **206 tests, 100% pass** | **Zero memory leaks**
+**Version: 1.8.0-alpha** | **216 tests, 100% pass** | **Zero memory leaks**
 
 ```
  ____  _                      _                _
@@ -58,10 +58,12 @@ make SDL2=1
 - **Hot-plug** — Game controllers detected automatically
 - **Blending** — Joystick and keyboard signals combined on Port A
 
-### Centronics Printer
+### Centronics Printer & MCP-40 Plotter
 - **LPRINT/LLIST capture** — Printer output saved to text file (`-p output.txt`)
+- **MCP-40 plotter** — 4-color pen plotter emulation (`--printer-type mcp40`)
+- **Plotter commands** — H (Home), D (Draw), M (Move), J (Color), P (Print), L (LineType)
+- **480x400 framebuffer** — Bresenham line drawing, 5x7 font, BMP export
 - **Centronics protocol** — VIA Port A data + CA2 STROBE edge detection
-- **Real-time output** — Auto-flush on newline for live monitoring
 
 ### Save States
 - **`.ost` format** — Binary save state with CRC32 integrity check
@@ -143,6 +145,7 @@ Joystick:
 
 Printer:
   -p, --printer FILE        Capture printer output to FILE (LPRINT/LLIST)
+  --printer-type TYPE       Printer type: text (default), mcp40
 
 Debugger:
   -D, --debug               Start in debugger
@@ -178,7 +181,7 @@ Display & Export:
 ## Testing
 
 ```bash
-make tests               # All 206 tests (100% pass)
+make tests               # All 216 tests (100% pass)
 make test-cpu            # 74 CPU tests
 make test-memory         # 19 memory tests
 make test-io             # 29 VIA/I/O tests
@@ -191,6 +194,7 @@ make test-savestate      # 8 save state tests
 make test-atmos          # 10 Atmos support tests
 make test-joystick       # 10 joystick tests
 make test-printer        # 10 printer tests
+make test-mcp40          # 10 MCP-40 plotter tests
 make valgrind            # Memory leak detection
 make static-analysis     # Compiler warnings analysis
 ```
@@ -239,7 +243,7 @@ src/
   debugger.c     Interactive REPL debugger
 
 include/         Public headers
-tests/unit/      13 test files, 206 tests
+tests/unit/      14 test files, 216 tests
 tools/           bas2tap, bin2tap, tap2sedoric
 examples/        Example BASIC programs (.bas + .tap)
 roms/            ROM files (not distributed)
@@ -291,4 +295,4 @@ This project is licensed under the [MIT License](LICENSE).
 
 ---
 
-Phosphoric v1.7.0-alpha | 206 tests | ORIC-1 + Atmos | Printer + Joystick | 2026-03-02
+Phosphoric v1.8.0-alpha | 216 tests | ORIC-1 + Atmos | MCP-40 Plotter + Printer + Joystick | 2026-03-02
