@@ -1,12 +1,22 @@
 VERSION_TRACKING - Phosphoric
 =====================================
 
-Current Version: 1.5.0-alpha
+Current Version: 1.6.0-alpha
 Release Date: 2026-03-02
-Status: Alpha (Atmos Support + Save States + Full Type Safety + WAV Audio + CASTV2 + MJPEG Cast, 186 tests pass)
+Status: Alpha (Joystick + Atmos + Save States + Full Type Safety + WAV Audio + CASTV2 + MJPEG Cast, 196 tests pass)
 
 Version History:
 ----------------
+- 1.6.0-alpha (2026-03-02): IJK Joystick Support (Sprint 24)
+  * IJK joystick interface (src/io/joystick.c, include/io/joystick.h)
+  * PSG Port A active low: bit 0=Left, 1=Right, 3=Down, 4=Up, 5=Fire
+  * Keyboard-as-joystick mode: arrow keys + RCtrl/RAlt = fire
+  * SDL2 game controller mode: D-pad, left stick, A/B/X buttons
+  * Joystick/keyboard blending via AND on Port A read
+  * CLI: -j/--joystick (keys, gamepad)
+  * SDL_INIT_GAMECONTROLLER + hot-plug detection
+  * 10 new joystick unit tests (196 via make tests, 100% pass)
+
 - 1.5.0-alpha (2026-03-02): ORIC Atmos Support (Sprint 23)
   * oric_model_t enum (ORIC_MODEL_ORIC1, ORIC_MODEL_ATMOS)
   * ROM auto-detection: JMP target at offset 0 ($EA59=1.0, $ECCC=1.1)
@@ -235,9 +245,9 @@ MAJOR.MINOR.PATCH-LABEL
 - PATCH: Bug fixes (backward compatible)
 - LABEL: alpha, beta, rc, stable
 
-Next Planned Version: 1.6.0
+Next Planned Version: 1.7.0
 Target Date: TBD
 Planned Features:
   - Telestrat support
-  - Joystick support
+  - Printer emulation
   - Additional game compatibility testing

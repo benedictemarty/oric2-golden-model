@@ -5,6 +5,43 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.0-alpha] - 2026-03-02
+
+### IJK Joystick Support (Sprint 24)
+
+#### Added
+- **IJK joystick interface** (`src/io/joystick.c`, `include/io/joystick.h`):
+  emulates the most common ORIC joystick adapter, read via PSG Port A
+  (register 14), active low. Bit layout: 0=Left, 1=Right, 3=Down, 4=Up, 5=Fire
+- **Keyboard-as-joystick mode** (`--joystick keys`): arrow keys + Right Ctrl/Alt
+  as fire button. Joystick events consume keyboard events to avoid conflicts
+- **SDL2 game controller mode** (`--joystick gamepad`): full SDL2 game controller
+  support with D-pad, left stick (8000 dead zone), and A/B/X buttons as fire.
+  Supports hot-plug detection
+- **Joystick/keyboard blending**: PSG Port A callback returns keyboard AND
+  joystick state (both active low), allowing simultaneous use
+- **SDL_INIT_GAMECONTROLLER**: renderer init now includes game controller
+  subsystem for joystick support
+- **CLI `-j` / `--joystick MODE`**: `keys` for keyboard-as-joystick, `gamepad`
+  for SDL2 controller
+- **10 new joystick unit tests**: init state, disabled mode, press/release
+  directions, fire button, simultaneous presses, release all, IJK bit layout,
+  mode switching, all four directions, reset
+- **`make test-joystick`** target in Makefile
+
+#### Changed
+- `emulator_t`: added `oric_joystick_t joystick` field
+- `keyboard_matrix_read()`: blends keyboard AND joystick via `oric_joystick_read()`
+- SDL2 event loop: dispatches controller/joystick events, keyboard-as-joystick
+  consumes arrow keys before keyboard handler
+- `renderer_init()`: SDL_Init now includes `SDL_INIT_GAMECONTROLLER`
+- Version updated from 1.5.0-alpha to 1.6.0-alpha
+
+#### Tests
+- 196 tests via `make tests` (186 existing + 10 new), 100% pass rate
+
+---
+
 ## [1.5.0-alpha] - 2026-03-02
 
 ### ORIC Atmos Support (Sprint 23)

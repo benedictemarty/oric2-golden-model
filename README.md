@@ -2,7 +2,7 @@
 
 A cycle-accurate ORIC-1 / Atmos emulator written in C11.
 
-**Version: 1.5.0-alpha** | **186 tests, 100% pass** | **Zero memory leaks**
+**Version: 1.6.0-alpha** | **196 tests, 100% pass** | **Zero memory leaks**
 
 ```
  ____  _                      _                _
@@ -50,6 +50,13 @@ make SDL2=1
 - **ROM auto-detection** — Detects BASIC 1.0 (ORIC-1) or 1.1 (Atmos) from ROM header
 - **`--model` CLI flag** — Force model selection (`oric1`, `atmos`, `1.0`, `1.1`)
 - **ROM-specific tape patching** — Correct patch addresses for both ROM versions
+
+### IJK Joystick
+- **IJK interface** — Most common ORIC joystick adapter (active low on PSG Port A)
+- **Keyboard mode** — Arrow keys + RCtrl/RAlt as fire (`-j keys`)
+- **Gamepad mode** — SDL2 game controller with D-pad, analog stick, A/B/X fire (`-j gamepad`)
+- **Hot-plug** — Game controllers detected automatically
+- **Blending** — Joystick and keyboard signals combined on Port A
 
 ### Save States
 - **`.ost` format** — Binary save state with CRC32 integrity check
@@ -126,6 +133,9 @@ Save States:
   --save-state FILE         Save state on exit
   --load-state FILE         Load state at startup
 
+Joystick:
+  -j, --joystick MODE       Joystick mode: keys, gamepad
+
 Debugger:
   -D, --debug               Start in debugger
   --break ADDR              Set initial breakpoint
@@ -160,7 +170,7 @@ Display & Export:
 ## Testing
 
 ```bash
-make tests               # All 186 tests (100% pass)
+make tests               # All 196 tests (100% pass)
 make test-cpu            # 74 CPU tests
 make test-memory         # 19 memory tests
 make test-io             # 29 VIA/I/O tests
@@ -171,6 +181,7 @@ make test-audio          # 8 PSG audio tests
 make test-debugger       # 8 debugger tests
 make test-savestate      # 8 save state tests
 make test-atmos          # 10 Atmos support tests
+make test-joystick       # 10 joystick tests
 make valgrind            # Memory leak detection
 make static-analysis     # Compiler warnings analysis
 ```
@@ -219,7 +230,7 @@ src/
   debugger.c     Interactive REPL debugger
 
 include/         Public headers
-tests/unit/      11 test files, 186 tests
+tests/unit/      12 test files, 196 tests
 tools/           bas2tap, bin2tap, tap2sedoric
 examples/        Example BASIC programs (.bas + .tap)
 roms/            ROM files (not distributed)
@@ -262,7 +273,7 @@ make SDL2=1
 
 ## License
 
-To be determined.
+This project is licensed under the [MIT License](LICENSE).
 
 ## Contact
 
@@ -271,4 +282,4 @@ To be determined.
 
 ---
 
-Phosphoric v1.5.0-alpha | 186 tests | ORIC-1 + Atmos | 2026-03-02
+Phosphoric v1.6.0-alpha | 196 tests | ORIC-1 + Atmos | IJK Joystick | 2026-03-02

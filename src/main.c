@@ -125,6 +125,7 @@ static void print_usage(const char* program_name) {
     printf("      --frame-dump-interval N  Dump every Nth frame (default: 50)\n");
     printf("  -m, --model MODEL          Machine model: oric1 or atmos (default: auto-detect)\n");
     printf("  -k, --keyboard LAYOUT      Keyboard layout: qwerty (default) or azerty\n");
+    printf("  -j, --joystick MODE        Joystick: keys (arrow keys), gamepad (SDL2 controller)\n");
     printf("      --type-keys C:TEXT     Auto-type TEXT after C cycles (\\n=Return, \\pN=pause N sec)\n");
     printf("  -b, --breakpoint ADDR      Break when PC reaches address (hex, e.g. ED8A)\n");
     printf("  -D, --debug                Start in debugger mode (break at first instruction)\n");
@@ -210,7 +211,10 @@ static void psg_decode(emulator_t* emu) {
 static uint8_t keyboard_matrix_read(void* userdata) {
     emulator_t* emu = (emulator_t*)userdata;
     uint8_t col = emu->via.orb & 0x07;
-    return emu->keyboard.matrix[col];
+    uint8_t kbd = emu->keyboard.matrix[col];
+    /* Blend joystick IJK state with keyboard (both active low → AND) */
+    uint8_t joy = oric_joystick_read(&emu->joystick);
+    return kbd & joy;
 }
 
 /**
@@ -317,6 +321,9 @@ static bool emulator_init(emulator_t* emu) {
     /* Initialize keyboard */
     oric_keyboard_init(&emu->keyboard);
 
+    /* Initialize joystick (disabled by default) */
+    oric_joystick_init(&emu->joystick);
+
     /* Initialize PSG (AY-3-8912) with keyboard input callback */
     ay_init(&emu->psg, ORIC_CLOCK_HZ);
     emu->psg.porta_input = keyboard_matrix_read;
@@ -390,6 +397,9 @@ static void emulator_cleanup(emulator_t* emu) {
     if (emu->has_cast_server) {
         cast_server_stop(&emu->cast_server);
     }
+#ifdef HAS_SDL2
+    oric_joystick_close_sdl(&emu->joystick);
+#endif
     if (emu->has_microdisc) {
         microdisc_cleanup(&emu->microdisc);
     }
@@ -627,15 +637,35 @@ static void emulator_run(emulator_t* emu) {
                     default:
                         break;
                     }
-                    /* Fall through to keyboard handler */
-                    oric_keyboard_handle_sdl_event(&emu->keyboard, &event);
+                    /* Fall through to keyboard/joystick handler */
+                    if (!oric_joystick_handle_sdl_event(&emu->joystick, &event)) {
+                        oric_keyboard_handle_sdl_event(&emu->keyboard, &event);
+                    }
                     break;
                 case SDL_KEYUP:
-                    oric_keyboard_handle_sdl_event(&emu->keyboard, &event);
+                    if (!oric_joystick_handle_sdl_event(&emu->joystick, &event)) {
+                        oric_keyboard_handle_sdl_event(&emu->keyboard, &event);
+                    }
                     break;
                 case SDL_TEXTINPUT:
                     /* Symbolic mode: character -> ORIC key mapping */
                     oric_keyboard_handle_sdl_event(&emu->keyboard, &event);
+                    break;
+                /* SDL game controller / joystick events */
+                case SDL_CONTROLLERBUTTONDOWN:
+                case SDL_CONTROLLERBUTTONUP:
+                case SDL_CONTROLLERAXISMOTION:
+                case SDL_JOYHATMOTION:
+                case SDL_JOYBUTTONDOWN:
+                case SDL_JOYBUTTONUP:
+                    oric_joystick_handle_sdl_event(&emu->joystick, &event);
+                    break;
+                case SDL_CONTROLLERDEVICEADDED:
+                    if (emu->joystick.mode == ORIC_JOY_SDL_GAMEPAD &&
+                        emu->joystick.controller == NULL &&
+                        emu->joystick.joystick == NULL) {
+                        oric_joystick_open_sdl(&emu->joystick, event.cdevice.which);
+                    }
                     break;
                 default:
                     break;
@@ -721,9 +751,10 @@ int main(int argc, char* argv[]) {
     const char* save_state_file = NULL;
     const char* load_state_file = NULL;
     const char* model_arg = NULL;
+    const char* joystick_mode = NULL;
 
     /* Long option codes for options without short equivalents */
-    enum { OPT_SCREENSHOT = 256, OPT_SCREENSHOT_AT, OPT_FRAME_DUMP, OPT_FRAME_DUMP_INTERVAL, OPT_TYPE_KEYS, OPT_DISK_ROM, OPT_DISK1, OPT_DISK2, OPT_DISK3, OPT_BREAKPOINT, OPT_DEBUG_BREAK, OPT_CAST_SERVER, OPT_CAST_DISCOVER, OPT_CAST_TO, OPT_SAVE_STATE, OPT_LOAD_STATE, OPT_MODEL };
+    enum { OPT_SCREENSHOT = 256, OPT_SCREENSHOT_AT, OPT_FRAME_DUMP, OPT_FRAME_DUMP_INTERVAL, OPT_TYPE_KEYS, OPT_DISK_ROM, OPT_DISK1, OPT_DISK2, OPT_DISK3, OPT_BREAKPOINT, OPT_DEBUG_BREAK, OPT_CAST_SERVER, OPT_CAST_DISCOVER, OPT_CAST_TO, OPT_SAVE_STATE, OPT_LOAD_STATE, OPT_MODEL, OPT_JOYSTICK };
 
     static struct option long_options[] = {
         {"tape",                required_argument, 0, 't'},
@@ -753,6 +784,7 @@ int main(int argc, char* argv[]) {
         {"save-state",          required_argument, 0, OPT_SAVE_STATE},
         {"load-state",          required_argument, 0, OPT_LOAD_STATE},
         {"model",               required_argument, 0, 'm'},
+        {"joystick",            required_argument, 0, 'j'},
         {"help",                no_argument,       0, '?'},
         {0, 0, 0, 0}
     };
@@ -760,7 +792,7 @@ int main(int argc, char* argv[]) {
     int opt;
     int option_index = 0;
 
-    while ((opt = getopt_long(argc, argv, "t:d:r:h:fnc:vm:k:b:D?", long_options, &option_index)) != -1) {
+    while ((opt = getopt_long(argc, argv, "t:d:r:h:fnc:vm:k:j:b:D?", long_options, &option_index)) != -1) {
         switch (opt) {
             case 't': tape_file = optarg; break;
             case 'd': disk_files[0] = optarg; break;
@@ -795,6 +827,7 @@ int main(int argc, char* argv[]) {
             case OPT_SAVE_STATE: save_state_file = optarg; break;
             case OPT_LOAD_STATE: load_state_file = optarg; break;
             case 'm': model_arg = optarg; break;
+            case 'j': joystick_mode = optarg; break;
             case '?':
             default:
                 print_usage(argv[0]);
@@ -836,6 +869,24 @@ int main(int argc, char* argv[]) {
     } else {
         log_info("Keyboard layout: QWERTY");
     }
+    /* Set joystick mode */
+    if (joystick_mode) {
+        if (strcasecmp(joystick_mode, "keys") == 0 || strcasecmp(joystick_mode, "keyboard") == 0) {
+            oric_joystick_set_mode(&emu.joystick, ORIC_JOY_KEYBOARD);
+        } else if (strcasecmp(joystick_mode, "gamepad") == 0 || strcasecmp(joystick_mode, "sdl") == 0) {
+            oric_joystick_set_mode(&emu.joystick, ORIC_JOY_SDL_GAMEPAD);
+#ifdef HAS_SDL2
+            if (SDL_NumJoysticks() > 0) {
+                oric_joystick_open_sdl(&emu.joystick, 0);
+            } else {
+                log_info("Joystick: no SDL game controller found, waiting for hot-plug");
+            }
+#endif
+        } else {
+            log_error("Unknown joystick mode '%s'. Use: keys, gamepad", joystick_mode);
+        }
+    }
+
     emu.frame_dump_dir = frame_dump_dir;
     emu.frame_dump_interval = (frame_dump_interval > 0) ? frame_dump_interval : 50;
 

@@ -17,7 +17,7 @@ static SDL_Texture* texture;
 static bool fullscreen;
 
 bool renderer_init(int scale) {
-    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) < 0) return false;
+    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMECONTROLLER) < 0) return false;
     window = SDL_CreateWindow("Phosphoric",
         SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
         ORIC_SCREEN_W * scale, ORIC_SCREEN_H * scale,

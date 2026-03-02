@@ -299,13 +299,23 @@ including host filesystem sharing and conversion tools for legacy BASIC/machine 
 - [x] emulator_t: model field, rom_patches pointer
 - [x] 10 new Atmos unit tests (186 total, 100% pass)
 
+### Sprint 24: IJK Joystick Support (v1.6.0-alpha) - DONE
+- [x] IJK joystick interface (src/io/joystick.c, include/io/joystick.h)
+- [x] PSG Port A active low bit layout: 0=Left, 1=Right, 3=Down, 4=Up, 5=Fire
+- [x] Keyboard-as-joystick mode (--joystick keys): arrow keys + RCtrl/RAlt
+- [x] SDL2 game controller mode (--joystick gamepad): D-pad, left stick, A/B/X
+- [x] Joystick/keyboard blending (AND on PSG Port A read)
+- [x] SDL_INIT_GAMECONTROLLER + hot-plug device detection
+- [x] CLI: -j/--joystick (keys, gamepad)
+- [x] 10 new joystick unit tests (196 total, 100% pass)
+
 ## Future Enhancements
 
 ### Advanced Features
 - [x] ORIC Atmos support
 - [ ] Telestrat support
 - [x] Save states
-- [ ] Joystick support
+- [x] Joystick support
 - [ ] Printer emulation
 - [ ] Trace logging
 
@@ -326,7 +336,7 @@ including host filesystem sharing and conversion tools for legacy BASIC/machine 
 - [ ] <5% CPU overhead on modern hardware
 
 ### Quality
-- [x] 186 tests passing (make tests)
+- [x] 196 tests passing (make tests)
 - [x] Zero critical bugs in test suite
 - [x] API documentation complete
 - [ ] Comprehensive user guide
@@ -334,5 +344,5 @@ including host filesystem sharing and conversion tools for legacy BASIC/machine 
 ---
 
 **Last Updated**: 2026-03-02
-**Current Version**: 1.5.0-alpha
-**Next Milestone**: 1.6.0 (Advanced features)
+**Current Version**: 1.6.0-alpha
+**Next Milestone**: 1.7.0 (Advanced features)

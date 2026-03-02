@@ -21,13 +21,14 @@
 #include "video/video.h"
 #include "audio/audio.h"
 #include "io/keyboard.h"
+#include "io/joystick.h"
 #include "io/microdisc.h"
 #include "storage/sedoric.h"
 #include "hostfs/hostfs.h"
 #include "debugger.h"
 #include "network/cast_server.h"
 
-#define EMU_VERSION "1.5.0-alpha"
+#define EMU_VERSION "1.6.0-alpha"
 
 /**
  * @brief ORIC machine model
@@ -77,6 +78,9 @@ typedef struct emulator_s {
 
     /* Keyboard */
     oric_keyboard_t keyboard;
+
+    /* Joystick (IJK interface) */
+    oric_joystick_t joystick;
 
     /* Microdisc controller */
     microdisc_t microdisc;
