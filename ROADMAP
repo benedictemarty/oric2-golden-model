@@ -333,12 +333,15 @@ including host filesystem sharing and conversion tools for legacy BASIC/machine 
 - [x] Integration with Centronics STROBE capture (Sprint 25)
 - [x] 10 new MCP-40 unit tests (216 total, 100% pass)
 
-### Sprint 27: Display Scaling (v1.9.0-alpha) - PLANNED
-- [ ] Window scaling x2 (480x448) and x4 (960x896)
-- [ ] Nearest-neighbor upscale (pixel-perfect retro look)
-- [ ] CLI: --scale N (1, 2, 4) or --scale auto
-- [ ] SDL2 renderer scaling via SDL_RenderSetLogicalSize or manual blit
-- [ ] Fullscreen retains integer scaling (no stretching)
+### Sprint 27: Display Scaling (v1.9.0-alpha) - DONE
+- [x] CLI: --scale N (1, 2, 3, 4) with default x3 (720x672)
+- [x] Window scaling: x1=240x224, x2=480x448, x3=720x672, x4=960x896
+- [x] Nearest-neighbor upscale (SDL_HINT_RENDER_SCALE_QUALITY=0, pixel-perfect)
+- [x] SDL2 renderer scaling via SDL_RenderSetLogicalSize (GPU-accelerated)
+- [x] F3 hotkey: cycle scale x1→x2→x3→x4 at runtime
+- [x] renderer_set_scale/get_scale/cycle_scale API
+- [x] Fullscreen mode preserved (window resize skipped in fullscreen)
+- [x] 10 new display scaling tests (226 total, 100% pass)
 
 ## Future Enhancements
 
@@ -348,7 +351,7 @@ including host filesystem sharing and conversion tools for legacy BASIC/machine 
 - [x] Save states
 - [x] Joystick support
 - [x] Printer emulation (text + MCP-40 plotter)
-- [ ] Display scaling (x2, x4)
+- [x] Display scaling (x1, x2, x3, x4)
 - [ ] Trace logging
 
 ### Developer Tools
@@ -368,7 +371,7 @@ including host filesystem sharing and conversion tools for legacy BASIC/machine 
 - [ ] <5% CPU overhead on modern hardware
 
 ### Quality
-- [x] 216 tests passing (make tests)
+- [x] 226 tests passing (make tests)
 - [x] Zero critical bugs in test suite
 - [x] API documentation complete
 - [ ] Comprehensive user guide
@@ -376,5 +379,5 @@ including host filesystem sharing and conversion tools for legacy BASIC/machine 
 ---
 
 **Last Updated**: 2026-03-02
-**Current Version**: 1.8.0-alpha
-**Next Milestone**: 1.9.0 (Display scaling)
+**Current Version**: 1.9.0-alpha
+**Next Milestone**: 2.0.0 (Telestrat / stable release)

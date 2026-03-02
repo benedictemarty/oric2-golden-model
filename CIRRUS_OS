@@ -2,8 +2,8 @@ CIRRUS_OS - Phosphoric Build & Development Status
 ======================================================
 
 Project: Phosphoric — ORIC-1/Atmos Cycle-Accurate Emulator
-Version: 1.8.0-alpha
-Build Status: ALPHA (MCP-40 Plotter + Printer + Joystick + Atmos + Save States + Full Type Safety + WAV Audio + CASTV2 + MJPEG Cast)
+Version: 1.9.0-alpha
+Build Status: ALPHA (Display Scaling + MCP-40 Plotter + Printer + Joystick + Atmos + Save States + Full Type Safety + WAV Audio + CASTV2 + MJPEG Cast)
 Last Updated: 2026-03-02
 
 ================================================================
@@ -50,7 +50,8 @@ BUILD STATUS
 [V] IJK Joystick          - Complete (keyboard/gamepad modes, Port A blending, hot-plug)
 [V] Printer Emulation     - Complete (Centronics parallel, LPRINT/LLIST capture)
 [V] MCP-40 Plotter        - Complete (4-color pen plotter, 480x400, BMP export)
-[V] Test Suite            - Complete (216 tests via make tests, 100% pass)
+[V] Display Scaling       - Complete (x1/x2/x3/x4, F3 hotkey, nearest-neighbor)
+[V] Test Suite            - Complete (226 tests via make tests, 100% pass)
 [V] ROM Compatibility     - Validated (ORIC-1 BASIC 1.0 + Atmos BASIC 1.1 ROMs)
 [V] Performance           - Benchmarked (~90+ MHz, target met)
 [V] Static Analysis       - Run (no critical issues)
@@ -62,7 +63,7 @@ Legend: [V] Complete [*] In Progress [ ] Not Started [X] Failed
 
 TEST RESULTS
 ------------
-Unit Tests: 216/216 passed (100%)
+Unit Tests: 226/226 passed (100%)
 Integration Tests: 7/7 passed (100%)
 ROM Compatibility: 12/12 passed (100%)
 Video Export Tests: 11/11 passed (100%)
@@ -87,6 +88,7 @@ Atmos Tests:        10/10 passed
 Joystick Tests:     10/10 passed
 Printer Tests:      10/10 passed
 MCP-40 Tests:       10/10 passed
+Renderer Tests:     10/10 passed
 Cast Tests:         24/24 passed
 
 ================================================================
@@ -94,7 +96,7 @@ Cast Tests:         24/24 passed
 CODE METRICS
 ------------
 Total Source Files: 30 (.c) + 18 (.h)
-Total Test Files: 14
+Total Test Files: 15
 Lines of Code: ~4500+ (source) + ~2500 (tests)
 Build Warnings: 0 critical (informational conversion warnings with strict flags)
 Memory Leaks: 0 (Valgrind clean)
@@ -104,7 +106,7 @@ Performance: ~90+ MHz equivalent (target: 10x real-time met)
 
 QUALITY GATES
 -------------
-[V] All unit tests pass (216/216 via make tests)
+[V] All unit tests pass (226/226 via make tests)
 [V] No compiler errors
 [ ] Code coverage > 80% (measurement pending)
 [V] No critical warnings
@@ -118,8 +120,8 @@ QUALITY GATES
 
 SPRINT STATUS
 -------------
-Current Sprint: Sprint 26 completed
-Sprint Progress: 100% (MCP-40 Plotter Emulation v1.8.0-alpha)
+Current Sprint: Sprint 27 completed
+Sprint Progress: 100% (Display Scaling v1.9.0-alpha)
 
 Completed Sprints:
 - [V] Sprint 0: Infrastructure setup
@@ -151,9 +153,9 @@ Completed Sprints:
 - [V] Sprint 24: IJK Joystick Support (196 tests)
 - [V] Sprint 25: Centronics Printer Emulation (206 tests)
 - [V] Sprint 26: MCP-40 Plotter Emulation (216 tests)
+- [V] Sprint 27: Display Scaling (226 tests)
 
 Remaining:
-- [ ] Display scaling (x2, x4)
 - [ ] Telestrat support
 
 ================================================================
@@ -219,4 +221,4 @@ License: Not specified yet
 ================================================================
 
 End of CIRRUS_OS Status Report
-Generated: 2026-03-02 (Sprint 26)
+Generated: 2026-03-02 (Sprint 27)

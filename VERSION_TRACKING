@@ -1,12 +1,20 @@
 VERSION_TRACKING - Phosphoric
 =====================================
 
-Current Version: 1.8.0-alpha
+Current Version: 1.9.0-alpha
 Release Date: 2026-03-02
-Status: Alpha (MCP-40 Plotter + Printer + Joystick + Atmos + Save States + Full Type Safety + WAV Audio + CASTV2 + MJPEG Cast, 216 tests pass)
+Status: Alpha (Display Scaling + MCP-40 Plotter + Printer + Joystick + Atmos + Save States + Full Type Safety + WAV Audio + CASTV2 + MJPEG Cast, 226 tests pass)
 
 Version History:
 ----------------
+- 1.9.0-alpha (2026-03-02): Display Scaling (Sprint 27)
+  * --scale N CLI option (1, 2, 3, 4) for integer pixel-perfect scaling
+  * F3 hotkey: cycle scale x1 → x2 → x3 → x4 at runtime
+  * renderer_set_scale/get_scale/cycle_scale API
+  * Nearest-neighbor upscaling (SDL_HINT_RENDER_SCALE_QUALITY=0)
+  * Default scale x3 (720x672), max x4 (960x896)
+  * 10 new display scaling tests (226 via make tests, 100% pass)
+
 - 1.8.0-alpha (2026-03-02): MCP-40 Plotter Emulation (Sprint 26)
   * MCP-40 4-color pen plotter module (src/io/mcp40.c, include/io/mcp40.h)
   * Command parser: H (Home), D (Draw), M (Move), J (Color), P (Print), I (Init), L (LineType), Q (CharSize)
@@ -264,9 +272,8 @@ MAJOR.MINOR.PATCH-LABEL
 - PATCH: Bug fixes (backward compatible)
 - LABEL: alpha, beta, rc, stable
 
-Next Planned Version: 1.9.0
+Next Planned Version: 2.0.0
 Target Date: TBD
 Planned Features:
-  - Display scaling (x2, x4)
   - Telestrat support
   - Additional game compatibility testing

@@ -2,7 +2,7 @@
 
 A cycle-accurate ORIC-1 / Atmos emulator written in C11.
 
-**Version: 1.8.0-alpha** | **216 tests, 100% pass** | **Zero memory leaks**
+**Version: 1.9.0-alpha** | **226 tests, 100% pass** | **Zero memory leaks**
 
 ```
  ____  _                      _                _
@@ -83,6 +83,12 @@ make SDL2=1
 - **Native CASTV2** — Direct Chromecast control via `--cast-to`
 - **mDNS discovery** — `--cast-discover`
 
+### Display Scaling
+- **Integer scaling** — x1 (240x224), x2 (480x448), x3 (720x672, default), x4 (960x896)
+- **Pixel-perfect** — Nearest-neighbor upscaling, no blur
+- **Runtime toggle** — F3 cycles through scale factors
+- **CLI** — `--scale N` (1, 2, 3, 4)
+
 ### Modern Features
 - **Video export** — PPM, BMP, ASCII screenshots
 - **Keyboard layouts** — QWERTY, AZERTY (`--keyboard azerty`)
@@ -147,6 +153,9 @@ Printer:
   -p, --printer FILE        Capture printer output to FILE (LPRINT/LLIST)
   --printer-type TYPE       Printer type: text (default), mcp40
 
+Display:
+  --scale N                 Display scale: 1, 2, 3 (default), 4
+
 Debugger:
   -D, --debug               Start in debugger
   --break ADDR              Set initial breakpoint
@@ -171,6 +180,7 @@ Display & Export:
 | Key | Function |
 |-----|----------|
 | F2 | Quick save state |
+| F3 | Cycle display scale (x1→x2→x3→x4) |
 | F4 | Quick load state |
 | F5 | Warm reset |
 | F9 | Enter debugger |
@@ -181,7 +191,7 @@ Display & Export:
 ## Testing
 
 ```bash
-make tests               # All 216 tests (100% pass)
+make tests               # All 226 tests (100% pass)
 make test-cpu            # 74 CPU tests
 make test-memory         # 19 memory tests
 make test-io             # 29 VIA/I/O tests
@@ -195,6 +205,7 @@ make test-atmos          # 10 Atmos support tests
 make test-joystick       # 10 joystick tests
 make test-printer        # 10 printer tests
 make test-mcp40          # 10 MCP-40 plotter tests
+make test-renderer       # 10 display scaling tests
 make valgrind            # Memory leak detection
 make static-analysis     # Compiler warnings analysis
 ```
@@ -243,7 +254,7 @@ src/
   debugger.c     Interactive REPL debugger
 
 include/         Public headers
-tests/unit/      14 test files, 216 tests
+tests/unit/      15 test files, 226 tests
 tools/           bas2tap, bin2tap, tap2sedoric
 examples/        Example BASIC programs (.bas + .tap)
 roms/            ROM files (not distributed)
@@ -363,4 +374,4 @@ This project is licensed under the [MIT License](LICENSE).
 
 ---
 
-Phosphoric v1.8.0-alpha | 216 tests | ORIC-1 + Atmos | MCP-40 Plotter + Printer + Joystick | 2026-03-02
+Phosphoric v1.9.0-alpha | 226 tests | ORIC-1 + Atmos | Display Scaling + MCP-40 Plotter + Printer + Joystick | 2026-03-02

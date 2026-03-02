@@ -15,6 +15,7 @@ static SDL_Window* window;
 static SDL_Renderer* sdl_renderer;
 static SDL_Texture* texture;
 static bool fullscreen;
+static int current_scale;
 
 bool renderer_init(int scale) {
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMECONTROLLER) < 0) return false;
@@ -31,7 +32,9 @@ bool renderer_init(int scale) {
         ORIC_SCREEN_W, ORIC_SCREEN_H);
     if (!texture) return false;
     SDL_RenderSetLogicalSize(sdl_renderer, ORIC_SCREEN_W, ORIC_SCREEN_H);
+    SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "0"); /* nearest-neighbor */
     fullscreen = false;
+    current_scale = scale;
     return true;
 }
 
@@ -54,11 +57,34 @@ void renderer_toggle_fullscreen(void) {
     SDL_SetWindowFullscreen(window, fullscreen ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0);
 }
 
+void renderer_set_scale(int scale) {
+    if (scale < 1) scale = 1;
+    if (scale > 4) scale = 4;
+    if (scale == current_scale) return;
+    current_scale = scale;
+    if (fullscreen) return; /* Don't resize in fullscreen */
+    SDL_SetWindowSize(window, ORIC_SCREEN_W * scale, ORIC_SCREEN_H * scale);
+    SDL_SetWindowPosition(window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
+}
+
+int renderer_get_scale(void) {
+    return current_scale;
+}
+
+void renderer_cycle_scale(void) {
+    int next = current_scale + 1;
+    if (next > 4) next = 1;
+    renderer_set_scale(next);
+}
+
 #else
 
 bool renderer_init(int scale) { (void)scale; return true; }
 void renderer_cleanup(void) {}
 void renderer_present(video_t* vid) { (void)vid; }
 void renderer_toggle_fullscreen(void) {}
+void renderer_set_scale(int scale) { (void)scale; }
+int renderer_get_scale(void) { return 1; }
+void renderer_cycle_scale(void) {}
 
 #endif

@@ -29,7 +29,7 @@
 #include "debugger.h"
 #include "network/cast_server.h"
 
-#define EMU_VERSION "1.8.0-alpha"
+#define EMU_VERSION "1.9.0-alpha"
 
 /**
  * @brief ORIC machine model

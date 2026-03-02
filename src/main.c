@@ -45,6 +45,9 @@ bool renderer_init(int scale);
 void renderer_cleanup(void);
 void renderer_present(video_t* vid);
 void renderer_toggle_fullscreen(void);
+void renderer_set_scale(int scale);
+int renderer_get_scale(void);
+void renderer_cycle_scale(void);
 
 static volatile bool g_running = true;
 
@@ -129,6 +132,7 @@ static void print_usage(const char* program_name) {
     printf("  -j, --joystick MODE        Joystick: keys (arrow keys), gamepad (SDL2 controller)\n");
     printf("  -p, --printer FILE         Capture printer output to FILE (LPRINT/LLIST)\n");
     printf("      --printer-type TYPE    Printer type: text (default) or mcp40 (4-color plotter)\n");
+    printf("      --scale N              Display scale factor: 1, 2, 3 (default), or 4\n");
     printf("      --type-keys C:TEXT     Auto-type TEXT after C cycles (\\n=Return, \\pN=pause N sec)\n");
     printf("  -b, --breakpoint ADDR      Break when PC reaches address (hex, e.g. ED8A)\n");
     printf("  -D, --debug                Start in debugger mode (break at first instruction)\n");
@@ -143,6 +147,7 @@ static void print_usage(const char* program_name) {
     printf("Controls:\n");
     printf("  F1  - Help menu\n");
     printf("  F2  - Quick save state\n");
+    printf("  F3  - Cycle display scale (x1 → x2 → x3 → x4)\n");
     printf("  F4  - Quick load state\n");
     printf("  F5  - Reset\n");
     printf("  F9  - Enter debugger\n");
@@ -356,7 +361,7 @@ static bool emulator_init(emulator_t* emu) {
 
     /* Initialize renderer if not headless */
     if (!emu->headless) {
-        renderer_init(3);
+        renderer_init(scale_factor);
 #ifdef HAS_SDL2
         SDL_StartTextInput();  /* Enable TEXTINPUT events for symbolic keyboard */
 #endif
@@ -622,6 +627,10 @@ static void emulator_run(emulator_t* emu) {
                             log_error("Quick save state failed (F2)");
                         }
                         break;
+                    case SDLK_F3:
+                        renderer_cycle_scale();
+                        log_info("Display scale: x%d", renderer_get_scale());
+                        break;
                     case SDLK_F4:
                         if (savestate_load(emu, "oric1_quicksave.ost")) {
                             log_info("Quick save state loaded (F4)");
@@ -766,9 +775,10 @@ int main(int argc, char* argv[]) {
     const char* joystick_mode = NULL;
     const char* printer_file = NULL;
     const char* printer_type_arg = NULL;
+    int scale_factor = 3;
 
     /* Long option codes for options without short equivalents */
-    enum { OPT_SCREENSHOT = 256, OPT_SCREENSHOT_AT, OPT_FRAME_DUMP, OPT_FRAME_DUMP_INTERVAL, OPT_TYPE_KEYS, OPT_DISK_ROM, OPT_DISK1, OPT_DISK2, OPT_DISK3, OPT_BREAKPOINT, OPT_DEBUG_BREAK, OPT_CAST_SERVER, OPT_CAST_DISCOVER, OPT_CAST_TO, OPT_SAVE_STATE, OPT_LOAD_STATE, OPT_MODEL, OPT_JOYSTICK, OPT_PRINTER, OPT_PRINTER_TYPE };
+    enum { OPT_SCREENSHOT = 256, OPT_SCREENSHOT_AT, OPT_FRAME_DUMP, OPT_FRAME_DUMP_INTERVAL, OPT_TYPE_KEYS, OPT_DISK_ROM, OPT_DISK1, OPT_DISK2, OPT_DISK3, OPT_BREAKPOINT, OPT_DEBUG_BREAK, OPT_CAST_SERVER, OPT_CAST_DISCOVER, OPT_CAST_TO, OPT_SAVE_STATE, OPT_LOAD_STATE, OPT_MODEL, OPT_JOYSTICK, OPT_PRINTER, OPT_PRINTER_TYPE, OPT_SCALE };
 
     static struct option long_options[] = {
         {"tape",                required_argument, 0, 't'},
@@ -801,6 +811,7 @@ int main(int argc, char* argv[]) {
         {"joystick",            required_argument, 0, 'j'},
         {"printer",             required_argument, 0, 'p'},
         {"printer-type",        required_argument, 0, OPT_PRINTER_TYPE},
+        {"scale",               required_argument, 0, OPT_SCALE},
         {"help",                no_argument,       0, '?'},
         {0, 0, 0, 0}
     };
@@ -846,6 +857,13 @@ int main(int argc, char* argv[]) {
             case 'j': joystick_mode = optarg; break;
             case 'p': printer_file = optarg; break;
             case OPT_PRINTER_TYPE: printer_type_arg = optarg; break;
+            case OPT_SCALE:
+                scale_factor = atoi(optarg);
+                if (scale_factor < 1 || scale_factor > 4) {
+                    fprintf(stderr, "Invalid scale factor: %s (must be 1-4)\n", optarg);
+                    return 1;
+                }
+                break;
             case '?':
             default:
                 print_usage(argv[0]);

@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.0-alpha] - 2026-03-02
+
+### Display Scaling (Sprint 27)
+
+#### Added
+- **Display scaling** (`--scale N`): integer scale factor 1 to 4 for pixel-perfect
+  rendering. Default scale remains x3 (720x672). Scale x1 = 240x224, x2 = 480x448,
+  x4 = 960x896.
+- **F3 hotkey**: cycle display scale (x1 → x2 → x3 → x4 → x1) at runtime
+- **`renderer_set_scale()`**: change scale dynamically (resizes window, re-centers)
+- **`renderer_get_scale()`**: query current scale factor
+- **`renderer_cycle_scale()`**: advance to next scale factor
+- **Nearest-neighbor scaling**: `SDL_HINT_RENDER_SCALE_QUALITY` set to "0" for
+  crisp pixel-perfect upscaling (no blurring)
+- **10 new display scaling tests**: screen dimensions, window sizes at x1/x2/x3/x4,
+  headless renderer init, scale factor validation, framebuffer size, pixel pitch,
+  video init
+- **`make test-renderer`** target in Makefile
+
+#### Changed
+- **renderer.c**: added `current_scale` state, `renderer_set_scale()`,
+  `renderer_get_scale()`, `renderer_cycle_scale()` functions
+- **main.c**: `renderer_init()` now uses CLI `--scale` value instead of hardcoded 3
+- **Version**: 1.8.0-alpha → 1.9.0-alpha
+- **Test count**: 216 → 226 (10 new renderer tests)
+
 ## [1.8.0-alpha] - 2026-03-02
 
 ### MCP-40 Plotter Emulation (Sprint 26)

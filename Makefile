@@ -81,7 +81,7 @@ BINDIR = $(PREFIX)/bin
 DATADIR = $(PREFIX)/share/phosphoric
 DOCDIR = $(PREFIX)/share/doc/phosphoric
 
-.PHONY: all clean tools tests test-cpu test-memory test-io test-storage test-system test-rom test-video test-audio test-debugger test-cast test-savestate test-atmos test-joystick test-printer test-mcp40 valgrind static-analysis install uninstall help
+.PHONY: all clean tools tests test-cpu test-memory test-io test-storage test-system test-rom test-video test-audio test-debugger test-cast test-savestate test-atmos test-joystick test-printer test-mcp40 test-renderer valgrind static-analysis install uninstall help
 
 all: $(TARGET)
 
@@ -217,7 +217,14 @@ test-joystick: $(TEST_JOYSTICK_SRCS)
 	@$(CC) $(CFLAGS) $(TEST_JOYSTICK_SRCS) $(LDFLAGS) -o test_joystick
 	@./test_joystick
 
-tests: test-cpu test-memory test-io test-storage test-system test-video test-audio test-debugger test-savestate test-atmos test-joystick test-printer test-mcp40
+TEST_RENDERER_SRCS = tests/unit/test_renderer.c src/video/video.c src/video/renderer.c \
+                     src/memory/memory.c src/memory/banking.c src/utils/logging.c
+
+test-renderer: $(TEST_RENDERER_SRCS)
+	@$(CC) $(CFLAGS) $(TEST_RENDERER_SRCS) $(LDFLAGS) -o test_renderer
+	@./test_renderer
+
+tests: test-cpu test-memory test-io test-storage test-system test-video test-audio test-debugger test-savestate test-atmos test-joystick test-printer test-mcp40 test-renderer
 	@echo ""
 	@echo "═══════════════════════════════════════════════════════"
 	@echo "  All test suites completed!"
@@ -269,7 +276,7 @@ uninstall:
 
 clean:
 	rm -f $(OBJECTS) $(TARGET) $(TOOLS)
-	rm -f test_cpu test_memory test_io test_storage test_system test_rom test_video test_audio test_debugger test_cast test_savestate test_atmos test_joystick test_printer test_mcp40
+	rm -f test_cpu test_memory test_io test_storage test_system test_rom test_video test_audio test_debugger test_cast test_savestate test_atmos test_joystick test_printer test_mcp40 test_renderer
 	rm -f tools/*.o
 
 help:
@@ -293,6 +300,7 @@ help:
 	@echo "  test-joystick- Run joystick tests"
 	@echo "  test-printer - Run printer tests"
 	@echo "  test-mcp40  - Run MCP-40 plotter tests"
+	@echo "  test-renderer- Run display scaling tests"
 	@echo "  test-cast    - Run cast server tests (requires CAST=1)"
 	@echo "  valgrind     - Run all tests under Valgrind"
 	@echo "  static-analysis - Run static analysis"
