@@ -352,6 +352,16 @@ including host filesystem sharing and conversion tools for legacy BASIC/machine 
 - [x] Integration in emulation loop (before cpu_step, captures pre-execution state)
 - [x] 10 new trace tests (236 total, 100% pass)
 
+### Sprint 29: CPU Performance Profiler (v1.11.0-alpha) - DONE
+- [x] `--profile FILE`: write CPU performance profile report on exit
+- [x] Per-address execution counts (64K address space)
+- [x] Per-address cycle usage tracking
+- [x] Opcode frequency histogram (256 opcodes)
+- [x] Top 20 hotspots by execution count and by cycle usage
+- [x] Summary: total instructions, total cycles, avg cycles/instruction
+- [x] `profiler_init/start/stop/record_instruction/record_cycles/reset/report` API
+- [x] 10 new profiler tests (246 total, 100% pass)
+
 ## Future Enhancements
 
 ### Advanced Features
@@ -366,7 +376,7 @@ including host filesystem sharing and conversion tools for legacy BASIC/machine 
 ### Developer Tools
 - [x] Memory viewer (debugger: m command)
 - [x] Register inspector (debugger: r command)
-- [ ] Performance profiler
+- [x] Performance profiler
 - [ ] ROM analysis tools
 
 ---
@@ -380,7 +390,7 @@ including host filesystem sharing and conversion tools for legacy BASIC/machine 
 - [ ] <5% CPU overhead on modern hardware
 
 ### Quality
-- [x] 226 tests passing (make tests)
+- [x] 246 tests passing (make tests)
 - [x] Zero critical bugs in test suite
 - [x] API documentation complete
 - [ ] Comprehensive user guide
@@ -388,5 +398,5 @@ including host filesystem sharing and conversion tools for legacy BASIC/machine 
 ---
 
 **Last Updated**: 2026-03-02
-**Current Version**: 1.10.0-alpha
+**Current Version**: 1.11.0-alpha
 **Next Milestone**: 2.0.0 (Telestrat / stable release)

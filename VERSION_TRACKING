@@ -1,12 +1,19 @@
 VERSION_TRACKING - Phosphoric
 =====================================
 
-Current Version: 1.10.0-alpha
+Current Version: 1.11.0-alpha
 Release Date: 2026-03-02
-Status: Alpha (CPU Trace + Display Scaling + MCP-40 Plotter + Printer + Joystick + Atmos + Save States + Full Type Safety + WAV Audio + CASTV2 + MJPEG Cast, 236 tests pass)
+Status: Alpha (CPU Profiler + CPU Trace + Display Scaling + MCP-40 Plotter + Printer + Joystick + Atmos + Save States + Full Type Safety + WAV Audio + CASTV2 + MJPEG Cast, 246 tests pass)
 
 Version History:
 ----------------
+- 1.11.0-alpha (2026-03-02): CPU Performance Profiler (Sprint 29)
+  * --profile FILE: track per-address execution counts, cycle hotspots, opcode frequency
+  * cpu_profiler_t with 64K address hits/cycles + 256 opcode histogram
+  * Report: top 20 hotspots, opcode frequency, avg cycles/instruction
+  * profiler_init/start/stop/record_instruction/record_cycles/reset/report API
+  * 10 new profiler tests (246 via make tests, 100% pass)
+
 - 1.10.0-alpha (2026-03-02): CPU Trace Logging (Sprint 28)
   * --trace FILE: log every CPU instruction with disassembly and register state
   * --trace-max N: limit trace to N instructions

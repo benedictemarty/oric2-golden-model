@@ -143,6 +143,7 @@ static void print_usage(const char* program_name) {
     printf("      --cast-discover        Discover Chromecast devices on network\n");
     printf("      --trace FILE           Log CPU instruction trace to FILE\n");
     printf("      --trace-max N          Max instructions to trace (default: unlimited)\n");
+    printf("      --profile FILE         Write CPU performance profile to FILE on exit\n");
     printf("      --save-state FILE      Save emulator state to FILE on exit\n");
     printf("      --load-state FILE      Load emulator state from FILE at startup\n");
     printf("  -?, --help                 Show this help\n");
@@ -537,9 +538,16 @@ static void emulator_run(emulator_t* emu) {
             /* CPU trace logging (before step, captures pre-execution state) */
             trace_log_instruction(&emu->trace, &emu->cpu);
 
+            /* CPU profiler (record address and opcode before step) */
+            profiler_record_instruction(&emu->profiler, &emu->cpu);
+            uint16_t prof_pc = emu->cpu.PC;
+
             tape_patches(emu);
             int step = cpu_step(&emu->cpu);
             frame_cycles += step;
+
+            /* CPU profiler (record cycle cost after step) */
+            profiler_record_cycles(&emu->profiler, prof_pc, step);
 
             /* Update VIA timers */
             via_update(&emu->via, step);
@@ -784,9 +792,10 @@ int main(int argc, char* argv[]) {
     int scale_factor = 3;
     const char* trace_file = NULL;
     int64_t trace_max = 0;
+    const char* profile_file = NULL;
 
     /* Long option codes for options without short equivalents */
-    enum { OPT_SCREENSHOT = 256, OPT_SCREENSHOT_AT, OPT_FRAME_DUMP, OPT_FRAME_DUMP_INTERVAL, OPT_TYPE_KEYS, OPT_DISK_ROM, OPT_DISK1, OPT_DISK2, OPT_DISK3, OPT_BREAKPOINT, OPT_DEBUG_BREAK, OPT_CAST_SERVER, OPT_CAST_DISCOVER, OPT_CAST_TO, OPT_SAVE_STATE, OPT_LOAD_STATE, OPT_MODEL, OPT_JOYSTICK, OPT_PRINTER, OPT_PRINTER_TYPE, OPT_SCALE, OPT_TRACE, OPT_TRACE_MAX };
+    enum { OPT_SCREENSHOT = 256, OPT_SCREENSHOT_AT, OPT_FRAME_DUMP, OPT_FRAME_DUMP_INTERVAL, OPT_TYPE_KEYS, OPT_DISK_ROM, OPT_DISK1, OPT_DISK2, OPT_DISK3, OPT_BREAKPOINT, OPT_DEBUG_BREAK, OPT_CAST_SERVER, OPT_CAST_DISCOVER, OPT_CAST_TO, OPT_SAVE_STATE, OPT_LOAD_STATE, OPT_MODEL, OPT_JOYSTICK, OPT_PRINTER, OPT_PRINTER_TYPE, OPT_SCALE, OPT_TRACE, OPT_TRACE_MAX, OPT_PROFILE };
 
     static struct option long_options[] = {
         {"tape",                required_argument, 0, 't'},
@@ -822,6 +831,7 @@ int main(int argc, char* argv[]) {
         {"scale",               required_argument, 0, OPT_SCALE},
         {"trace",               required_argument, 0, OPT_TRACE},
         {"trace-max",           required_argument, 0, OPT_TRACE_MAX},
+        {"profile",             required_argument, 0, OPT_PROFILE},
         {"help",                no_argument,       0, '?'},
         {0, 0, 0, 0}
     };
@@ -876,6 +886,7 @@ int main(int argc, char* argv[]) {
                 break;
             case OPT_TRACE: trace_file = optarg; break;
             case OPT_TRACE_MAX: trace_max = atoll(optarg); break;
+            case OPT_PROFILE: profile_file = optarg; break;
             case '?':
             default:
                 print_usage(argv[0]);
@@ -1249,6 +1260,13 @@ int main(int argc, char* argv[]) {
         }
     }
 
+    /* CPU performance profiler */
+    profiler_init(&emu.profiler);
+    if (profile_file) {
+        profiler_start(&emu.profiler);
+        log_info("CPU profiling enabled, report will be written to %s", profile_file);
+    }
+
     /* Run emulation */
     emulator_run(&emu);
 
@@ -1256,6 +1274,12 @@ int main(int argc, char* argv[]) {
     if (save_state_file) {
         log_info("Saving state on exit: %s", save_state_file);
         savestate_save(&emu, save_state_file);
+    }
+
+    /* Write profiler report if enabled */
+    if (profile_file) {
+        profiler_stop(&emu.profiler);
+        profiler_report_to_file(&emu.profiler, profile_file);
     }
 
     trace_close(&emu.trace);

@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.11.0-alpha] - 2026-03-02
+
+### CPU Performance Profiler (Sprint 29)
+
+#### Added
+- **CPU performance profiler** (`--profile FILE`): track per-address execution counts,
+  cycle hotspots, and opcode frequency distribution. Writes a summary report on exit.
+- **`cpu_profiler_t`** structure with 64K address space coverage (hits + cycles per address)
+- **`profiler_init()`**, **`profiler_start()`**, **`profiler_stop()`**,
+  **`profiler_record_instruction()`**, **`profiler_record_cycles()`**,
+  **`profiler_reset()`**, **`profiler_report()`**, **`profiler_report_to_file()`** API
+- **Report format**: summary stats, top 20 hotspots by execution count, top 20 by cycle
+  usage, full opcode frequency histogram
+- **10 new profiler tests**: init, start/stop, record instruction, address hotspots,
+  opcode histogram, cycle tracking, report output, inactive no-op, reset, invalid file
+- **`make test-profiler`** target in Makefile
+
+#### Changed
+- **emulator.h**: added `cpu_profiler_t profiler` field and `#include "utils/profiler.h"`
+- **main.c**: profiler integration in emulation loop (record before + after cpu_step),
+  report generation on exit
+
 ## [1.10.0-alpha] - 2026-03-02
 
 ### CPU Trace Logging (Sprint 28)

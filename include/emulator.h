@@ -28,9 +28,10 @@
 #include "hostfs/hostfs.h"
 #include "debugger.h"
 #include "utils/trace.h"
+#include "utils/profiler.h"
 #include "network/cast_server.h"
 
-#define EMU_VERSION "1.10.0-alpha"
+#define EMU_VERSION "1.11.0-alpha"
 
 /**
  * @brief ORIC machine model
@@ -131,6 +132,9 @@ typedef struct emulator_s {
 
     /* CPU trace logging */
     cpu_trace_t trace;
+
+    /* CPU performance profiler */
+    cpu_profiler_t profiler;
 
     /* Cast server (MJPEG streaming) */
     cast_server_t cast_server;

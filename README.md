@@ -2,7 +2,7 @@
 
 A cycle-accurate ORIC-1 / Atmos emulator written in C11.
 
-**Version: 1.10.0-alpha** | **236 tests, 100% pass** | **Zero memory leaks**
+**Version: 1.11.0-alpha** | **246 tests, 100% pass** | **Zero memory leaks**
 
 ```
  ____  _                      _                _
@@ -94,6 +94,12 @@ make SDL2=1
 - **CLI** — `--trace FILE` to enable, `--trace-max N` to limit
 - **Output** — `CYCLES  PC  BYTES  DISASM  A=XX X=XX Y=XX SP=XX P=XX`
 
+### CPU Performance Profiler
+- **Execution profiling** — Per-address hit counts and cycle usage across full 64K space
+- **Opcode histogram** — Frequency distribution of all 256 opcodes
+- **Hotspot report** — Top 20 addresses by execution count and cycle usage
+- **CLI** — `--profile FILE` writes report on exit
+
 ### Modern Features
 - **Video export** — PPM, BMP, ASCII screenshots
 - **Keyboard layouts** — QWERTY, AZERTY (`--keyboard azerty`)
@@ -165,6 +171,9 @@ Trace:
   --trace FILE              Log CPU instruction trace to FILE
   --trace-max N             Max instructions to trace (default: unlimited)
 
+Profiler:
+  --profile FILE            Write CPU performance profile to FILE on exit
+
 Debugger:
   -D, --debug               Start in debugger
   --break ADDR              Set initial breakpoint
@@ -200,7 +209,7 @@ Display & Export:
 ## Testing
 
 ```bash
-make tests               # All 236 tests (100% pass)
+make tests               # All 246 tests (100% pass)
 make test-cpu            # 74 CPU tests
 make test-memory         # 19 memory tests
 make test-io             # 29 VIA/I/O tests
@@ -216,6 +225,7 @@ make test-printer        # 10 printer tests
 make test-mcp40          # 10 MCP-40 plotter tests
 make test-renderer       # 10 display scaling tests
 make test-trace          # 10 CPU trace logging tests
+make test-profiler       # 10 CPU profiler tests
 make valgrind            # Memory leak detection
 make static-analysis     # Compiler warnings analysis
 ```
@@ -264,7 +274,7 @@ src/
   debugger.c     Interactive REPL debugger
 
 include/         Public headers
-tests/unit/      16 test files, 236 tests
+tests/unit/      17 test files, 246 tests
 tools/           bas2tap, bin2tap, tap2sedoric
 examples/        Example BASIC programs (.bas + .tap)
 roms/            ROM files (not distributed)
@@ -384,4 +394,4 @@ This project is licensed under the [MIT License](LICENSE).
 
 ---
 
-Phosphoric v1.10.0-alpha | 236 tests | ORIC-1 + Atmos | CPU Trace + Display Scaling + MCP-40 Plotter + Printer + Joystick | 2026-03-02
+Phosphoric v1.11.0-alpha | 246 tests | ORIC-1 + Atmos | CPU Profiler + CPU Trace + Display Scaling + MCP-40 Plotter + Printer + Joystick | 2026-03-02
