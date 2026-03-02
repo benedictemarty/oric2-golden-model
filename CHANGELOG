@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.13.0-alpha] - 2026-03-02
+
+### Comprehensive Documentation (Sprint 31)
+
+#### Added
+- **API reference** (`docs/api/README.md`): complete reference for all 24 public headers,
+  ~200 functions, ~40 structs, ~30 enums across 22 module sections
+- **User guide rewrite** (`docs/user-guide/README.md`): 17 sections covering installation,
+  quick start, tape/disk loading, keyboard, joystick, video, audio, printer/plotter,
+  save states, debugger commands, trace/profiler, ROM analysis, Chromecast, headless mode,
+  conversion tools, full CLI reference, troubleshooting
+- **Compatibility list update** (`docs/COMPATIBILITY.md`): updated to 256 tests,
+  added Atmos ROM, updated subsystem test table
+
+#### Changed
+- **README.md**: fixed stale test count in AI warning (216 → 256), added API reference link
+- **CIRRUS_OS**: fixed quality gates (256/256), updated sprint status to Sprint 31
+- **ROADMAP**: added Sprint 30 (ROM Analysis) and Sprint 31 (Documentation)
+
 ## [1.12.0-alpha] - 2026-03-02
 
 ### ROM Analysis Tools (Sprint 30)

@@ -1,73 +1,98 @@
-# Compatibility List
+# Liste de Compatibilite — Phosphoric v1.12.0-alpha
 
-Programs tested with Phosphoric v1.0.0-rc.
+Derniere mise a jour : 2026-03-02
 
-## Operating Systems
+---
 
-| Program | Format | Status | Notes |
-|---------|--------|--------|-------|
-| Sedoric V4.0 | .DSK | Working | Boots to prompt, keyboard functional |
-| BASIC 1.0 ROM | .ROM | Working | Full BASIC interpreter, all commands |
+## Systemes d'exploitation
 
-## Games
+| Programme | Format | Modele | Statut | Notes |
+|-----------|--------|--------|--------|-------|
+| BASIC 1.0 ROM | .ROM | ORIC-1 | Fonctionnel | Interpreteur BASIC complet |
+| BASIC 1.1 ROM | .ROM | Atmos | Fonctionnel | Auto-detection via JMP $ECCC |
+| Sedoric V4.0 | .DSK | ORIC-1/Atmos | Fonctionnel | Boot, clavier, commandes DOS |
 
-| Program | Format | Status | Notes |
-|---------|--------|--------|-------|
-| Poker (poker-asn.tap) | .TAP | Working | HIRES graphics render correctly |
-| Explode | .TAP | Working | CLOAD loading, gameplay functional |
+## Jeux
 
-## Demos / Test Programs
+| Programme | Format | Statut | Notes |
+|-----------|--------|--------|-------|
+| Poker (poker-asn.tap) | .TAP | Fonctionnel | Graphismes HIRES corrects |
+| Explode | .TAP | Fonctionnel | CLOAD, gameplay fonctionnel |
 
-| Program | Format | Status | Notes |
-|---------|--------|--------|-------|
-| Hello World | .TAP | Working | Text mode, PRINT output |
-| Sound demo | .TAP | Working | PSG tone/envelope generation |
-| HIRES graphics demo | .TAP | Working | 240x200 rendering |
+## Demos / Programmes de test
 
-## Subsystem Test Results
+| Programme | Format | Statut | Notes |
+|-----------|--------|--------|-------|
+| Hello World | .TAP | Fonctionnel | Mode texte, sortie PRINT |
+| Demo sonore | .TAP | Fonctionnel | Generation PSG tone/enveloppe |
+| Demo graphique HIRES | .TAP | Fonctionnel | Rendu 240x200 |
 
-| Subsystem | Tests | Status |
-|-----------|-------|--------|
-| CPU 6502 | 74/74 | All pass |
-| Memory | 19/19 | All pass |
-| VIA 6522 I/O | 24/24 | All pass |
-| Storage (Sedoric/FDC) | 12/12 | All pass |
-| System Integration | 7/7 | All pass |
-| Video Export | 11/11 | All pass |
-| Audio PSG | 8/8 | All pass |
-| **Total** | **155/155** | **100%** |
+---
 
-## ROM Compatibility
+## Resultats des tests unitaires
 
-| ROM | Size | Reset Vector | Status |
-|-----|------|-------------|--------|
-| basic10.rom (ORIC-1 BASIC 1.0) | 16384 bytes | $F42D | Validated |
-| microdis.rom (Microdisc) | varies | N/A | Working (overlay at $E000) |
+| Sous-systeme | Tests | Statut |
+|-------------|-------|--------|
+| CPU 6502 | 74/74 | Tous passent |
+| Memoire | 19/19 | Tous passent |
+| VIA 6522 I/O | 29/29 | Tous passent |
+| Stockage (Sedoric/FDC) | 12/12 | Tous passent |
+| Integration systeme | 7/7 | Tous passent |
+| Export video | 11/11 | Tous passent |
+| Audio PSG | 8/8 | Tous passent |
+| Debogueur | 8/8 | Tous passent |
+| Sauvegarde d'etat | 8/8 | Tous passent |
+| Atmos | 10/10 | Tous passent |
+| Joystick | 10/10 | Tous passent |
+| Imprimante | 10/10 | Tous passent |
+| Traceur MCP-40 | 10/10 | Tous passent |
+| Rendu / Scaling | 10/10 | Tous passent |
+| Trace CPU | 10/10 | Tous passent |
+| Profileur CPU | 10/10 | Tous passent |
+| Analyse ROM | 10/10 | Tous passent |
+| **Total** | **256/256** | **100%** |
 
-## Known Limitations
+---
 
-- Save states not yet implemented
-- Debugger not yet implemented
-- Joystick not supported
-- Printer emulation not available
-- ORIC Atmos mode not supported (planned post-1.0)
-- Some copy-protected programs may not load correctly
+## Compatibilite ROM
 
-## Hardware Emulation Accuracy
+| ROM | Taille | Vecteur RESET | Modele | Statut |
+|-----|--------|--------------|--------|--------|
+| basic10.rom (BASIC 1.0) | 16384 octets | $EA59 | ORIC-1 | Valide |
+| basic11b.rom (BASIC 1.1) | 16384 octets | $ECCC | Atmos | Valide |
+| microdis.rom (Microdisc) | variable | N/A | Overlay $E000 | Fonctionnel |
 
-| Component | Accuracy | Notes |
+---
+
+## Precision de l'emulation
+
+| Composant | Precision | Notes |
 |-----------|----------|-------|
-| 6502 CPU | Cycle-accurate | All 151 official opcodes, BCD, JMP bug |
-| VIA 6522 | Functional | Timers, interrupts, port callbacks |
-| AY-3-8910 PSG | Accurate | Oricutron-compatible DAC curve, clock dividers |
-| ULA Video | Functional | Text + HIRES modes, serial attributes |
-| WD1793 FDC | Functional | Type I/II commands, sector R/W |
-| Keyboard | Accurate | 8x8 matrix scan via VIA + PSG Port A |
+| 6502 CPU | Cycle-accurate | 151 opcodes officiels, BCD, bug JMP indirect |
+| VIA 6522 | Fonctionnel | Timers, interruptions, callbacks ports, CB1 edge |
+| AY-3-8910 PSG | Precis | Courbe DAC Oricutron, diviseurs d'horloge |
+| ULA Video | Fonctionnel | Texte + HIRES, attributs serie, timing PAL |
+| WD1793 FDC | Fonctionnel | Commandes Type I/II, lecture/ecriture secteur |
+| Clavier | Precis | Matrice 8x8 via VIA + PSG Port A |
+| Joystick IJK | Fonctionnel | Port A PSG actif bas, clavier + gamepad |
+| Imprimante | Fonctionnel | Centronics, STROBE via CA2 |
+| MCP-40 | Fonctionnel | 8 commandes, 4 couleurs, export BMP |
 
-## Reporting Compatibility
+---
 
-If you test a program not listed here, please report:
-- Program name and format (.TAP/.DSK)
-- Whether it loads and runs correctly
-- Any visual/audio glitches observed
-- Steps to reproduce any issues
+## Limitations connues
+
+- Le support Telestrat n'est pas encore implemente
+- Certains programmes avec protection anti-copie peuvent ne pas se charger
+- La couverture de code n'a pas ete mesuree formellement (estimation > 80%)
+- Les tests de compatibilite jeux sont limites (95%+ game compatibility pending)
+
+---
+
+## Signaler la compatibilite
+
+Si vous testez un programme non liste ici, merci de signaler :
+- Nom du programme et format (.TAP/.DSK)
+- S'il se charge et s'execute correctement
+- Tout glitch visuel ou audio observe
+- Etapes pour reproduire tout probleme

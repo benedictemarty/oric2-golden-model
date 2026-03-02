@@ -362,6 +362,23 @@ including host filesystem sharing and conversion tools for legacy BASIC/machine 
 - [x] `profiler_init/start/stop/record_instruction/record_cycles/reset/report` API
 - [x] 10 new profiler tests (246 total, 100% pass)
 
+### Sprint 30: ROM Analysis Tools (v1.12.0-alpha) - DONE
+- [x] `--rom-info [FILE]`: analyze ROM vectors, targets, strings, usage stats
+- [x] Vector extraction: RESET ($FFFC), NMI ($FFFA), IRQ ($FFFE)
+- [x] JSR/JMP target scanning with reference counts (up to 512 targets)
+- [x] ASCII string detection (min 4 chars, up to 256 strings)
+- [x] Code vs data vs fill usage classification
+- [x] Byte pattern search (rominfo_find_pattern)
+- [x] `rominfo_init/analyze/report/report_to_file/find_pattern` API
+- [x] 10 new ROM analysis tests (256 total, 100% pass)
+
+### Sprint 31: Comprehensive Documentation (v1.13.0-alpha) - DONE
+- [x] API reference (docs/api/README.md): 24 headers, ~200 functions, 22 module sections
+- [x] User guide rewrite (docs/user-guide/README.md): 17 sections, all features
+- [x] Compatibility list update (docs/COMPATIBILITY.md): 256 tests, Atmos ROM
+- [x] Fixed stale data in README, CIRRUS_OS quality gates, ROADMAP
+- [x] Version bump to 1.13.0-alpha
+
 ## Future Enhancements
 
 ### Advanced Features
@@ -393,10 +410,10 @@ including host filesystem sharing and conversion tools for legacy BASIC/machine 
 - [x] 256 tests passing (make tests)
 - [x] Zero critical bugs in test suite
 - [x] API documentation complete
-- [ ] Comprehensive user guide
+- [x] Comprehensive user guide
 
 ---
 
 **Last Updated**: 2026-03-02
-**Current Version**: 1.12.0-alpha
+**Current Version**: 1.13.0-alpha
 **Next Milestone**: 2.0.0 (Telestrat / stable release)

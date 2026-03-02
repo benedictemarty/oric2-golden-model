@@ -2,7 +2,7 @@
 
 A cycle-accurate ORIC-1 / Atmos emulator written in C11.
 
-**Version: 1.12.0-alpha** | **256 tests, 100% pass** | **Zero memory leaks**
+**Version: 1.13.0-alpha** | **256 tests, 100% pass** | **Zero memory leaks**
 
 ```
  ____  _                      _                _
@@ -308,6 +308,7 @@ docs/            User guide, compatibility list, agile plan
 ## Documentation
 
 - [User Guide](docs/user-guide/README.md)
+- [API Reference](docs/api/README.md)
 - [Compatibility List](docs/COMPATIBILITY.md)
 - [Contributing](CONTRIBUTING.md)
 - [Changelog](CHANGELOG)
@@ -322,7 +323,7 @@ docs/            User guide, compatibility list, agile plan
 ### Avertissements
 
 - **Aucune vérification formelle** : le code n'a pas été audité par un
-  ingénieur logiciel professionnel. Bien que 216 tests unitaires passent,
+  ingénieur logiciel professionnel. Bien que 256 tests unitaires passent,
   la couverture de test n'est pas exhaustive et des cas limites peuvent exister.
 - **Non adapté à la production** : il s'agit d'un projet expérimental et
   éducatif. Il ne doit pas être utilisé dans des environnements critiques,
@@ -406,4 +407,4 @@ This project is licensed under the [MIT License](LICENSE).
 
 ---
 
-Phosphoric v1.12.0-alpha | 256 tests | ORIC-1 + Atmos | ROM Analysis + CPU Profiler + CPU Trace + Display Scaling + MCP-40 Plotter + Printer + Joystick | 2026-03-02
+Phosphoric v1.13.0-alpha | 256 tests | ORIC-1 + Atmos | Documentation + ROM Analysis + CPU Profiler + CPU Trace + Display Scaling + MCP-40 Plotter + Printer + Joystick | 2026-03-02

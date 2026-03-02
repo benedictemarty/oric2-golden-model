@@ -1,12 +1,18 @@
 VERSION_TRACKING - Phosphoric
 =====================================
 
-Current Version: 1.12.0-alpha
+Current Version: 1.13.0-alpha
 Release Date: 2026-03-02
-Status: Alpha (ROM Analysis + CPU Profiler + CPU Trace + Display Scaling + MCP-40 Plotter + Printer + Joystick + Atmos + Save States + Full Type Safety + WAV Audio + CASTV2 + MJPEG Cast, 256 tests pass)
+Status: Alpha (Documentation + ROM Analysis + CPU Profiler + CPU Trace + Display Scaling + MCP-40 Plotter + Printer + Joystick + Atmos + Save States + Full Type Safety + WAV Audio + CASTV2 + MJPEG Cast, 256 tests pass)
 
 Version History:
 ----------------
+- 1.13.0-alpha (2026-03-02): Comprehensive Documentation (Sprint 31)
+  * Complete API reference (docs/api/README.md): 24 headers, ~200 functions, 22 modules
+  * User guide rewrite (docs/user-guide/README.md): 17 sections, all features covered
+  * Compatibility list update (docs/COMPATIBILITY.md): 256 tests, Atmos ROM added
+  * Fixed stale data in README, CIRRUS_OS, ROADMAP
+
 - 1.12.0-alpha (2026-03-02): ROM Analysis Tools (Sprint 30)
   * --rom-info [FILE]: analyze ROM vectors, JSR/JMP targets, strings, usage stats
   * rominfo_analyze/report/find_pattern API
