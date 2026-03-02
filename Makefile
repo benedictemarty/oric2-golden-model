@@ -27,6 +27,13 @@ ifeq ($(CAST), 1)
     LDFLAGS += -lpthread -lssl -lcrypto
 endif
 
+# Coverage support (optional)
+COVERAGE ?= 0
+ifeq ($(COVERAGE), 1)
+    CFLAGS += --coverage -O0 -g
+    LDFLAGS += --coverage
+endif
+
 # Source files
 SOURCES = src/main.c \
           src/cpu/cpu6502.c \
@@ -84,7 +91,7 @@ BINDIR = $(PREFIX)/bin
 DATADIR = $(PREFIX)/share/phosphoric
 DOCDIR = $(PREFIX)/share/doc/phosphoric
 
-.PHONY: all clean tools tests test-cpu test-memory test-io test-storage test-system test-rom test-video test-audio test-debugger test-cast test-savestate test-atmos test-joystick test-printer test-mcp40 test-renderer test-trace test-profiler test-rominfo valgrind static-analysis install uninstall help
+.PHONY: all clean tools tests test-cpu test-memory test-io test-storage test-system test-rom test-video test-audio test-debugger test-cast test-savestate test-atmos test-joystick test-printer test-mcp40 test-renderer test-trace test-profiler test-rominfo valgrind static-analysis coverage coverage-report install uninstall help
 
 all: $(TARGET)
 
@@ -251,7 +258,20 @@ test-rominfo: $(TEST_ROMINFO_SRCS)
 	@$(CC) $(CFLAGS) $(TEST_ROMINFO_SRCS) $(LDFLAGS) -o test_rominfo
 	@./test_rominfo
 
-tests: test-cpu test-memory test-io test-storage test-system test-video test-audio test-debugger test-savestate test-atmos test-joystick test-printer test-mcp40 test-renderer test-trace test-profiler test-rominfo
+TEST_COVERAGE_SRCS = tests/unit/test_coverage.c src/cpu/cpu6502.c src/cpu/opcodes.c \
+                     src/cpu/addressing.c src/memory/memory.c src/memory/banking.c \
+                     src/io/via6522.c src/io/keyboard.c src/io/joystick.c \
+                     src/io/printer.c src/io/mcp40.c src/io/microdisc.c \
+                     src/storage/sedoric.c src/storage/disk.c \
+                     src/savestate.c src/debugger.c \
+                     src/audio/ay3891x.c src/video/video.c \
+                     src/utils/logging.c
+
+test-coverage: $(TEST_COVERAGE_SRCS)
+	@$(CC) $(CFLAGS) $(TEST_COVERAGE_SRCS) $(LDFLAGS) -o test_coverage
+	@./test_coverage
+
+tests: test-cpu test-memory test-io test-storage test-system test-video test-audio test-debugger test-savestate test-atmos test-joystick test-printer test-mcp40 test-renderer test-trace test-profiler test-rominfo test-coverage
 	@echo ""
 	@echo "═══════════════════════════════════════════════════════"
 	@echo "  All test suites completed!"
@@ -288,6 +308,54 @@ valgrind: test-cpu test-memory test-io test-storage test-system test-rom test-vi
 	@echo "  Valgrind: No memory leaks detected!"
 	@echo "═══════════════════════════════════════════════════════"
 
+# ═══════════════════════════════════════════════════════════════
+#  CODE COVERAGE
+# ═══════════════════════════════════════════════════════════════
+
+coverage:
+	@echo "Building and running tests with coverage instrumentation..."
+	@$(MAKE) clean --no-print-directory
+	@$(MAKE) tests COVERAGE=1 --no-print-directory
+	@echo ""
+	@echo "Generating coverage report..."
+	@$(MAKE) coverage-report --no-print-directory
+
+coverage-report:
+	@echo "═══════════════════════════════════════════════════════"
+	@echo "  Code Coverage Report — Phosphoric"
+	@echo "═══════════════════════════════════════════════════════"
+	@echo ""
+	@total_lines=0; covered_lines=0; \
+	echo "File                                      Lines   Covered   Coverage"; \
+	echo "────────────────────────────────────────────────────────────────────"; \
+	for gcno in $$(find src/ -name '*.gcno' 2>/dev/null); do \
+		src=$$(echo $$gcno | sed 's/\.gcno$$/.c/'); \
+		if [ -f "$$src" ]; then \
+			gcov -n "$$src" 2>/dev/null | grep -A1 "^File '$$src'" | tail -1 | \
+			while read line; do \
+				pct=$$(echo "$$line" | grep -oP '[0-9]+\.[0-9]+%' | head -1); \
+				lines=$$(echo "$$line" | grep -oP 'of [0-9]+' | grep -oP '[0-9]+' | head -1); \
+				if [ -n "$$pct" ] && [ -n "$$lines" ]; then \
+					cov=$$(echo "$$pct" | sed 's/%//'); \
+					covered=$$(echo "$$lines $$cov" | awk '{printf "%d", $$1 * $$2 / 100}'); \
+					printf "%-42s %5s   %5s     %s\n" "$$src" "$$lines" "$$covered" "$$pct"; \
+				fi; \
+			done; \
+		fi; \
+	done
+	@echo ""
+	@echo "Generating aggregate summary..."
+	@gcov -n src/**/*.c src/*.c 2>/dev/null | grep -E "^Lines executed:" | \
+		awk -F'[:%]' 'BEGIN{tl=0;te=0;n=0} {split($$3,a," of "); te+=$$2*a[2]/100; tl+=a[2]; n++} \
+		END{if(tl>0) printf "TOTAL: %.1f%% (%d/%d lines in %d files)\n", te/tl*100, te, tl, n; \
+		else print "No coverage data found"}'
+	@echo ""
+	@echo "═══════════════════════════════════════════════════════"
+
+coverage-clean:
+	@find . -name '*.gcno' -o -name '*.gcda' -o -name '*.gcov' | xargs rm -f 2>/dev/null
+	@echo "Coverage data cleaned."
+
 install: $(TARGET)
 	install -d $(DESTDIR)$(BINDIR)
 	install -m 755 $(TARGET) $(DESTDIR)$(BINDIR)/
@@ -303,8 +371,9 @@ uninstall:
 
 clean:
 	rm -f $(OBJECTS) $(TARGET) $(TOOLS)
-	rm -f test_cpu test_memory test_io test_storage test_system test_rom test_video test_audio test_debugger test_cast test_savestate test_atmos test_joystick test_printer test_mcp40 test_renderer test_trace test_profiler test_rominfo
+	rm -f test_cpu test_memory test_io test_storage test_system test_rom test_video test_audio test_debugger test_cast test_savestate test_atmos test_joystick test_printer test_mcp40 test_renderer test_trace test_profiler test_rominfo test_coverage
 	rm -f tools/*.o
+	find . -name '*.gcno' -o -name '*.gcda' -o -name '*.gcov' | xargs rm -f 2>/dev/null
 
 help:
 	@echo "Phosphoric — ORIC-1 Emulator Makefile"
@@ -336,6 +405,7 @@ help:
 	@echo "  static-analysis - Run static analysis"
 	@echo "  install      - Install emulator (PREFIX=/usr/local)"
 	@echo "  uninstall    - Remove installed files"
+	@echo "  coverage     - Build with coverage, run tests, generate report"
 	@echo "  clean        - Remove build artifacts"
 	@echo "  help         - Show this help"
 	@echo ""
@@ -343,3 +413,4 @@ help:
 	@echo "  DEBUG=1      - Build with debug symbols"
 	@echo "  SDL2=1       - Build with SDL2 display/audio"
 	@echo "  CAST=1       - Build with MJPEG cast server"
+	@echo "  COVERAGE=1   - Build with gcov coverage instrumentation"

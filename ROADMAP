@@ -379,6 +379,14 @@ including host filesystem sharing and conversion tools for legacy BASIC/machine 
 - [x] Fixed stale data in README, CIRRUS_OS quality gates, ROADMAP
 - [x] Version bump to 1.13.0-alpha
 
+### Sprint 32: Code Coverage Measurement (v1.14.0-alpha) - DONE
+- [x] `make coverage` target: gcov instrumented build + per-file report
+- [x] `COVERAGE=1` Makefile option for instrumented builds
+- [x] 24 new coverage improvement tests (keyboard, microdisc, FDC, sedoric, debugger, CPU)
+- [x] Coverage results: 72.2% global, 78.9% excluding interactive REPL
+- [x] 15 modules >= 80%, 5 modules 60-80%, 4 modules < 60%
+- [x] 280 total tests (256 + 24 coverage, 100% pass)
+
 ## Future Enhancements
 
 ### Advanced Features
@@ -404,6 +412,7 @@ including host filesystem sharing and conversion tools for legacy BASIC/machine 
 - [x] 100% CPU instruction compatibility (151/151 opcodes)
 - [x] Cycle-accurate timing
 - [x] 100% game compatibility (40/40 programs tested: 25 TAP + 11 DSK + 4 demos)
+- [x] Code coverage measured: 72.2% global, 78.9% excluding interactive REPL
 - [ ] <5% CPU overhead on modern hardware
 
 ### Quality
@@ -415,5 +424,5 @@ including host filesystem sharing and conversion tools for legacy BASIC/machine 
 ---
 
 **Last Updated**: 2026-03-02
-**Current Version**: 1.13.0-alpha
+**Current Version**: 1.14.0-alpha
 **Next Milestone**: 2.0.0 (Telestrat / stable release)

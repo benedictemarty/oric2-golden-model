@@ -1,12 +1,18 @@
 VERSION_TRACKING - Phosphoric
 =====================================
 
-Current Version: 1.13.0-alpha
+Current Version: 1.14.0-alpha
 Release Date: 2026-03-02
-Status: Alpha (Documentation + ROM Analysis + CPU Profiler + CPU Trace + Display Scaling + MCP-40 Plotter + Printer + Joystick + Atmos + Save States + Full Type Safety + WAV Audio + CASTV2 + MJPEG Cast, 256 tests pass)
+Status: Alpha (Code Coverage + Documentation + ROM Analysis + CPU Profiler + CPU Trace + Display Scaling + MCP-40 Plotter + Printer + Joystick + Atmos + Save States + Full Type Safety + WAV Audio + CASTV2 + MJPEG Cast, 280 tests pass)
 
 Version History:
 ----------------
+- 1.14.0-alpha (2026-03-02): Code Coverage Measurement (Sprint 32)
+  * make coverage target: gcov instrumented build + report
+  * 24 new coverage tests (keyboard, microdisc, FDC, sedoric, debugger, CPU)
+  * 72.2% global coverage (78.9% excluding interactive REPL)
+  * 280 total tests (256 + 24 coverage tests)
+
 - 1.13.0-alpha (2026-03-02): Comprehensive Documentation (Sprint 31)
   * Complete API reference (docs/api/README.md): 24 headers, ~200 functions, 22 modules
   * User guide rewrite (docs/user-guide/README.md): 17 sections, all features covered

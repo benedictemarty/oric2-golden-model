@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.14.0-alpha] - 2026-03-02
+
+### Code Coverage Measurement (Sprint 32)
+
+#### Added
+- **`make coverage`** target: builds with `--coverage`, runs all tests, generates gcov report
+- **`COVERAGE=1`** Makefile option: instruments build with gcov flags (`--coverage -O0 -g`)
+- **24 coverage improvement tests** (`test_coverage.c`): keyboard init/reset/press,
+  microdisc I/O/drive select, FDC seek/read/write sector, Sedoric create/save/load,
+  debugger breakpoints/watchpoints/should_break, memory banking, CPU BCD/stack/JMP bug/NMI
+- **`make test-coverage`** target in Makefile
+
+#### Coverage Results
+- **72.2% global** (2235/3095 lines across 23 source files)
+- **78.9% excluding interactive REPL** (debugger.c REPL is untestable in batch mode)
+- 15 modules at >= 80% coverage, 5 modules at 60-80%, 4 modules < 60%
+- Highest: joystick 100%, keyboard 100%, addressing 97%, export 97%
+- Lowest: debugger 15.7% (interactive REPL), renderer 42.9% (SDL2 stubs)
+
+#### Changed
+- **Makefile**: added `coverage`, `coverage-report`, `coverage-clean` targets
+- **280 total tests** (256 existing + 24 coverage tests)
+
 ## [1.13.0-alpha] - 2026-03-02
 
 ### Comprehensive Documentation (Sprint 31)

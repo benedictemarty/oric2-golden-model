@@ -2,8 +2,8 @@ CIRRUS_OS - Phosphoric Build & Development Status
 ======================================================
 
 Project: Phosphoric — ORIC-1/Atmos Cycle-Accurate Emulator
-Version: 1.13.0-alpha
-Build Status: ALPHA (Documentation + ROM Analysis + CPU Profiler + CPU Trace + Display Scaling + MCP-40 Plotter + Printer + Joystick + Atmos + Save States + Full Type Safety + WAV Audio + CASTV2 + MJPEG Cast)
+Version: 1.14.0-alpha
+Build Status: ALPHA (Code Coverage + Documentation + ROM Analysis + CPU Profiler + CPU Trace + Display Scaling + MCP-40 Plotter + Printer + Joystick + Atmos + Save States + Full Type Safety + WAV Audio + CASTV2 + MJPEG Cast)
 Last Updated: 2026-03-02
 
 ================================================================
@@ -66,7 +66,7 @@ Legend: [V] Complete [*] In Progress [ ] Not Started [X] Failed
 
 TEST RESULTS
 ------------
-Unit Tests: 256/256 passed (100%)
+Unit Tests: 280/280 passed (100%)
 Integration Tests: 7/7 passed (100%)
 ROM Compatibility: 12/12 passed (100%)
 Video Export Tests: 11/11 passed (100%)
@@ -112,9 +112,9 @@ Performance: ~90+ MHz equivalent (target: 10x real-time met)
 
 QUALITY GATES
 -------------
-[V] All unit tests pass (256/256 via make tests)
+[V] All unit tests pass (280/280 via make tests)
 [V] No compiler errors
-[ ] Code coverage > 80% (measurement pending)
+[V] Code coverage measured (72.2% global, 78.9% hors REPL interactif, gcov)
 [V] No critical warnings
 [V] ROM compatibility validated (basic10.rom)
 [V] Performance benchmarks pass (<100ms for 1M cycles)
@@ -126,8 +126,8 @@ QUALITY GATES
 
 SPRINT STATUS
 -------------
-Current Sprint: Sprint 31 completed
-Sprint Progress: 100% (Comprehensive Documentation v1.13.0-alpha)
+Current Sprint: Sprint 32 completed
+Sprint Progress: 100% (Code Coverage Measurement v1.14.0-alpha)
 
 Completed Sprints:
 - [V] Sprint 0: Infrastructure setup
@@ -164,6 +164,7 @@ Completed Sprints:
 - [V] Sprint 29: CPU Performance Profiler (246 tests)
 - [V] Sprint 30: ROM Analysis Tools (256 tests)
 - [V] Sprint 31: Comprehensive Documentation (256 tests)
+- [V] Sprint 32: Code Coverage Measurement (280 tests)
 
 Remaining:
 - [ ] Telestrat support
