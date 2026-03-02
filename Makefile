@@ -58,7 +58,8 @@ SOURCES = src/main.c \
           src/utils/logging.c \
           src/utils/config.c \
           src/utils/trace.c \
-          src/utils/profiler.c
+          src/utils/profiler.c \
+          src/utils/rominfo.c
 
 ifeq ($(CAST), 1)
     SOURCES += src/network/cast_server.c src/network/castv2.c
@@ -83,7 +84,7 @@ BINDIR = $(PREFIX)/bin
 DATADIR = $(PREFIX)/share/phosphoric
 DOCDIR = $(PREFIX)/share/doc/phosphoric
 
-.PHONY: all clean tools tests test-cpu test-memory test-io test-storage test-system test-rom test-video test-audio test-debugger test-cast test-savestate test-atmos test-joystick test-printer test-mcp40 test-renderer test-trace test-profiler valgrind static-analysis install uninstall help
+.PHONY: all clean tools tests test-cpu test-memory test-io test-storage test-system test-rom test-video test-audio test-debugger test-cast test-savestate test-atmos test-joystick test-printer test-mcp40 test-renderer test-trace test-profiler test-rominfo valgrind static-analysis install uninstall help
 
 all: $(TARGET)
 
@@ -242,7 +243,15 @@ test-profiler: $(TEST_PROFILER_SRCS)
 	@$(CC) $(CFLAGS) $(TEST_PROFILER_SRCS) $(LDFLAGS) -o test_profiler
 	@./test_profiler
 
-tests: test-cpu test-memory test-io test-storage test-system test-video test-audio test-debugger test-savestate test-atmos test-joystick test-printer test-mcp40 test-renderer test-trace test-profiler
+TEST_ROMINFO_SRCS = tests/unit/test_rominfo.c src/utils/rominfo.c \
+                    src/cpu/cpu6502.c src/cpu/opcodes.c src/cpu/addressing.c \
+                    src/memory/memory.c src/memory/banking.c src/utils/logging.c
+
+test-rominfo: $(TEST_ROMINFO_SRCS)
+	@$(CC) $(CFLAGS) $(TEST_ROMINFO_SRCS) $(LDFLAGS) -o test_rominfo
+	@./test_rominfo
+
+tests: test-cpu test-memory test-io test-storage test-system test-video test-audio test-debugger test-savestate test-atmos test-joystick test-printer test-mcp40 test-renderer test-trace test-profiler test-rominfo
 	@echo ""
 	@echo "═══════════════════════════════════════════════════════"
 	@echo "  All test suites completed!"
@@ -294,7 +303,7 @@ uninstall:
 
 clean:
 	rm -f $(OBJECTS) $(TARGET) $(TOOLS)
-	rm -f test_cpu test_memory test_io test_storage test_system test_rom test_video test_audio test_debugger test_cast test_savestate test_atmos test_joystick test_printer test_mcp40 test_renderer test_trace test_profiler
+	rm -f test_cpu test_memory test_io test_storage test_system test_rom test_video test_audio test_debugger test_cast test_savestate test_atmos test_joystick test_printer test_mcp40 test_renderer test_trace test_profiler test_rominfo
 	rm -f tools/*.o
 
 help:
@@ -321,6 +330,7 @@ help:
 	@echo "  test-renderer- Run display scaling tests"
 	@echo "  test-trace   - Run CPU trace logging tests"
 	@echo "  test-profiler- Run CPU profiler tests"
+	@echo "  test-rominfo - Run ROM analysis tests"
 	@echo "  test-cast    - Run cast server tests (requires CAST=1)"
 	@echo "  valgrind     - Run all tests under Valgrind"
 	@echo "  static-analysis - Run static analysis"

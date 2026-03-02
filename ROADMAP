@@ -377,7 +377,7 @@ including host filesystem sharing and conversion tools for legacy BASIC/machine 
 - [x] Memory viewer (debugger: m command)
 - [x] Register inspector (debugger: r command)
 - [x] Performance profiler
-- [ ] ROM analysis tools
+- [x] ROM analysis tools
 
 ---
 
@@ -390,7 +390,7 @@ including host filesystem sharing and conversion tools for legacy BASIC/machine 
 - [ ] <5% CPU overhead on modern hardware
 
 ### Quality
-- [x] 246 tests passing (make tests)
+- [x] 256 tests passing (make tests)
 - [x] Zero critical bugs in test suite
 - [x] API documentation complete
 - [ ] Comprehensive user guide
@@ -398,5 +398,5 @@ including host filesystem sharing and conversion tools for legacy BASIC/machine 
 ---
 
 **Last Updated**: 2026-03-02
-**Current Version**: 1.11.0-alpha
+**Current Version**: 1.12.0-alpha
 **Next Milestone**: 2.0.0 (Telestrat / stable release)

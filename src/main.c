@@ -32,6 +32,7 @@
 #include "debugger.h"
 #include "savestate.h"
 #include "utils/trace.h"
+#include "utils/rominfo.h"
 #ifdef HAS_SDL2
 #include <SDL2/SDL.h>
 #endif
@@ -144,6 +145,7 @@ static void print_usage(const char* program_name) {
     printf("      --trace FILE           Log CPU instruction trace to FILE\n");
     printf("      --trace-max N          Max instructions to trace (default: unlimited)\n");
     printf("      --profile FILE         Write CPU performance profile to FILE on exit\n");
+    printf("      --rom-info [FILE]      Analyze ROM and print report (or write to FILE)\n");
     printf("      --save-state FILE      Save emulator state to FILE on exit\n");
     printf("      --load-state FILE      Load emulator state from FILE at startup\n");
     printf("  -?, --help                 Show this help\n");
@@ -793,9 +795,11 @@ int main(int argc, char* argv[]) {
     const char* trace_file = NULL;
     int64_t trace_max = 0;
     const char* profile_file = NULL;
+    const char* rom_info_file = NULL;
+    bool rom_info_enabled = false;
 
     /* Long option codes for options without short equivalents */
-    enum { OPT_SCREENSHOT = 256, OPT_SCREENSHOT_AT, OPT_FRAME_DUMP, OPT_FRAME_DUMP_INTERVAL, OPT_TYPE_KEYS, OPT_DISK_ROM, OPT_DISK1, OPT_DISK2, OPT_DISK3, OPT_BREAKPOINT, OPT_DEBUG_BREAK, OPT_CAST_SERVER, OPT_CAST_DISCOVER, OPT_CAST_TO, OPT_SAVE_STATE, OPT_LOAD_STATE, OPT_MODEL, OPT_JOYSTICK, OPT_PRINTER, OPT_PRINTER_TYPE, OPT_SCALE, OPT_TRACE, OPT_TRACE_MAX, OPT_PROFILE };
+    enum { OPT_SCREENSHOT = 256, OPT_SCREENSHOT_AT, OPT_FRAME_DUMP, OPT_FRAME_DUMP_INTERVAL, OPT_TYPE_KEYS, OPT_DISK_ROM, OPT_DISK1, OPT_DISK2, OPT_DISK3, OPT_BREAKPOINT, OPT_DEBUG_BREAK, OPT_CAST_SERVER, OPT_CAST_DISCOVER, OPT_CAST_TO, OPT_SAVE_STATE, OPT_LOAD_STATE, OPT_MODEL, OPT_JOYSTICK, OPT_PRINTER, OPT_PRINTER_TYPE, OPT_SCALE, OPT_TRACE, OPT_TRACE_MAX, OPT_PROFILE, OPT_ROM_INFO };
 
     static struct option long_options[] = {
         {"tape",                required_argument, 0, 't'},
@@ -832,6 +836,7 @@ int main(int argc, char* argv[]) {
         {"trace",               required_argument, 0, OPT_TRACE},
         {"trace-max",           required_argument, 0, OPT_TRACE_MAX},
         {"profile",             required_argument, 0, OPT_PROFILE},
+        {"rom-info",            optional_argument, 0, OPT_ROM_INFO},
         {"help",                no_argument,       0, '?'},
         {0, 0, 0, 0}
     };
@@ -887,6 +892,10 @@ int main(int argc, char* argv[]) {
             case OPT_TRACE: trace_file = optarg; break;
             case OPT_TRACE_MAX: trace_max = atoll(optarg); break;
             case OPT_PROFILE: profile_file = optarg; break;
+            case OPT_ROM_INFO:
+                rom_info_enabled = true;
+                if (optarg) rom_info_file = optarg;
+                break;
             case '?':
             default:
                 print_usage(argv[0]);
@@ -1014,6 +1023,19 @@ int main(int argc, char* argv[]) {
             emulator_cleanup(&emu);
             return 1;
         }
+    }
+
+    /* ROM analysis (if requested) */
+    if (rom_info_enabled && rom_file) {
+        rom_analysis_t rom_analysis;
+        rominfo_analyze(&rom_analysis, emu.memory.rom, ROM_SIZE);
+        if (rom_info_file) {
+            rominfo_report_to_file(&rom_analysis, emu.memory.rom, ROM_SIZE, rom_info_file);
+        } else {
+            rominfo_report(&rom_analysis, emu.memory.rom, ROM_SIZE, stdout);
+        }
+    } else if (rom_info_enabled && !rom_file) {
+        log_error("--rom-info requires a ROM file (-r ROM)");
     }
 
     /* Detect or set machine model */

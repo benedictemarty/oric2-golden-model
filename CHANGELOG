@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.12.0-alpha] - 2026-03-02
+
+### ROM Analysis Tools (Sprint 30)
+
+#### Added
+- **ROM analysis** (`--rom-info [FILE]`): analyze a loaded ROM to extract hardware
+  vectors (RESET, NMI, IRQ), map JSR/JMP targets, detect ASCII strings, and compute
+  region usage statistics (code vs data vs fill bytes)
+- **`rom_analysis_t`** structure: vectors, subroutine targets (up to 512), strings
+  (up to 256), usage statistics
+- **`rominfo_init()`**, **`rominfo_analyze()`**, **`rominfo_report()`**,
+  **`rominfo_report_to_file()`**, **`rominfo_find_pattern()`** API
+- **Pattern search**: find arbitrary byte sequences in ROM with address results
+- **Sorted target map**: JSR/JMP targets sorted by address with reference counts
+- **10 new ROM analysis tests**: init, vector detection, JSR targets, JMP targets,
+  string detection, pattern search, usage stats, report output, empty ROM, cross-refs
+- **`make test-rominfo`** target in Makefile
+
+#### Changed
+- **main.c**: `--rom-info` option, analysis runs after ROM load, output to stdout or file
+
 ## [1.11.0-alpha] - 2026-03-02
 
 ### CPU Performance Profiler (Sprint 29)
