@@ -31,7 +31,7 @@
 #include "utils/profiler.h"
 #include "network/cast_server.h"
 
-#define EMU_VERSION "1.14.1-alpha"
+#define EMU_VERSION "1.14.2-alpha"
 
 /**
  * @brief ORIC machine model
@@ -126,6 +126,8 @@ typedef struct emulator_s {
     int type_keys_idx;
     int64_t type_keys_next_cycle;
     bool type_keys_done;
+    char type_keys_last_char;       /* Last typed char (debounce repeated keys) */
+    int type_keys_debounce;         /* Debounce frames remaining (0 = ready) */
 
     /* Breakpoint (legacy single breakpoint, -1 = none) */
     int32_t breakpoint;

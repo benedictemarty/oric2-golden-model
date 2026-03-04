@@ -348,6 +348,23 @@ TEST(test_deferred_fastload_survives_ram_clear) {
 }
 
 /* ═══════════════════════════════════════════════════════════════════ */
+/*  TYPE-KEYS DEBOUNCE TESTS                                          */
+/* ═══════════════════════════════════════════════════════════════════ */
+
+TEST(test_type_keys_debounce_field) {
+    emulator_t emu;
+    memset(&emu, 0, sizeof(emu));
+    /* Verify debounce fields exist and are zero-initialized */
+    ASSERT_EQ(emu.type_keys_last_char, 0);
+    ASSERT_EQ(emu.type_keys_debounce, 0);
+    /* Set and verify */
+    emu.type_keys_last_char = 'A';
+    emu.type_keys_debounce = 2;
+    ASSERT_EQ(emu.type_keys_last_char, 'A');
+    ASSERT_EQ(emu.type_keys_debounce, 2);
+}
+
+/* ═══════════════════════════════════════════════════════════════════ */
 /*  MAIN                                                              */
 /* ═══════════════════════════════════════════════════════════════════ */
 
@@ -372,6 +389,9 @@ int main(void) {
     RUN(test_deferred_fastload_fields);
     RUN(test_deferred_fastload_buffer);
     RUN(test_deferred_fastload_survives_ram_clear);
+
+    printf("\n  Type-Keys Debounce:\n");
+    RUN(test_type_keys_debounce_field);
 
     printf("\n═══════════════════════════════════════════════════════════\n");
     printf("Results: %d passed, %d failed\n", tests_passed, tests_failed);

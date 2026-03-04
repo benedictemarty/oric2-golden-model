@@ -394,6 +394,12 @@ including host filesystem sharing and conversion tools for legacy BASIC/machine 
 - [x] Cleanup du buffer dans `emulator_cleanup()`
 - [x] 3 nouveaux tests deferred fast-load (283 total, 100% pass)
 
+### Sprint 32 bugfix: Timer Exact-Zero & Type-Keys Debounce (v1.14.2-alpha) - DONE
+- [x] Fix Timer1/T2 IFR jamais levé quand compteur atteint exactement 0 (Popeye #4)
+- [x] Fix type-keys perd les caractères répétés consécutifs (Popeye #3)
+- [x] `emulator_t` : `type_keys_last_char`, `type_keys_debounce`
+- [x] 3 nouveaux tests (286 total, 100% pass)
+
 ## Future Enhancements
 
 ### Advanced Features

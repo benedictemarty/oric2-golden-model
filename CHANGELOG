@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.14.2-alpha] - 2026-03-04
+
+### Timer Exact-Zero & Type-Keys Debounce Fix (Sprint 32 bugfix — Popeye #3 & #4)
+
+#### Fixed
+- **Timer1/T2 IFR jamais levé quand compteur atteint exactement 0** : la condition
+  d'underflow dans `via_update()` ne couvrait pas le cas exact-zero (ex: latch=2,
+  cycles=2 → counter=0 → condition false). Ajout de `|| via->t1_counter == 0` pour
+  T1 et T2 (Popeye #4)
+- **type-keys perd les caractères répétés consécutifs** : `release_all()` + `press_char(c)`
+  dans le même frame ne créait pas de transition visible par la ROM quand c == précédent.
+  Insertion d'une phase release de 2 frames avant de re-presser le même caractère (Popeye #3)
+
+#### Added
+- `emulator_t` : champs `type_keys_last_char`, `type_keys_debounce` pour le debounce
+- 3 nouveaux tests : `test_via_t1_exact_zero`, `test_via_t2_exact_zero`,
+  `test_type_keys_debounce_field`
+
+#### Changed
+- **286 total tests** (283 + 3 Popeye #3/#4 tests)
+
 ## [1.14.1-alpha] - 2026-03-04
 
 ### Deferred Fast-Load Fix (Sprint 32 bugfix — Popeye #1)

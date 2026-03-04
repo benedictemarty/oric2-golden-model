@@ -194,7 +194,7 @@ void via_update(via6522_t* via, int cycles) {
     if (via->t1_running) {
         int old = via->t1_counter;
         via->t1_counter -= (uint16_t)cycles;
-        if (via->t1_counter > (uint16_t)old || via->t1_counter == 0xFFFF) {
+        if (via->t1_counter > (uint16_t)old || via->t1_counter == 0xFFFF || via->t1_counter == 0) {
             /* Timer 1 underflow */
             via->ifr |= VIA_INT_T1;
             via_check_irq(via);
@@ -213,7 +213,7 @@ void via_update(via6522_t* via, int cycles) {
     if (via->t2_running && !(via->acr & 0x20)) {
         int old = via->t2_counter;
         via->t2_counter -= (uint16_t)cycles;
-        if (via->t2_counter > (uint16_t)old || via->t2_counter == 0xFFFF) {
+        if (via->t2_counter > (uint16_t)old || via->t2_counter == 0xFFFF || via->t2_counter == 0) {
             via->ifr |= VIA_INT_T2;
             via_check_irq(via);
             via->t2_running = false;

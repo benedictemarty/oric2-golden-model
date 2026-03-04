@@ -626,10 +626,25 @@ static void emulator_run(emulator_t* emu) {
                     emu->type_keys_next_cycle = (int64_t)total_executed + ORIC_CLOCK_HZ * secs;
                 } else {
                     /* Regular character */
-                    oric_keyboard_release_all(&emu->keyboard);
-                    oric_keyboard_press_char(&emu->keyboard, c);
-                    emu->type_keys_idx++;
-                    emu->type_keys_next_cycle = (int64_t)total_executed + CYCLES_PER_FRAME * 4;
+                    if (emu->type_keys_debounce > 0) {
+                        /* Debounce phase: release all keys and wait */
+                        oric_keyboard_release_all(&emu->keyboard);
+                        emu->type_keys_debounce--;
+                        emu->type_keys_next_cycle = (int64_t)total_executed + CYCLES_PER_FRAME;
+                    } else if (c == emu->type_keys_last_char) {
+                        /* Same char as previous: insert release phase */
+                        oric_keyboard_release_all(&emu->keyboard);
+                        emu->type_keys_debounce = 1; /* 1 more frame of release */
+                        emu->type_keys_last_char = 0;
+                        emu->type_keys_next_cycle = (int64_t)total_executed + CYCLES_PER_FRAME;
+                    } else {
+                        /* New character: press immediately */
+                        oric_keyboard_release_all(&emu->keyboard);
+                        oric_keyboard_press_char(&emu->keyboard, c);
+                        emu->type_keys_last_char = c;
+                        emu->type_keys_idx++;
+                        emu->type_keys_next_cycle = (int64_t)total_executed + CYCLES_PER_FRAME * 4;
+                    }
                 }
             }
         }

@@ -417,6 +417,40 @@ TEST(test_register_mask) {
 }
 
 /* ═══════════════════════════════════════════════════════════════════ */
+/*  TIMER EXACT-ZERO TESTS                                            */
+/* ═══════════════════════════════════════════════════════════════════ */
+
+TEST(test_via_t1_exact_zero) {
+    via6522_t via;
+    via_init(&via);
+    /* Set T1 latch to 2, start timer */
+    via_write(&via, VIA_T1CL, 2);
+    via_write(&via, VIA_T1CH, 0);  /* starts timer */
+    /* Clear IFR T1 flag that may have been set */
+    via.ifr = 0;
+    /* Update by exactly 2 cycles: counter goes from 2 to 0 */
+    via_update(&via, 2);
+    /* IFR bit 6 (T1) should be set */
+    ASSERT_EQ(via.ifr & 0x40, 0x40);
+}
+
+TEST(test_via_t2_exact_zero) {
+    via6522_t via;
+    via_init(&via);
+    /* Set T2 latch to 4 */
+    via_write(&via, VIA_T2CL, 4);
+    via_write(&via, VIA_T2CH, 0);  /* starts timer */
+    /* Clear IFR */
+    via.ifr = 0;
+    /* ACR bit 5 clear = timer mode (not pulse counting) */
+    via.acr &= ~0x20;
+    /* Update by exactly 4 cycles: counter goes from 4 to 0 */
+    via_update(&via, 4);
+    /* IFR bit 5 (T2) should be set */
+    ASSERT_EQ(via.ifr & 0x20, 0x20);
+}
+
+/* ═══════════════════════════════════════════════════════════════════ */
 /*  MAIN                                                              */
 /* ═══════════════════════════════════════════════════════════════════ */
 
@@ -472,6 +506,10 @@ int main(void) {
 
     printf("\n  Register Masking:\n");
     RUN(test_register_mask);
+
+    printf("\n  Timer Exact-Zero:\n");
+    RUN(test_via_t1_exact_zero);
+    RUN(test_via_t2_exact_zero);
 
     printf("\n═══════════════════════════════════════════════════════════\n");
     printf("Results: %d passed, %d failed\n", tests_passed, tests_failed);
