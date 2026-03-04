@@ -387,6 +387,13 @@ including host filesystem sharing and conversion tools for legacy BASIC/machine 
 - [x] 15 modules >= 80%, 5 modules 60-80%, 4 modules < 60%
 - [x] 280 total tests (256 + 24 coverage, 100% pass)
 
+### Sprint 32 bugfix: Deferred Fast-Load Fix (v1.14.1-alpha) - DONE
+- [x] Fix fast-load écrasé par test RAM ROM BASIC 1.0 (Popeye #1)
+- [x] Injection différée : buffer TAP data, inject after 3M cycles
+- [x] `emulator_t` : `fastload_buf`, `fastload_addr`, `fastload_size`, `fastload_pending`
+- [x] Cleanup du buffer dans `emulator_cleanup()`
+- [x] 3 nouveaux tests deferred fast-load (283 total, 100% pass)
+
 ## Future Enhancements
 
 ### Advanced Features
@@ -416,13 +423,13 @@ including host filesystem sharing and conversion tools for legacy BASIC/machine 
 - [ ] <5% CPU overhead on modern hardware
 
 ### Quality
-- [x] 256 tests passing (make tests)
+- [x] 283 tests passing (make tests)
 - [x] Zero critical bugs in test suite
 - [x] API documentation complete
 - [x] Comprehensive user guide
 
 ---
 
-**Last Updated**: 2026-03-02
-**Current Version**: 1.14.0-alpha
+**Last Updated**: 2026-03-04
+**Current Version**: 1.14.1-alpha
 **Next Milestone**: 2.0.0 (Telestrat / stable release)

@@ -413,6 +413,10 @@ static void emulator_cleanup(emulator_t* emu) {
         free(emu->tapebuf);
         emu->tapebuf = NULL;
     }
+    if (emu->fastload_buf) {
+        free(emu->fastload_buf);
+        emu->fastload_buf = NULL;
+    }
     if (emu->has_castv2) {
         castv2_disconnect(&emu->castv2_client);
     }
@@ -576,6 +580,23 @@ static void emulator_run(emulator_t* emu) {
         }
 
         total_executed += (uint64_t)frame_cycles;
+
+        /* Deferred fast-load: inject TAP data after ROM RAM test completes.
+         * BASIC 1.0 RAM test runs $FA1F-$FA45 (~2.5M cycles), so we wait
+         * 3M cycles to ensure RAM test is complete before injecting. */
+        if (emu->fastload_pending && total_executed > 3000000) {
+            for (int i = 0; i < emu->fastload_size; i++) {
+                memory_write(&emu->memory, emu->fastload_addr + i,
+                             emu->fastload_buf[i]);
+            }
+            log_info("Deferred fast-load: injected %d bytes at $%04X-$%04X (after %llu cycles)",
+                     emu->fastload_size, emu->fastload_addr,
+                     emu->fastload_addr + emu->fastload_size - 1,
+                     (unsigned long long)total_executed);
+            free(emu->fastload_buf);
+            emu->fastload_buf = NULL;
+            emu->fastload_pending = false;
+        }
 
         /* Auto-type: inject keystrokes at specified cycle count.
          * Each key is pressed for ~2 frames (40ms) then released for ~2 frames.
@@ -1075,24 +1096,27 @@ int main(int argc, char* argv[]) {
     if (tape_file) {
         log_info("Loading tape: %s", tape_file);
         if (fast_load) {
-            /* Fast load: inject directly into memory (no CLOAD needed) */
+            /* Fast load: buffer TAP data for deferred injection after RAM test */
             tap_file_t* tap = tap_open_read(tape_file, true);
             if (tap) {
                 tap_header_t header;
                 if (tap_read_header(tap, &header)) {
-                    log_info("Fast load: '%s' type=%02X start=$%04X end=$%04X",
+                    log_info("Fast load (deferred): '%s' type=%02X start=$%04X end=$%04X",
                              header.name, header.type, header.start_addr, header.end_addr);
                     uint16_t size = header.end_addr - header.start_addr + 1;
                     uint8_t* buf = (uint8_t*)malloc(size);
                     if (buf) {
                         int rd = tap_read_data(tap, buf, size);
                         if (rd > 0) {
-                            for (int i = 0; i < rd; i++) {
-                                memory_write(&emu.memory, header.start_addr + i, buf[i]);
-                            }
-                            log_info("Loaded %d bytes to $%04X-$%04X", rd, header.start_addr, header.start_addr + rd - 1);
+                            emu.fastload_buf = buf;
+                            emu.fastload_addr = header.start_addr;
+                            emu.fastload_size = (uint16_t)rd;
+                            emu.fastload_pending = true;
+                            log_info("Buffered %d bytes for deferred injection to $%04X-$%04X",
+                                     rd, header.start_addr, header.start_addr + rd - 1);
+                        } else {
+                            free(buf);
                         }
-                        free(buf);
                     }
                 }
                 tap_close(tap);

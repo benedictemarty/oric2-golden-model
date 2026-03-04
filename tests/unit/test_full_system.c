@@ -7,11 +7,13 @@
  */
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include "cpu/cpu6502.h"
 #include "cpu/cpu_internal.h"
 #include "memory/memory.h"
 #include "io/via6522.h"
+#include "emulator.h"
 
 static int tests_passed = 0;
 static int tests_failed = 0;
@@ -258,6 +260,94 @@ TEST(test_state_string) {
 }
 
 /* ═══════════════════════════════════════════════════════════════════ */
+/*  Deferred fast-load tests                                          */
+/* ═══════════════════════════════════════════════════════════════════ */
+
+TEST(test_deferred_fastload_fields) {
+    /* Verify deferred fast-load fields initialize to safe defaults */
+    emulator_t emu;
+    memset(&emu, 0, sizeof(emu));
+    ASSERT_TRUE(emu.fastload_buf == NULL);
+    ASSERT_EQ(emu.fastload_addr, 0);
+    ASSERT_EQ(emu.fastload_size, 0);
+    ASSERT_TRUE(!emu.fastload_pending);
+}
+
+TEST(test_deferred_fastload_buffer) {
+    /* Verify buffering: data stored in fastload fields, not in memory */
+    emulator_t emu;
+    memset(&emu, 0, sizeof(emu));
+    memory_init(&emu.memory);
+
+    uint16_t addr = 0x0500;
+    uint16_t size = 4;
+    uint8_t data[] = {0xDE, 0xAD, 0xBE, 0xEF};
+
+    emu.fastload_buf = (uint8_t*)malloc(size);
+    memcpy(emu.fastload_buf, data, size);
+    emu.fastload_addr = addr;
+    emu.fastload_size = size;
+    emu.fastload_pending = true;
+
+    /* Memory should NOT contain the data yet */
+    ASSERT_EQ(memory_read(&emu.memory, 0x0500), 0x00);
+    ASSERT_EQ(memory_read(&emu.memory, 0x0501), 0x00);
+
+    /* Simulate deferred injection (as emulator_run would do) */
+    for (int i = 0; i < emu.fastload_size; i++) {
+        memory_write(&emu.memory, emu.fastload_addr + i, emu.fastload_buf[i]);
+    }
+    free(emu.fastload_buf);
+    emu.fastload_buf = NULL;
+    emu.fastload_pending = false;
+
+    /* Now memory should contain the data */
+    ASSERT_EQ(memory_read(&emu.memory, 0x0500), 0xDE);
+    ASSERT_EQ(memory_read(&emu.memory, 0x0501), 0xAD);
+    ASSERT_EQ(memory_read(&emu.memory, 0x0502), 0xBE);
+    ASSERT_EQ(memory_read(&emu.memory, 0x0503), 0xEF);
+    ASSERT_TRUE(!emu.fastload_pending);
+
+    memory_cleanup(&emu.memory);
+}
+
+TEST(test_deferred_fastload_survives_ram_clear) {
+    /* Verify that fastload buffer survives memory_clear_ram() */
+    emulator_t emu;
+    memset(&emu, 0, sizeof(emu));
+    memory_init(&emu.memory);
+
+    uint8_t data[] = {0x42, 0x43, 0x44};
+    emu.fastload_buf = (uint8_t*)malloc(3);
+    memcpy(emu.fastload_buf, data, 3);
+    emu.fastload_addr = 0x0400;
+    emu.fastload_size = 3;
+    emu.fastload_pending = true;
+
+    /* Simulate RAM test clearing memory */
+    memory_clear_ram(&emu.memory, 0x00);
+
+    /* Buffer should still be intact */
+    ASSERT_TRUE(emu.fastload_pending);
+    ASSERT_EQ(emu.fastload_buf[0], 0x42);
+    ASSERT_EQ(emu.fastload_buf[1], 0x43);
+    ASSERT_EQ(emu.fastload_buf[2], 0x44);
+
+    /* Inject after "RAM test" */
+    for (int i = 0; i < emu.fastload_size; i++) {
+        memory_write(&emu.memory, emu.fastload_addr + i, emu.fastload_buf[i]);
+    }
+
+    ASSERT_EQ(memory_read(&emu.memory, 0x0400), 0x42);
+    ASSERT_EQ(memory_read(&emu.memory, 0x0401), 0x43);
+    ASSERT_EQ(memory_read(&emu.memory, 0x0402), 0x44);
+
+    free(emu.fastload_buf);
+    emu.fastload_buf = NULL;
+    memory_cleanup(&emu.memory);
+}
+
+/* ═══════════════════════════════════════════════════════════════════ */
 /*  MAIN                                                              */
 /* ═══════════════════════════════════════════════════════════════════ */
 
@@ -277,6 +367,11 @@ int main(void) {
     printf("\n  System:\n");
     RUN(test_execute_cycles);
     RUN(test_state_string);
+
+    printf("\n  Deferred Fast-Load:\n");
+    RUN(test_deferred_fastload_fields);
+    RUN(test_deferred_fastload_buffer);
+    RUN(test_deferred_fastload_survives_ram_clear);
 
     printf("\n═══════════════════════════════════════════════════════════\n");
     printf("Results: %d passed, %d failed\n", tests_passed, tests_failed);

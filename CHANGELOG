@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.14.1-alpha] - 2026-03-04
+
+### Deferred Fast-Load Fix (Sprint 32 bugfix — Popeye #1)
+
+#### Fixed
+- **Fast-load écrasé par test RAM** : le mode `-f` injectait les données TAP en RAM
+  avant `cpu_reset()`, la ROM BASIC 1.0 écrasait ensuite la zone $0000-$BFFF via
+  son test RAM ($FA1F-$FA45, ~2.5M cycles)
+- **Injection différée** : les données TAP sont bufferisées et injectées après 3M cycles
+  (seuil post-test RAM) dans la boucle `emulator_run()`
+
+#### Added
+- `emulator_t` : champs `fastload_buf`, `fastload_addr`, `fastload_size`, `fastload_pending`
+- 3 nouveaux tests unitaires : `test_deferred_fastload_fields`, `test_deferred_fastload_buffer`,
+  `test_deferred_fastload_survives_ram_clear`
+- `POPEYE_RESPONSE.md` : réponse formelle à l'équipe Popeye
+
+#### Changed
+- **283 total tests** (280 + 3 deferred fast-load tests)
+
 ## [1.14.0-alpha] - 2026-03-02
 
 ### Code Coverage Measurement (Sprint 32)

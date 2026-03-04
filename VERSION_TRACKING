@@ -1,12 +1,18 @@
 VERSION_TRACKING - Phosphoric
 =====================================
 
-Current Version: 1.14.0-alpha
-Release Date: 2026-03-02
-Status: Alpha (Code Coverage + Documentation + ROM Analysis + CPU Profiler + CPU Trace + Display Scaling + MCP-40 Plotter + Printer + Joystick + Atmos + Save States + Full Type Safety + WAV Audio + CASTV2 + MJPEG Cast, 280 tests pass)
+Current Version: 1.14.1-alpha
+Release Date: 2026-03-04
+Status: Alpha (Deferred Fast-Load Fix + Code Coverage + Documentation + ROM Analysis + CPU Profiler + CPU Trace + Display Scaling + MCP-40 Plotter + Printer + Joystick + Atmos + Save States + Full Type Safety + WAV Audio + CASTV2 + MJPEG Cast, 283 tests pass)
 
 Version History:
 ----------------
+- 1.14.1-alpha (2026-03-04): Deferred Fast-Load Fix (Sprint 32 bugfix — Popeye #1)
+  * Fix: fast-load data no longer overwritten by ROM RAM test
+  * Deferred injection after 3M cycles (post-RAM test threshold)
+  * 3 new deferred fast-load tests
+  * 283 total tests (280 + 3 deferred fast-load tests)
+
 - 1.14.0-alpha (2026-03-02): Code Coverage Measurement (Sprint 32)
   * make coverage target: gcov instrumented build + report
   * 24 new coverage tests (keyboard, microdisc, FDC, sedoric, debugger, CPU)

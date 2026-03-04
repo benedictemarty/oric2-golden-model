@@ -2,9 +2,9 @@ CIRRUS_OS - Phosphoric Build & Development Status
 ======================================================
 
 Project: Phosphoric — ORIC-1/Atmos Cycle-Accurate Emulator
-Version: 1.14.0-alpha
-Build Status: ALPHA (Code Coverage + Documentation + ROM Analysis + CPU Profiler + CPU Trace + Display Scaling + MCP-40 Plotter + Printer + Joystick + Atmos + Save States + Full Type Safety + WAV Audio + CASTV2 + MJPEG Cast)
-Last Updated: 2026-03-02
+Version: 1.14.1-alpha
+Build Status: ALPHA (Deferred Fast-Load Fix + Code Coverage + Documentation + ROM Analysis + CPU Profiler + CPU Trace + Display Scaling + MCP-40 Plotter + Printer + Joystick + Atmos + Save States + Full Type Safety + WAV Audio + CASTV2 + MJPEG Cast)
+Last Updated: 2026-03-04
 
 ================================================================
 
@@ -54,7 +54,7 @@ BUILD STATUS
 [V] CPU Trace Logging     - Complete (--trace FILE, --trace-max N, per-instruction log)
 [V] CPU Performance Profiler - Complete (--profile FILE, hotspots, opcode histogram)
 [V] ROM Analysis Tools    - Complete (--rom-info, vectors, targets, strings, usage)
-[V] Test Suite            - Complete (256 tests via make tests, 100% pass)
+[V] Test Suite            - Complete (283 tests via make tests, 100% pass)
 [V] ROM Compatibility     - Validated (ORIC-1 BASIC 1.0 + Atmos BASIC 1.1 ROMs)
 [V] Performance           - Benchmarked (~90+ MHz, target met)
 [V] Static Analysis       - Run (no critical issues)
@@ -66,7 +66,7 @@ Legend: [V] Complete [*] In Progress [ ] Not Started [X] Failed
 
 TEST RESULTS
 ------------
-Unit Tests: 280/280 passed (100%)
+Unit Tests: 283/283 passed (100%)
 Integration Tests: 7/7 passed (100%)
 ROM Compatibility: 12/12 passed (100%)
 Video Export Tests: 11/11 passed (100%)
@@ -75,13 +75,13 @@ Debugger Tests: 8/8 passed (100%)
 Save State Tests: 8/8 passed (100%)
 Atmos Tests: 10/10 passed (100%)
 Cast Tests: 24/24 passed (100%)
-Last Test Run: 2026-03-02 (Sprint 28)
+Last Test Run: 2026-03-04 (Sprint 32 bugfix)
 
 CPU Tests:          74/74 passed
 Memory Tests:       19/19 passed
 I/O Tests:          29/29 passed
 Storage Tests:      12/12 passed
-System Tests:        7/7  passed
+System Tests:       10/10 passed
 ROM Tests:          12/12 passed
 Video Tests:        11/11 passed
 Audio Tests:         8/8  passed
@@ -112,7 +112,7 @@ Performance: ~90+ MHz equivalent (target: 10x real-time met)
 
 QUALITY GATES
 -------------
-[V] All unit tests pass (280/280 via make tests)
+[V] All unit tests pass (283/283 via make tests)
 [V] No compiler errors
 [V] Code coverage measured (72.2% global, 78.9% hors REPL interactif, gcov)
 [V] No critical warnings
@@ -126,8 +126,8 @@ QUALITY GATES
 
 SPRINT STATUS
 -------------
-Current Sprint: Sprint 32 completed
-Sprint Progress: 100% (Code Coverage Measurement v1.14.0-alpha)
+Current Sprint: Sprint 32 bugfix completed
+Sprint Progress: 100% (Deferred Fast-Load Fix v1.14.1-alpha)
 
 Completed Sprints:
 - [V] Sprint 0: Infrastructure setup
@@ -235,4 +235,4 @@ License: Not specified yet
 ================================================================
 
 End of CIRRUS_OS Status Report
-Generated: 2026-03-02 (Sprint 31)
+Generated: 2026-03-04 (Sprint 32 bugfix)

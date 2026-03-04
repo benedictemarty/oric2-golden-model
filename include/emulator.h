@@ -31,7 +31,7 @@
 #include "utils/profiler.h"
 #include "network/cast_server.h"
 
-#define EMU_VERSION "1.14.0-alpha"
+#define EMU_VERSION "1.14.1-alpha"
 
 /**
  * @brief ORIC machine model
@@ -99,6 +99,12 @@ typedef struct emulator_s {
     int tapeoffs;            /* Current read offset */
     bool tape_loaded;        /* A tape is loaded and available */
     int tape_syncstack;     /* Saved SP for sync loop recovery (-1 = none) */
+
+    /* Deferred fast-load (inject after RAM test completes) */
+    uint8_t* fastload_buf;       /* Buffered TAP data */
+    uint16_t fastload_addr;      /* Target start address */
+    uint16_t fastload_size;      /* Data size in bytes */
+    bool     fastload_pending;   /* Injection pending */
 
     bool running;
     bool fast_load;
