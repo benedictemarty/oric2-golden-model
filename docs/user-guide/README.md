@@ -1,6 +1,6 @@
 # Guide Utilisateur Phosphoric
 
-**Version 1.12.0-alpha** | Emulateur ORIC-1 / Atmos
+**Version 1.14.3-alpha** | Emulateur ORIC-1 / Atmos
 
 ---
 
@@ -104,6 +104,14 @@ Au prompt BASIC, tapez `CLOAD""` puis Entree. Le programme se charge depuis la c
 ./oric1-emu -r basic10.rom -t jeu.tap -f
 ```
 Le programme est injecte directement en memoire via le patch ROM, sans delai.
+Les programmes multi-blocs (ex: TYRANN.TAP) sont supportes : le premier bloc est injecte,
+les blocs suivants sont charges par CLOAD via les patches ROM. Les next-line pointers BASIC
+stale sont automatiquement recorrigees apres chaque chargement.
+
+**Sauvegarde cassette (CSAVE) :**
+Quand un programme BASIC execute `CSAVE"nom"`, les donnees sont capturees dans un fichier
+`nom.tap` dans le repertoire courant. Si le nom est vide (`CSAVE""`), le fichier sera
+`csave_output.tap`.
 
 ### Disquettes (.DSK)
 
@@ -158,6 +166,7 @@ En mode AZERTY, l'emulateur utilise les evenements texte SDL2, donc la saisie fo
 | F3 | Changer l'echelle d'affichage (x1 -> x2 -> x3 -> x4) |
 | F4 | Chargement rapide (quickload) |
 | F5 | Reset a chaud |
+| F7 | Dump memoire (64 Ko RAM dans fichier .bin horodate) |
 | F9 | Entrer dans le debogueur |
 | F10 | Quitter |
 | F11 | Plein ecran |
@@ -621,5 +630,5 @@ Affichage et export :
 
 ---
 
-*Phosphoric v1.12.0-alpha — Guide utilisateur*
-*Derniere mise a jour : 2026-03-02*
+*Phosphoric v1.14.3-alpha — Guide utilisateur*
+*Derniere mise a jour : 2026-03-16*

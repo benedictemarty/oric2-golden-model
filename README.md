@@ -2,7 +2,7 @@
 
 A cycle-accurate ORIC-1 / Atmos emulator written in C11.
 
-**Version: 1.13.0-alpha** | **256 tests, 100% pass** | **Zero memory leaks**
+**Version: 1.14.3-alpha** | **286 tests, 100% pass** | **Zero memory leaks**
 
 ```
  ____  _                      _                _
@@ -44,7 +44,7 @@ make SDL2=1
 - **ULA Video** — Text mode (40x28) + HIRES (240x200), serial attributes, PAL timing (312 lines x 64 cycles)
 - **AY-3-8910 PSG** — 3 tone channels, noise, 16 envelope shapes, SDL2 audio output
 - **Microdisc** — WD1793 FDC, 4 drives (A-D), overlay ROM, Sedoric disk boot
-- **Cassette** — TAP format, CLOAD via ROM patching, fast load mode
+- **Cassette** — TAP format, CLOAD/CSAVE via ROM patching, fast load mode, multi-block support, post-CLOAD rechain
 
 ### ORIC-1 & Atmos Support
 - **ROM auto-detection** — Detects BASIC 1.0 (ORIC-1) or 1.1 (Atmos) from ROM header
@@ -212,6 +212,7 @@ Display & Export:
 | F3 | Cycle display scale (x1→x2→x3→x4) |
 | F4 | Quick load state |
 | F5 | Warm reset |
+| F7 | Memory dump (64KB RAM to timestamped .bin file) |
 | F9 | Enter debugger |
 | F10 | Quit |
 | F11 | Fullscreen |
@@ -220,7 +221,7 @@ Display & Export:
 ## Testing
 
 ```bash
-make tests               # All 256 tests (100% pass)
+make tests               # All 286 tests (100% pass)
 make test-cpu            # 74 CPU tests
 make test-memory         # 19 memory tests
 make test-io             # 29 VIA/I/O tests
@@ -407,4 +408,4 @@ This project is licensed under the [MIT License](LICENSE).
 
 ---
 
-Phosphoric v1.13.0-alpha | 256 tests | ORIC-1 + Atmos | Documentation + ROM Analysis + CPU Profiler + CPU Trace + Display Scaling + MCP-40 Plotter + Printer + Joystick | 2026-03-02
+Phosphoric v1.14.3-alpha | 286 tests | ORIC-1 + Atmos | Post-CLOAD Rechain + CSAVE + Memory Dump + Documentation + ROM Analysis + CPU Profiler + CPU Trace + Display Scaling + MCP-40 Plotter + Printer + Joystick | 2026-03-16

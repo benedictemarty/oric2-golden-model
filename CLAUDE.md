@@ -62,7 +62,7 @@ Central struct containing all hardware subsystems. Passed as pointer to most sub
 - **io/joystick.c** — IJK joystick adapter: active low on PSG Port A, keyboard/gamepad modes
 - **io/printer.c** — Centronics printer: VIA Port A data + CA2 STROBE, text file capture
 - **io/mcp40.c** — MCP-40 4-color pen plotter: 480x400 framebuffer, Bresenham line drawing, BMP export
-- **io/cassette.c** — Cassette interface: TAP format loading
+- **io/cassette.c** — Cassette interface: TAP format loading/saving (CLOAD/CSAVE ROM patching, post-CLOAD rechain)
 - **io/microdisc.c** — Microdisc: WD1793 FDC at $0310-$031F, 4 drives, overlay ROM banking
 - **video/** — ULA: text/HIRES framebuffer, PPM/BMP/ASCII export, `renderer.c` for SDL2 scaling (x1-x4)
 - **audio/** — AY-3-8910 PSG: 3 tone + noise + envelope, SDL2 audio callback
