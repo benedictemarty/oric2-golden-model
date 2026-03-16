@@ -15,6 +15,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <errno.h>
+#include <time.h>
 
 #include "emulator.h"
 #include "cpu/cpu6502.h"
@@ -937,6 +938,25 @@ static void emulator_run(emulator_t* emu) {
                     case SDLK_F5:
                         cpu_reset(&emu->cpu);
                         break;
+                    case SDLK_F7: {
+                        /* Memory dump: save 64KB RAM to timestamped file */
+                        time_t now = time(NULL);
+                        struct tm* tm = localtime(&now);
+                        char dumpname[64];
+                        snprintf(dumpname, sizeof(dumpname),
+                                 "memdump_%04d%02d%02d_%02d%02d%02d.bin",
+                                 tm->tm_year+1900, tm->tm_mon+1, tm->tm_mday,
+                                 tm->tm_hour, tm->tm_min, tm->tm_sec);
+                        FILE* df = fopen(dumpname, "wb");
+                        if (df) {
+                            fwrite(emu->memory.ram, 1, 0x10000, df);
+                            fclose(df);
+                            log_info("Memory dump: %s (64KB, PC=$%04X, cycle=%llu)",
+                                     dumpname, emu->cpu.PC,
+                                     (unsigned long long)total_executed);
+                        }
+                        break;
+                    }
                     case SDLK_F9:
                         /* Enter interactive debugger */
                         emu->debugger.active = true;
