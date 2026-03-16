@@ -108,20 +108,25 @@ bool tap_read_header(tap_file_t* tap, tap_header_t* header) {
     uint8_t marker = read_byte(tap);
     if (marker != TAP_MARKER) return false;
 
-    /* Read header fields */
-    header->type = read_byte(tap);
-    header->auto_run = read_byte(tap);
-
-    uint8_t end_hi = read_byte(tap);
-    uint8_t end_lo = read_byte(tap);
+    /* Read 9 header bytes — matching the ORIC ROM's CLOAD routine which
+     * reads exactly 9 bytes after the $24 marker and stores them at
+     * zero page $5E-$66 in reverse order. The ROM then uses:
+     *   start_addr = ($60,$5F) = bytes 7-8
+     *   end_addr   = ($62,$61) = bytes 5-6
+     *   type/flag  = $66       = byte 1
+     *   auto       = $65       = byte 2
+     */
+    header->type = read_byte(tap);         /* byte 1 → $66 */
+    header->auto_run = read_byte(tap);     /* byte 2 → $65 */
+    read_byte(tap);                        /* byte 3 → $64 (extra) */
+    read_byte(tap);                        /* byte 4 → $63 (extra) */
+    uint8_t end_hi = read_byte(tap);       /* byte 5 → $62 */
+    uint8_t end_lo = read_byte(tap);       /* byte 6 → $61 */
     header->end_addr = (uint16_t)((end_hi << 8) | end_lo);
-
-    uint8_t start_hi = read_byte(tap);
-    uint8_t start_lo = read_byte(tap);
+    uint8_t start_hi = read_byte(tap);     /* byte 7 → $60 */
+    uint8_t start_lo = read_byte(tap);     /* byte 8 → $5F */
     header->start_addr = (uint16_t)((start_hi << 8) | start_lo);
-
-    /* Skip null byte */
-    read_byte(tap);
+    read_byte(tap);                        /* byte 9 → $5E (unused) */
 
     /* Read program name (null-terminated, up to 16 chars) */
     memset(header->name, 0, TAP_NAME_LEN);

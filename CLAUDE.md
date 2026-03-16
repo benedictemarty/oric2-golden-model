@@ -12,6 +12,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 make SDL2=1              # Standard build with SDL2
 make DEBUG=1 SDL2=1      # Debug build (-g -O0)
 make                     # Headless build (no SDL2)
+make SDL2=1 CAST=1       # Build with Chromecast MJPEG streaming
+make COVERAGE=1          # Build with gcov coverage instrumentation
+make tools               # Build conversion tools (bas2tap, bin2tap, tap2sedoric)
 make clean               # Clean build artifacts
 make install PREFIX=/usr/local
 ```
@@ -19,45 +22,62 @@ make install PREFIX=/usr/local
 ## Testing
 
 ```bash
-make tests               # All 196 tests (must all pass before commit)
-make test-cpu            # 74 CPU tests
-make test-memory         # 19 memory tests
-make test-io             # 29 VIA/I/O tests
-make test-storage        # 12 storage tests
-make test-system         # 7 integration tests
-make test-video          # 11 video export tests
-make test-audio          # 8 PSG audio tests
-make test-debugger       # 8 debugger tests
-make test-savestate      # 8 save state tests
-make test-atmos          # 10 Atmos support tests
-make test-joystick       # 10 joystick tests
-make valgrind            # Memory leak detection
-make static-analysis     # Compiler warnings analysis
+make tests               # All test suites (must all pass before commit)
+make test-cpu            # CPU tests (74)
+make test-memory         # Memory tests (19)
+make test-io             # VIA/I/O tests (29)
+make test-storage        # Storage tests (12)
+make test-system         # Integration tests (7)
+make test-video          # Video export tests (11)
+make test-audio          # PSG audio tests (8)
+make test-debugger       # Debugger tests (8)
+make test-savestate      # Save state tests (8)
+make test-atmos          # Atmos support tests (10)
+make test-joystick       # Joystick tests (10)
+make test-printer        # Printer tests (10)
+make test-mcp40          # MCP-40 plotter tests (10)
+make test-renderer       # Display scaling tests (10)
+make test-trace          # CPU trace logging tests (10)
+make test-profiler       # CPU profiler tests (10)
+make test-rominfo        # ROM analysis tests (10)
+make test-coverage       # Code coverage meta-tests
+make test-cast           # Cast server tests (requires CAST=1 build)
+make valgrind            # Memory leak detection (all suites under Valgrind)
+make static-analysis     # Extra compiler warnings (-Wshadow, -Wconversion, etc.)
+make coverage            # Full coverage pipeline: clean, build with gcov, run, report
 ```
 
-Test framework is custom C macros (no external dependency): `TEST()`, `RUN()`, `ASSERT_EQ()`, `ASSERT_TRUE()`.
+Test framework is custom C macros redefined in each test file (no shared header, no external dependency): `TEST()`, `RUN()`, `ASSERT_EQ()`, `ASSERT_TRUE()`, `ASSERT_FALSE()`.
 
 ## Architecture
 
 ### Core emulator structure: `emulator_t` (include/emulator.h)
-Contains all hardware subsystems: cpu, memory, via, psg, video, keyboard, microdisc, debugger, disk drives.
+Central struct containing all hardware subsystems. Passed as pointer to most subsystem functions. Key constants: `CYCLES_PER_FRAME = 19968` (PAL: 312 lines x 64 cycles), `ORIC_CLOCK_HZ = 1000000`, `ORIC_FRAME_RATE = 50`.
 
 ### Hardware subsystems (src/)
 - **cpu/** — MOS 6502: 151 opcodes, 13 addressing modes, cycle-accurate, level-triggered IRQ (IRQF_VIA, IRQF_DISK)
 - **memory/** — 64KB: RAM ($0000-$BFFF), VIA I/O ($0300-$030F), Microdisc I/O ($0310-$031F), ROM/RAM overlay ($C000-$FFFF)
 - **io/via6522.c** — VIA 6522: 16 registers, Timer 1/2, IFR/IER interrupts, Port A/B callbacks, keyboard matrix scanning
 - **io/keyboard.c** — 8x8 matrix: VIA ORB bits 0-2 select column, Port A reads rows (active low)
+- **io/joystick.c** — IJK joystick adapter: active low on PSG Port A, keyboard/gamepad modes
+- **io/printer.c** — Centronics printer: VIA Port A data + CA2 STROBE, text file capture
+- **io/mcp40.c** — MCP-40 4-color pen plotter: 480x400 framebuffer, Bresenham line drawing, BMP export
+- **io/cassette.c** — Cassette interface: TAP format loading
 - **io/microdisc.c** — Microdisc: WD1793 FDC at $0310-$031F, 4 drives, overlay ROM banking
-- **video/** — ULA: text/HIRES framebuffer, PPM/BMP/ASCII export
+- **video/** — ULA: text/HIRES framebuffer, PPM/BMP/ASCII export, `renderer.c` for SDL2 scaling (x1-x4)
 - **audio/** — AY-3-8910 PSG: 3 tone + noise + envelope, SDL2 audio callback
 - **storage/** — TAP format, Sedoric filesystem, WD1793 disk controller
-- **debugger.c** — Interactive REPL: breakpoints, watchpoints, step/continue, register/memory inspection
+- **hostfs/** — Host filesystem sharing (--hostfs DIR), VFS abstraction layer
+- **utils/** — Logging, INI config parser, CPU trace, CPU profiler, ROM analysis
+- **network/** — MJPEG cast server, CASTV2 Chromecast client (requires CAST=1)
+- **debugger.c** — Interactive REPL: breakpoints (16 max), watchpoints (8 max), step/continue, register/memory inspection
+- **savestate.c** — Binary .ost format: 10 sections (CPU, MEM, VIA, PSG, VID, KBD, FDC, MDC, TAP, META) with CRC32
 
 ### Emulation loop (src/main.c)
-Runs 20,000 CPU cycles per frame (50 FPS @ 1 MHz). Each cycle: debugger check → cpu_step → tape patches → via_tick → PSG decode. After frame: video render → SDL2 present.
+Runs `CYCLES_PER_FRAME` (19968) CPU cycles per frame at 50 FPS. Each cycle: debugger check → cpu_step → tape patches → via_tick → PSG decode. After frame: video render → SDL2 present.
 
 ### I/O routing
-Memory reads/writes at $0300-$031F trigger `io_read_callback()`/`io_write_callback()` which route to VIA or Microdisc.
+Memory reads/writes at $0300-$031F trigger `io_read_callback()`/`io_write_callback()` which route to VIA ($0300-$030F) or Microdisc ($0310-$031F).
 
 ### Tools (tools/)
 - `bas2tap` — BASIC text → .TAP
@@ -70,7 +90,7 @@ Memory reads/writes at $0300-$031F trigger `io_read_callback()`/`io_write_callba
 - **Style:** 4-space indent, K&R braces, `snake_case` functions/vars, `UPPER_CASE` macros, 100 char line limit
 - **Headers:** Include guards `#ifndef FILE_H`
 - **Commits:** Conventional commits (feat:, fix:, docs:, test:)
-- **Versioning:** Semantic (MAJOR.MINOR.PATCH-LABEL)
+- **Versioning:** Semantic (MAJOR.MINOR.PATCH-LABEL), current version in `EMU_VERSION` macro in `include/emulator.h`
 
 ## Per-Commit Requirements
 
@@ -84,13 +104,18 @@ Every modification must:
 ## Running the Emulator
 
 ```bash
-./oric1-emu -r roms/basic10.rom                          # Boot BASIC
+./oric1-emu -r roms/basic10.rom                          # Boot BASIC 1.0 (ORIC-1)
+./oric1-emu -r roms/basic11b.rom                         # Boot BASIC 1.1 (Atmos, auto-detected)
 ./oric1-emu -r roms/basic10.rom -t prog.tap -f           # Fast-load tape
 ./oric1-emu -r roms/basic10.rom --disk-rom roms/microdis.rom -d SEDO40u.DSK  # Sedoric
 ./oric1-emu -r roms/basic10.rom --debug                  # Start in debugger
+./oric1-emu -r roms/basic10.rom -j keys                  # IJK joystick via keyboard
+./oric1-emu -r roms/basic10.rom --trace trace.log        # CPU instruction trace
+./oric1-emu -r roms/basic10.rom --profile prof.txt       # CPU profiler
+./oric1-emu -r roms/basic10.rom --rom-info               # ROM analysis
 ```
 
 ## Dependencies
 
 - **Required:** GCC/Clang, Make, libm
-- **Optional:** SDL2 (display/audio/input), pkg-config, CMake, Valgrind
+- **Optional:** SDL2 (display/audio/input), pkg-config, Valgrind, OpenSSL (for CAST=1)

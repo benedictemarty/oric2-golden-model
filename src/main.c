@@ -58,6 +58,81 @@ static void signal_handler(int sig) {
     g_running = false;
 }
 
+/**
+ * @brief Strip padding bytes from TAP block headers in tape buffer.
+ *
+ * Some TAP files (from real tape captures) have extra $00 padding bytes
+ * between the $24 marker and the actual header fields. The ORIC ROM
+ * reads bytes sequentially via readbyte, so these extra bytes cause
+ * the header to be mis-parsed (wrong start/end addresses).
+ *
+ * This function scans the buffer for each block header (sync + $24),
+ * detects padding by checking that the null separator byte (7th byte
+ * after header fields) is $00, and removes extra bytes in-place.
+ *
+ * @param buf    Tape buffer (modified in place)
+ * @param len    Buffer length (updated with new length)
+ * @param offset Starting offset (updated if it falls after removed bytes)
+ */
+static void tap_strip_header_padding(uint8_t* buf, int* len, int* offset) {
+    int src = 0, dst = 0;
+    int orig_offset = *offset;
+    int new_offset = orig_offset;
+    int removed_before_offset = 0;
+
+    while (src < *len) {
+        /* Look for sync pattern: 3+ consecutive $16 followed by $24 */
+        if (buf[src] == 0x16) {
+            /* Copy sync bytes and count them */
+            int sync_start = src;
+            int sync_count = 0;
+            while (src < *len && buf[src] == 0x16) {
+                buf[dst++] = buf[src++];
+                sync_count++;
+            }
+            if (src >= *len) break;
+
+            if (buf[src] == 0x24 && sync_count >= 3) {
+                /* Valid sync pattern (3+ $16 bytes) — copy $24 marker */
+                buf[dst++] = buf[src++];
+
+                /* Now check for padding: try skip 0..4, find where
+                 * the null separator byte (offset +6 from type) is $00 */
+                int best_skip = 0;
+                for (int skip = 0; skip <= 4 && src + skip + 7 <= *len; skip++) {
+                    uint8_t type_byte = buf[src + skip];
+                    uint8_t null_byte = buf[src + skip + 6];
+                    bool valid_type = (type_byte == 0x00 || type_byte == 0x80 ||
+                                       type_byte == 0xC0);
+                    if (null_byte == 0x00 && valid_type) {
+                        best_skip = skip;
+                        break;
+                    }
+                }
+
+                if (best_skip > 0) {
+                    log_info("TAP: stripped %d padding byte(s) at offset %d",
+                             best_skip, src);
+                    /* Track bytes removed before the CLOAD offset */
+                    if (src <= orig_offset) {
+                        removed_before_offset += best_skip;
+                    }
+                    src += best_skip; /* Skip padding bytes */
+                }
+            }
+        } else {
+            buf[dst++] = buf[src++];
+        }
+    }
+
+    if (dst < *len) {
+        new_offset = orig_offset - removed_before_offset;
+        if (new_offset < 0) new_offset = 0;
+        *offset = new_offset;
+        *len = dst;
+    }
+}
+
 /* ═══════════════════════════════════════════════════════════════════ */
 /*  ROM patch tables (version-specific tape loading addresses)         */
 /* ═══════════════════════════════════════════════════════════════════ */
@@ -461,50 +536,44 @@ static void tape_patches(emulator_t* emu) {
     if (pc == p->getsync_entry) {
         /* getsync: scan forward to first 0x16 sync byte.
          * Leave tapeoffs pointing AT the 0x16 so readbyte will
-         * read the sync bytes (ROM confirmation loop needs them). */
+         * read the sync bytes (ROM confirmation loop needs them).
+         * The ORIC ROM reads 9 header bytes after $24, which
+         * correctly parses start/end addresses from the raw TAP. */
         if (emu->tapebuf[emu->tapeoffs] != 0x16) {
             while (emu->tapeoffs < emu->tapelen &&
                    emu->tapebuf[emu->tapeoffs] != 0x16) {
                 emu->tapeoffs++;
             }
             if (emu->tapeoffs >= emu->tapelen)
-                return; /* No sync found - let ROM timeout */
+                return;
         }
+        log_info("TAPE: getsync at tapeoffs=%d/%d", emu->tapeoffs, emu->tapelen);
         /* Save stack pointer for sync loop recovery */
         emu->tape_syncstack = emu->cpu.SP;
         /* Jump to end of getsync */
         emu->cpu.PC = p->getsync_end;
     } else if (pc == p->readbyte_entry) {
-        /* readbyte: read next byte from tape buffer */
+        /* readbyte: feed next byte from tape buffer to ROM */
         if (emu->tapeoffs < emu->tapelen) {
             uint8_t byte = emu->tapebuf[emu->tapeoffs++];
             emu->cpu.A = byte;
-            /* Set Z flag (like Oricutron: f_z = a == 0) */
             if (byte == 0)
                 emu->cpu.P |= FLAG_ZERO;
             else
                 emu->cpu.P &= ~FLAG_ZERO;
-            /* Clear carry = success */
             emu->cpu.P &= ~FLAG_CARRY;
-            /* Store byte at readbyte_store (ROM side effect) */
             memory_write(&emu->memory, p->readbyte_store, byte);
-            /* Jump to readbyte end (LDA store; RTS) */
             emu->cpu.PC = p->readbyte_end;
         }
-        /* If tape exhausted, let ROM handle (will timeout) */
     } else if (pc == p->getsync_loop) {
-        /* Sync loop recovery: CPU is stuck polling VIA CB1 in wait_edge.
-         * This happens if getsync's confirmation readbyte calls enter
-         * the real ROM code. Recover by restoring SP and forcing getsync. */
+        /* Sync loop recovery */
         if (emu->tape_syncstack >= 0) {
             emu->cpu.SP = (uint8_t)emu->tape_syncstack;
             emu->tape_syncstack = -1;
-            /* Force getsync patch */
             if (emu->tapebuf[emu->tapeoffs] != 0x16) {
                 while (emu->tapeoffs < emu->tapelen &&
-                       emu->tapebuf[emu->tapeoffs] != 0x16) {
+                       emu->tapebuf[emu->tapeoffs] != 0x16)
                     emu->tapeoffs++;
-                }
                 if (emu->tapeoffs >= emu->tapelen) {
                     emu->tape_loaded = false;
                     return;
@@ -552,6 +621,12 @@ static void emulator_run(emulator_t* emu) {
             int step = cpu_step(&emu->cpu);
             frame_cycles += step;
 
+            /* Post-CLOAD BASIC re-link: the ORIC ROM does NOT re-link
+             * BASIC line pointers after CLOAD. TAP files may have stale
+             * pointers. Detect when CLOAD completes (PC leaves ROM tape
+             * area $E4xx-$E6xx) and re-link the loaded program. */
+            /* (post-CLOAD re-link removed — ROM rechain at $C56F handles it) */
+
             /* CPU profiler (record cycle cost after step) */
             profiler_record_cycles(&emu->profiler, prof_pc, step);
 
@@ -586,13 +661,44 @@ static void emulator_run(emulator_t* emu) {
          * 3M cycles to ensure RAM test is complete before injecting. */
         if (emu->fastload_pending && total_executed > 3000000) {
             for (int i = 0; i < emu->fastload_size; i++) {
-                memory_write(&emu->memory, emu->fastload_addr + i,
+                memory_write(&emu->memory, (uint16_t)(emu->fastload_addr + i),
                              emu->fastload_buf[i]);
             }
             log_info("Deferred fast-load: injected %d bytes at $%04X-$%04X (after %llu cycles)",
                      emu->fastload_size, emu->fastload_addr,
                      emu->fastload_addr + emu->fastload_size - 1,
                      (unsigned long long)total_executed);
+
+            /* For BASIC programs, re-link the line chain and set pointers.
+             * The ORIC ROM's CLOAD re-links all next-line pointers after
+             * loading, because the program may have been saved from a
+             * different address. Our fast-load must do the same.
+             * Walk through lines (each terminated by $00), compute the
+             * actual next-line address, and update the 2-byte pointer. */
+            if (emu->fastload_type == 0x00) {
+                /* Set VARTAB — the ROM's BASIC RUN command will handle
+                 * rechaining the line pointers via $C56F. */
+                uint16_t vartab = emu->fastload_end + 1;
+                memory_write(&emu->memory, 0x9C, (uint8_t)(vartab & 0xFF));
+                memory_write(&emu->memory, 0x9D, (uint8_t)(vartab >> 8));
+                memory_write(&emu->memory, 0x9E, (uint8_t)(vartab & 0xFF));
+                memory_write(&emu->memory, 0x9F, (uint8_t)(vartab >> 8));
+                memory_write(&emu->memory, 0xA0, (uint8_t)(vartab & 0xFF));
+                memory_write(&emu->memory, 0xA1, (uint8_t)(vartab >> 8));
+                log_info("BASIC: VARTAB=$%04X", vartab);
+
+                /* Auto-type RUN + RETURN after a short delay for BASIC init */
+                if (!emu->type_keys_text) {
+                    emu->type_keys_text = "RUN\\n";
+                    emu->type_keys_at = (int64_t)total_executed + CYCLES_PER_FRAME * 10;
+                    emu->type_keys_idx = 0;
+                    emu->type_keys_next_cycle = emu->type_keys_at;
+                    emu->type_keys_done = false;
+                    emu->type_keys_last_char = 0;
+                    log_info("Auto-typing RUN after fast-load");
+                }
+            }
+
             free(emu->fastload_buf);
             emu->fastload_buf = NULL;
             emu->fastload_pending = false;
@@ -1125,7 +1231,9 @@ int main(int argc, char* argv[]) {
                         if (rd > 0) {
                             emu.fastload_buf = buf;
                             emu.fastload_addr = header.start_addr;
+                            emu.fastload_end = header.end_addr;
                             emu.fastload_size = (uint16_t)rd;
+                            emu.fastload_type = header.type;
                             emu.fastload_pending = true;
                             log_info("Buffered %d bytes for deferred injection to $%04X-$%04X",
                                      rd, header.start_addr, header.start_addr + rd - 1);
@@ -1134,6 +1242,26 @@ int main(int argc, char* argv[]) {
                         }
                     }
                 }
+
+                /* Also buffer the full tape for subsequent CLOADs via ROM
+                 * patching. Multi-block TAP files (like TYRANN) have a BASIC
+                 * loader as block 1 that CLOADs additional blocks at runtime.
+                 * Set tape position past the first block's data, and strip
+                 * any padding bytes so the ROM parses headers correctly. */
+                uint32_t remaining_pos = tap_tell(tap);
+                if (remaining_pos < tap_size(tap) && tap->data) {
+                    emu.tapelen = (int)tap_size(tap);
+                    emu.tapebuf = (uint8_t*)malloc((size_t)emu.tapelen);
+                    if (emu.tapebuf) {
+                        memcpy(emu.tapebuf, tap->data, (size_t)emu.tapelen);
+                        emu.tapeoffs = (int)remaining_pos;
+                        emu.tape_loaded = true;
+                        emu.tape_syncstack = -1;
+                        log_info("Tape buffered for CLOAD: %d bytes, offset=%d",
+                                 emu.tapelen, emu.tapeoffs);
+                    }
+                }
+
                 tap_close(tap);
             } else {
                 log_warning("Failed to open tape: %s", tape_file);

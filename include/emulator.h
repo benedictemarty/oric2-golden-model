@@ -103,8 +103,15 @@ typedef struct emulator_s {
     /* Deferred fast-load (inject after RAM test completes) */
     uint8_t* fastload_buf;       /* Buffered TAP data */
     uint16_t fastload_addr;      /* Target start address */
+    uint16_t fastload_end;       /* Target end address (from TAP header) */
     uint16_t fastload_size;      /* Data size in bytes */
+    uint8_t  fastload_type;      /* TAP type: 0x00=BASIC, 0x80=MC */
     bool     fastload_pending;   /* Injection pending */
+
+    /* Post-CLOAD BASIC re-linking (line pointers in TAP may be stale) */
+    bool     tape_pending_relink;
+    uint16_t tape_relink_start;
+    uint16_t tape_relink_end;
 
     bool running;
     bool fast_load;
