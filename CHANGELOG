@@ -5,6 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.14.3-alpha] - 2026-03-16
+
+### Post-CLOAD BASIC Rechain (Sprint 32 bugfix — TYRANN compatibility)
+
+#### Fixed
+- **BASIC next-line pointers stale après CLOAD** : les fichiers TAP multi-blocs
+  (ex: TYRANN.TAP, 6 blocs Loriciels 1984) ont des next-line pointers incorrects
+  dans le premier octet de chaque bloc BASIC. La ROM ORIC ne rechain PAS après
+  CLOAD ($C56F n'est appelé que lors de l'édition de lignes, pas par RUN ni CLOAD).
+  Ajout d'une routine `basic_rechain()` en C qui reproduit exactement la logique ROM
+  $C56F : parcours depuis TXTTAB ($9A/$9B), recherche des terminateurs $00, et mise
+  à jour des pointeurs 2 octets en tête de chaque ligne.
+- **Détection de fin de CLOAD** : le flag `tape_readbyte_active` est positionné par
+  le patch readbyte et détecté quand PC atteint `cload_data_rts` ($E502 BASIC 1.0,
+  $E50A Atmos). Le rechain ne s'applique qu'aux blocs de type BASIC ($66 == $00).
+- **Rechain après fast-load** : `basic_rechain()` est aussi appelé après l'injection
+  différée du premier bloc, avant l'auto-type RUN.
+
+#### Added
+- `basic_rechain()` : routine C reproduisant la logique ROM $C56F
+- `rom_patches_t.cload_data_rts` : adresse RTS de la boucle données CLOAD
+- `emulator_t.tape_readbyte_active` : flag CLOAD en cours
+
+#### Changed
+- Suppression des champs `tape_pending_relink`, `tape_relink_start`, `tape_relink_end`
+  (remplacés par `tape_readbyte_active` + détection cload_data_rts)
+
 ## [1.14.2-alpha] - 2026-03-04
 
 ### Timer Exact-Zero & Type-Keys Debounce Fix (Sprint 32 bugfix — Popeye #3 & #4)

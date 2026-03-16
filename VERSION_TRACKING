@@ -1,12 +1,19 @@
 VERSION_TRACKING - Phosphoric
 =====================================
 
-Current Version: 1.14.2-alpha
-Release Date: 2026-03-04
-Status: Alpha (Timer Exact-Zero + Type-Keys Debounce + Deferred Fast-Load Fix + Code Coverage + Documentation + ROM Analysis + CPU Profiler + CPU Trace + Display Scaling + MCP-40 Plotter + Printer + Joystick + Atmos + Save States + Full Type Safety + WAV Audio + CASTV2 + MJPEG Cast, 286 tests pass)
+Current Version: 1.14.3-alpha
+Release Date: 2026-03-16
+Status: Alpha (Post-CLOAD Rechain + Timer Exact-Zero + Type-Keys Debounce + Deferred Fast-Load Fix + Code Coverage + Documentation + ROM Analysis + CPU Profiler + CPU Trace + Display Scaling + MCP-40 Plotter + Printer + Joystick + Atmos + Save States + Full Type Safety + WAV Audio + CASTV2 + MJPEG Cast, 286 tests pass)
 
 Version History:
 ----------------
+- 1.14.3-alpha (2026-03-16): Post-CLOAD BASIC Rechain (Sprint 32 bugfix — TYRANN compatibility)
+  * Fix: BASIC next-line pointers rechained after each CLOAD and fast-load
+  * Added basic_rechain() reproducing ROM $C56F logic
+  * Added cload_data_rts detection ($E502 BASIC 1.0, $E50A Atmos)
+  * Only rechains BASIC blocks (type $00 check via ZP $66)
+  * 286 total tests
+
 - 1.14.2-alpha (2026-03-04): Timer Exact-Zero & Type-Keys Debounce Fix (Sprint 32 bugfix — Popeye #3 & #4)
   * Fix: T1/T2 IFR now fires when counter reaches exactly 0
   * Fix: type-keys debounce for repeated consecutive characters

@@ -31,7 +31,7 @@
 #include "utils/profiler.h"
 #include "network/cast_server.h"
 
-#define EMU_VERSION "1.14.2-alpha"
+#define EMU_VERSION "1.14.3-alpha"
 
 /**
  * @brief ORIC machine model
@@ -56,6 +56,12 @@ typedef struct rom_patches_s {
     uint16_t readbyte_entry;    /**< readbyte() entry point */
     uint16_t readbyte_end;      /**< readbyte() RTS address */
     uint16_t readbyte_store;    /**< readbyte() byte store address in RAM */
+    uint16_t cload_data_rts;    /**< CLOAD data loop RTS (triggers post-load rechain) */
+    uint16_t putbyte_entry;     /**< putbyte() entry point (CSAVE) */
+    uint16_t putbyte_end;       /**< putbyte() RTS address */
+    uint16_t csave_end;         /**< CSAVE complete RTS address */
+    uint16_t writeleader_entry; /**< writeleader() entry point */
+    uint16_t writeleader_end;   /**< writeleader() RTS address */
 } rom_patches_t;
 #define ORIC_CLOCK_HZ   1000000
 #define ORIC_FRAME_RATE  50
@@ -108,10 +114,12 @@ typedef struct emulator_s {
     uint8_t  fastload_type;      /* TAP type: 0x00=BASIC, 0x80=MC */
     bool     fastload_pending;   /* Injection pending */
 
-    /* Post-CLOAD BASIC re-linking (line pointers in TAP may be stale) */
-    bool     tape_pending_relink;
-    uint16_t tape_relink_start;
-    uint16_t tape_relink_end;
+    /* Post-CLOAD BASIC rechain (line pointers in TAP may be stale) */
+    bool     tape_readbyte_active;  /* Set when readbyte patch fires (CLOAD in progress) */
+
+    /* CSAVE support: capture saved data to .TAP file */
+    FILE*    csave_file;            /* Open TAP file for CSAVE output */
+    int      csave_byte_count;     /* Bytes written in current CSAVE */
 
     bool running;
     bool fast_load;

@@ -113,6 +113,7 @@ including host filesystem sharing and conversion tools for legacy BASIC/machine 
 
 ### Sprint 16a: CLOAD ROM Patching (v1.0.0-beta.4) - DONE
 - [x] CLOAD command support via ROM patching (getsync + readbyte interception)
+- [x] Post-CLOAD BASIC rechain (next-line pointer fix for multi-block TAP)
 - [x] TAP buffering for sequential reading by ROM routines
 - [x] Sync byte detection (0x16) and byte-by-byte tape reading
 - [x] -t without -f: buffered for CLOAD; -t -f: direct memory injection
@@ -398,6 +399,14 @@ including host filesystem sharing and conversion tools for legacy BASIC/machine 
 - [x] Fix Timer1/T2 IFR jamais levé quand compteur atteint exactement 0 (Popeye #4)
 - [x] Fix type-keys perd les caractères répétés consécutifs (Popeye #3)
 - [x] `emulator_t` : `type_keys_last_char`, `type_keys_debounce`
+
+### Sprint 32 bugfix: Post-CLOAD BASIC Rechain (v1.14.3-alpha) - DONE
+- [x] Fix BASIC next-line pointers stale après CLOAD (TYRANN.TAP, 6 blocs)
+- [x] `basic_rechain()` : routine C reproduisant la logique ROM $C56F
+- [x] Détection fin CLOAD via `cload_data_rts` ($E502 BASIC 1.0, $E50A Atmos)
+- [x] Rechain après fast-load ET après chaque CLOAD via ROM patching
+- [x] Protection type BASIC : ne rechain que si ZP $66 == $00
+- [x] 286 tests (100% pass)
 - [x] 3 nouveaux tests (286 total, 100% pass)
 
 ## Future Enhancements

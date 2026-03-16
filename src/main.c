@@ -138,23 +138,35 @@ static void tap_strip_header_padding(uint8_t* buf, int* len, int* offset) {
 /* ═══════════════════════════════════════════════════════════════════ */
 
 static const rom_patches_t rom_patches_basic10 = {
-    .name           = "BASIC 1.0 (ORIC-1)",
-    .getsync_entry  = 0xE696,
-    .getsync_end    = 0xE6B9,
-    .getsync_loop   = 0xE681,
-    .readbyte_entry = 0xE630,
-    .readbyte_end   = 0xE65B,
-    .readbyte_store = 0x002F
+    .name              = "BASIC 1.0 (ORIC-1)",
+    .getsync_entry     = 0xE696,
+    .getsync_end       = 0xE6B9,
+    .getsync_loop      = 0xE681,
+    .readbyte_entry    = 0xE630,
+    .readbyte_end      = 0xE65B,
+    .readbyte_store    = 0x002F,
+    .cload_data_rts    = 0xE502,
+    .putbyte_entry     = 0xE5C6,
+    .putbyte_end       = 0xE5F2,
+    .csave_end         = 0xE7FE,
+    .writeleader_entry = 0xE6BA,
+    .writeleader_end   = 0xE6C9
 };
 
 static const rom_patches_t rom_patches_basic11 = {
-    .name           = "BASIC 1.1 (ORIC Atmos)",
-    .getsync_entry  = 0xE735,
-    .getsync_end    = 0xE759,
-    .getsync_loop   = 0xE720,
-    .readbyte_entry = 0xE6C9,
-    .readbyte_end   = 0xE6FB,
-    .readbyte_store = 0x002F
+    .name              = "BASIC 1.1 (ORIC Atmos)",
+    .getsync_entry     = 0xE735,
+    .getsync_end       = 0xE759,
+    .getsync_loop      = 0xE720,
+    .readbyte_entry    = 0xE6C9,
+    .readbyte_end      = 0xE6FB,
+    .readbyte_store    = 0x002F,
+    .cload_data_rts    = 0xE50A,
+    .putbyte_entry     = 0xE65E,
+    .putbyte_end       = 0xE68A,
+    .csave_end         = 0xE93C,
+    .writeleader_entry = 0xE75A,
+    .writeleader_end   = 0xE769
 };
 
 /**
@@ -515,6 +527,59 @@ static void emulator_cleanup(emulator_t* emu) {
 }
 
 /**
+ * @brief Rechain BASIC line pointers after CLOAD
+ *
+ * Reproduces the ROM's rechain routine at $C56F (BASIC 1.0) / equivalent
+ * (Atmos). Walks the BASIC program from TXTTAB ($9A/$9B), finds each line's
+ * null terminator, computes the actual next-line address, and updates the
+ * 2-byte pointer at the start of each line.
+ *
+ * TAP files may have stale next-line pointers (saved from different memory
+ * addresses). The ORIC ROM does NOT rechain after CLOAD — only when lines
+ * are edited. Multi-block programs like TYRANN need rechaining after each
+ * block loads.
+ *
+ * @param mem  Memory subsystem
+ */
+static void basic_rechain(memory_t* mem) {
+    /* TXTTAB = start of BASIC text ($9A/$9B), typically $0501 */
+    uint16_t ptr = (uint16_t)(mem->ram[0x9A] | (mem->ram[0x9B] << 8));
+
+    int lines_fixed = 0;
+    while (ptr < 0xC000) {
+        /* Check next-line pointer high byte — $00 means end of program.
+         * The ROM $C56F checks ONLY the high byte (ptr+1): LDA ($91),Y
+         * with Y=1, then BEQ to exit. Valid next-line pointers always
+         * have hi >= $05 (BASIC text starts at $0501). A hi byte of $00
+         * is the end-of-program marker, even if the low byte is non-zero
+         * (e.g. TYRANN block 1 ends with $49 $00 at $132B). */
+        uint8_t next_hi = mem->ram[ptr + 1];
+        if (next_hi == 0)
+            break;
+
+        /* Find the null terminator: scan from offset 4 (after pointer + line num) */
+        uint16_t scan = ptr + 4;
+        while (scan < 0xC000 && mem->ram[scan] != 0x00)
+            scan++;
+        scan++;  /* Skip the null terminator */
+
+        /* Update the next-line pointer to the computed address */
+        uint16_t old_next = (uint16_t)(mem->ram[ptr] | (mem->ram[ptr + 1] << 8));
+        if (old_next != scan) {
+            mem->ram[ptr]     = (uint8_t)(scan & 0xFF);
+            mem->ram[ptr + 1] = (uint8_t)(scan >> 8);
+            lines_fixed++;
+        }
+
+        ptr = scan;
+    }
+
+    if (lines_fixed > 0) {
+        log_info("BASIC rechain: fixed %d line pointer(s)", lines_fixed);
+    }
+}
+
+/**
  * @brief ROM patching for CLOAD support
  *
  * Intercepts ROM cassette routines by checking CPU PC after each instruction.
@@ -527,12 +592,21 @@ static void emulator_cleanup(emulator_t* emu) {
  *   BASIC 1.1 (Atmos):   getsync=$E735, readbyte=$E6C9, loop=$E720
  */
 static void tape_patches(emulator_t* emu) {
-    if (!emu->tape_loaded || !emu->rom_patches)
+    if (!emu->rom_patches)
         return;
 
     const rom_patches_t* p = emu->rom_patches;
     uint16_t pc = emu->cpu.PC;
 
+    /* CSAVE patches work even without a tape loaded */
+    if (pc == p->writeleader_entry || pc == p->putbyte_entry || pc == p->csave_end) {
+        goto do_patch;  /* Skip tape_loaded check for CSAVE */
+    }
+
+    if (!emu->tape_loaded)
+        return;
+
+do_patch:
     if (pc == p->getsync_entry) {
         /* getsync: scan forward to first 0x16 sync byte.
          * Leave tapeoffs pointing AT the 0x16 so readbyte will
@@ -564,6 +638,7 @@ static void tape_patches(emulator_t* emu) {
             emu->cpu.P &= ~FLAG_CARRY;
             memory_write(&emu->memory, p->readbyte_store, byte);
             emu->cpu.PC = p->readbyte_end;
+            emu->tape_readbyte_active = true;
         }
     } else if (pc == p->getsync_loop) {
         /* Sync loop recovery */
@@ -580,6 +655,56 @@ static void tape_patches(emulator_t* emu) {
                 }
             }
             emu->cpu.PC = p->getsync_end;
+        }
+    } else if (pc == p->writeleader_entry) {
+        /* CSAVE: write tape leader — open output file if needed */
+        if (!emu->csave_file) {
+            /* Read the filename from ROM's name buffer at $0035 (up to 16 chars) */
+            char csave_name[32];
+            int nlen = 0;
+            for (int i = 0; i < 16; i++) {
+                uint8_t ch = emu->memory.ram[0x0035 + i];
+                if (ch == 0) break;
+                csave_name[nlen++] = (char)ch;
+            }
+            csave_name[nlen] = '\0';
+
+            /* Build filename: name.tap (or csave_output.tap if empty) */
+            char csave_path[64];
+            if (nlen > 0) {
+                snprintf(csave_path, sizeof(csave_path), "%s.tap", csave_name);
+            } else {
+                snprintf(csave_path, sizeof(csave_path), "csave_output.tap");
+            }
+
+            emu->csave_file = fopen(csave_path, "wb");
+            if (emu->csave_file) {
+                uint8_t leader[] = { 0x16, 0x16, 0x16 };
+                fwrite(leader, 1, 3, emu->csave_file);
+                emu->csave_byte_count = 0;
+                log_info("CSAVE: saving to %s", csave_path);
+            }
+        } else {
+            /* Subsequent leader (between header and data) */
+            uint8_t leader[] = { 0x16, 0x16, 0x16 };
+            fwrite(leader, 1, 3, emu->csave_file);
+        }
+        emu->cpu.PC = p->writeleader_end;
+    } else if (pc == p->putbyte_entry) {
+        /* CSAVE: write one byte from CPU A register */
+        if (emu->csave_file) {
+            uint8_t byte = emu->cpu.A;
+            fwrite(&byte, 1, 1, emu->csave_file);
+            emu->csave_byte_count++;
+        }
+        emu->cpu.PC = p->putbyte_end;
+    } else if (pc == p->csave_end) {
+        /* CSAVE complete — close the file */
+        if (emu->csave_file) {
+            fclose(emu->csave_file);
+            log_info("CSAVE: saved %d bytes to csave_output.tap", emu->csave_byte_count);
+            emu->csave_file = NULL;
+            emu->csave_byte_count = 0;
         }
     }
 }
@@ -621,11 +746,20 @@ static void emulator_run(emulator_t* emu) {
             int step = cpu_step(&emu->cpu);
             frame_cycles += step;
 
-            /* Post-CLOAD BASIC re-link: the ORIC ROM does NOT re-link
-             * BASIC line pointers after CLOAD. TAP files may have stale
-             * pointers. Detect when CLOAD completes (PC leaves ROM tape
-             * area $E4xx-$E6xx) and re-link the loaded program. */
-            /* (post-CLOAD re-link removed — ROM rechain at $C56F handles it) */
+            /* Post-CLOAD BASIC rechain: the ORIC ROM does NOT rechain
+             * line pointers after CLOAD. TAP files may have stale pointers
+             * (e.g. TYRANN.TAP). Detect when the CLOAD data loop completes
+             * (PC hits cload_data_rts after readbyte was active) and fix
+             * all next-line pointers so GOTO/GOSUB can traverse the chain. */
+            if (emu->tape_readbyte_active && emu->rom_patches &&
+                emu->cpu.PC == emu->rom_patches->cload_data_rts) {
+                /* Only rechain BASIC programs (type $00 stored at ZP $66).
+                 * Machine code loads ($80, $C0) must not be rechained. */
+                if (emu->memory.ram[0x66] == 0x00) {
+                    basic_rechain(&emu->memory);
+                }
+                emu->tape_readbyte_active = false;
+            }
 
             /* CPU profiler (record cycle cost after step) */
             profiler_record_cycles(&emu->profiler, prof_pc, step);
@@ -676,8 +810,12 @@ static void emulator_run(emulator_t* emu) {
              * Walk through lines (each terminated by $00), compute the
              * actual next-line address, and update the 2-byte pointer. */
             if (emu->fastload_type == 0x00) {
-                /* Set VARTAB — the ROM's BASIC RUN command will handle
-                 * rechaining the line pointers via $C56F. */
+                /* Rechain BASIC line pointers — TAP files may have stale
+                 * pointers (e.g. TYRANN.TAP first block). The ROM's RUN
+                 * command does NOT call rechain ($C56F). */
+                basic_rechain(&emu->memory);
+
+                /* Set VARTAB */
                 uint16_t vartab = emu->fastload_end + 1;
                 memory_write(&emu->memory, 0x9C, (uint8_t)(vartab & 0xFF));
                 memory_write(&emu->memory, 0x9D, (uint8_t)(vartab >> 8));
