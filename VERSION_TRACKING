@@ -1,12 +1,18 @@
 VERSION_TRACKING - Phosphoric
 =====================================
 
-Current Version: 1.14.3-alpha
-Release Date: 2026-03-16
-Status: Alpha (Post-CLOAD Rechain + Timer Exact-Zero + Type-Keys Debounce + Deferred Fast-Load Fix + Code Coverage + Documentation + ROM Analysis + CPU Profiler + CPU Trace + Display Scaling + MCP-40 Plotter + Printer + Joystick + Atmos + Save States + Full Type Safety + WAV Audio + CASTV2 + MJPEG Cast, 286 tests pass)
+Current Version: 1.14.4-alpha
+Release Date: 2026-03-18
+Status: Alpha (TAP Header Auto-Detection + Post-CLOAD Rechain + Timer Exact-Zero + Type-Keys Debounce + Deferred Fast-Load Fix + Code Coverage + Documentation + ROM Analysis + CPU Profiler + CPU Trace + Display Scaling + MCP-40 Plotter + Printer + Joystick + Atmos + Save States + Full Type Safety + WAV Audio + CASTV2 + MJPEG Cast, 286 tests pass)
 
 Version History:
 ----------------
+- 1.14.4-alpha (2026-03-18): TAP Header Auto-Detection (Sprint 32 bugfix — poker-asn.tap compatibility)
+  * Fix: tap_read_header() auto-detects 7-byte vs 9-byte format with 0-4 byte padding
+  * Validates start/end addresses to pick the correct interpretation
+  * Fixes type byte corruption for padded TAP files (e.g. poker-asn.tap: $52 instead of $00)
+  * 286 total tests
+
 - 1.14.3-alpha (2026-03-16): Post-CLOAD BASIC Rechain (Sprint 32 bugfix — TYRANN compatibility)
   * Fix: BASIC next-line pointers rechained after each CLOAD and fast-load
   * Added basic_rechain() reproducing ROM $C56F logic

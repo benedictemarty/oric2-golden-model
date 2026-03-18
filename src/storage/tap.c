@@ -108,32 +108,89 @@ bool tap_read_header(tap_file_t* tap, tap_header_t* header) {
     uint8_t marker = read_byte(tap);
     if (marker != TAP_MARKER) return false;
 
-    /* Read 9 header bytes — matching the ORIC ROM's CLOAD routine which
-     * reads exactly 9 bytes after the $24 marker and stores them at
-     * zero page $5E-$66 in reverse order. The ROM then uses:
-     *   start_addr = ($60,$5F) = bytes 7-8
-     *   end_addr   = ($62,$61) = bytes 5-6
-     *   type/flag  = $66       = byte 1
-     *   auto       = $65       = byte 2
-     */
-    header->type = read_byte(tap);         /* byte 1 → $66 */
-    header->auto_run = read_byte(tap);     /* byte 2 → $65 */
-    read_byte(tap);                        /* byte 3 → $64 (extra) */
-    read_byte(tap);                        /* byte 4 → $63 (extra) */
-    uint8_t end_hi = read_byte(tap);       /* byte 5 → $62 */
-    uint8_t end_lo = read_byte(tap);       /* byte 6 → $61 */
-    header->end_addr = (uint16_t)((end_hi << 8) | end_lo);
-    uint8_t start_hi = read_byte(tap);     /* byte 7 → $60 */
-    uint8_t start_lo = read_byte(tap);     /* byte 8 → $5F */
-    header->start_addr = (uint16_t)((start_hi << 8) | start_lo);
-    read_byte(tap);                        /* byte 9 → $5E (unused) */
+    /* Read raw bytes for format auto-detection.
+     * TAP headers come in two variants:
+     *   9-byte (ROM format): type auto extra extra end_hi end_lo start_hi start_lo unused
+     *   7-byte (tool format): type auto end_hi end_lo start_hi start_lo separator
+     * Some TAP files also have 1-4 padding bytes between the $24 marker
+     * and the actual header (e.g. poker-asn.tap has $52 $54 padding). */
+    uint32_t save_pos = tap->position;
+    uint8_t raw[32];
+    int raw_len = 0;
+    for (int i = 0; i < 32 && !tap_eof(tap); i++) {
+        raw[i] = read_byte(tap);
+        raw_len++;
+    }
 
-    /* Read program name (null-terminated, up to 16 chars) */
+    int best_off = 0, best_sz = 9;
+    bool found = false;
+
+    /* Try no-padding 9-byte first (standard ROM format, handles TYRANN) */
+    if (raw_len >= 9) {
+        uint8_t t = raw[0];
+        if (t == 0x00 || t == 0x80 || t == 0xC0) {
+            uint16_t end = (uint16_t)((raw[4] << 8) | raw[5]);
+            uint16_t start = (uint16_t)((raw[6] << 8) | raw[7]);
+            if (start < end && start >= 0x0100 && end < 0xC000) {
+                best_off = 0; best_sz = 9; found = true;
+            }
+        }
+    }
+
+    /* If not found, try padding (0-4) + 7-byte, then padding + 9-byte */
+    if (!found) {
+        for (int skip = 0; skip <= 4 && !found; skip++) {
+            if (skip + 7 > raw_len) break;
+            uint8_t t = raw[skip];
+            if (t != 0x00 && t != 0x80 && t != 0xC0) continue;
+
+            /* Try 7-byte format */
+            if (skip + 7 <= raw_len) {
+                uint16_t end = (uint16_t)((raw[skip + 2] << 8) | raw[skip + 3]);
+                uint16_t start = (uint16_t)((raw[skip + 4] << 8) | raw[skip + 5]);
+                if (start < end && start >= 0x0100 && end < 0xC000) {
+                    best_off = skip; best_sz = 7; found = true;
+                    break;
+                }
+            }
+            /* Try 9-byte format with padding */
+            if (skip > 0 && skip + 9 <= raw_len) {
+                uint16_t end = (uint16_t)((raw[skip + 4] << 8) | raw[skip + 5]);
+                uint16_t start = (uint16_t)((raw[skip + 6] << 8) | raw[skip + 7]);
+                if (start < end && start >= 0x0100 && end < 0xC000) {
+                    best_off = skip; best_sz = 9; found = true;
+                    break;
+                }
+            }
+        }
+    }
+
+    /* Fallback: 9-byte at offset 0 (original behavior) */
+
+    /* Parse header from raw buffer */
+    int p = best_off;
+    header->type = raw[p++];
+    header->auto_run = raw[p++];
+    if (best_sz == 9) {
+        p += 2;  /* skip extra bytes (ROM $64/$63) */
+    }
+    header->end_addr = (uint16_t)((raw[p] << 8) | raw[p + 1]);
+    p += 2;
+    header->start_addr = (uint16_t)((raw[p] << 8) | raw[p + 1]);
+    p += 2;
+    p++;  /* skip separator (7-byte) or unused byte (9-byte) */
+
+    /* Read program name from raw buffer */
     memset(header->name, 0, TAP_NAME_LEN);
-    for (int i = 0; i < TAP_NAME_LEN; i++) {
-        uint8_t ch = read_byte(tap);
-        if (ch == 0) break;
-        header->name[i] = (char)ch;
+    for (int i = 0; i < TAP_NAME_LEN - 1 && p < raw_len; i++, p++) {
+        if (raw[p] == 0) { p++; break; }
+        header->name[i] = (char)raw[p];
+    }
+
+    /* Reposition stream to just after name's null terminator */
+    tap->position = save_pos + p;
+    if (!tap->fast_load && tap->file) {
+        fseek(tap->file, (long)tap->position, SEEK_SET);
     }
 
     return true;

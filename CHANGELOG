@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.14.4-alpha] - 2026-03-18
+
+### TAP Header Auto-Detection (Sprint 32 bugfix — poker-asn.tap compatibility)
+
+#### Fixed
+- **TAP header format auto-detection (7-byte vs 9-byte)** : `tap_read_header()` détecte
+  automatiquement le format du header TAP et gère le padding entre le marker $24 et le
+  header réel. Certains TAP (ex: poker-asn.tap) ont des octets de padding ($52 $54) qui
+  corrompaient le byte de type (lu $52 au lieu de $00), empêchant le rechain BASIC et
+  causant "UNDEF'D STATEMENT". L'auto-détection essaie d'abord le format 9-byte (ROM),
+  puis 7-byte avec padding 0-4 bytes, en validant les adresses start/end.
+
+---
+
 ## [1.14.3-alpha] - 2026-03-16
 
 ### Post-CLOAD BASIC Rechain (Sprint 32 bugfix — TYRANN compatibility)
