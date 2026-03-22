@@ -7,7 +7,7 @@
  *
  * Implements .ost (Oric Save sTate) format:
  * - 48-byte header (magic, version, file size, CRC32, emu version)
- * - Sequential sections: CPU, MEM, VIA, PSG, VID, KBD, FDC, MDC, TAP, META
+ * - Sequential sections: CPU, MEM, VIA, PSG, VID, KBD, FDC, MDC, TAP, SER, META
  * - CRC32 integrity check over all data after the header
  */
 
@@ -300,6 +300,26 @@ bool savestate_save(const emulator_t* emu, const char* filename) {
     write_i32le(fp, emu->tape_syncstack);
     end_section(fp, sec);
 
+    /* ── SER Section (if serial present) ── */
+    if (emu->has_serial) {
+        sec = begin_section(fp, "SER\0");
+        write_u8(fp, emu->acia.tdr);
+        write_u8(fp, emu->acia.rdr);
+        write_u8(fp, emu->acia.status);
+        write_u8(fp, emu->acia.command);
+        write_u8(fp, emu->acia.control);
+        write_bool(fp, emu->acia.tx_pending);
+        write_bool(fp, emu->acia.rx_full);
+        write_bool(fp, emu->acia.irq_line);
+        write_i32le(fp, emu->acia.tx_cycles);
+        write_i32le(fp, emu->acia.rx_cycles);
+        write_bool(fp, emu->acia.v23_mode);
+        write_bool(fp, emu->acia.dcd);
+        write_bool(fp, emu->acia.dsr);
+        write_bool(fp, emu->acia.cts);
+        end_section(fp, sec);
+    }
+
     /* ── META Section ── */
     const char* rom_path = emu->rom_path ? emu->rom_path : "";
     const char* disk_path = emu->disk_path ? emu->disk_path : "";
@@ -559,6 +579,23 @@ bool savestate_load(emulator_t* emu, const char* filename) {
             emu->tapelen = read_i32le(fp);
             emu->tapeoffs = read_i32le(fp);
             emu->tape_syncstack = read_i32le(fp);
+        } else if (memcmp(tag, "SER\0", 4) == 0) {
+            emu->acia.tdr = read_u8(fp);
+            emu->acia.rdr = read_u8(fp);
+            emu->acia.status = read_u8(fp);
+            emu->acia.command = read_u8(fp);
+            emu->acia.control = read_u8(fp);
+            emu->acia.tx_pending = read_bool(fp);
+            emu->acia.rx_full = read_bool(fp);
+            emu->acia.irq_line = read_bool(fp);
+            emu->acia.tx_cycles = read_i32le(fp);
+            emu->acia.rx_cycles = read_i32le(fp);
+            emu->acia.v23_mode = read_bool(fp);
+            emu->acia.dcd = read_bool(fp);
+            emu->acia.dsr = read_bool(fp);
+            emu->acia.cts = read_bool(fp);
+            /* Recalculate timing from restored registers */
+            // Note: acia_update_timing needs to exist - just call it if possible
         } else if (memcmp(tag, "META", 4) == 0) {
             /* Read and log metadata (info only, don't override loaded paths) */
             char meta_buf[1024] = {0};

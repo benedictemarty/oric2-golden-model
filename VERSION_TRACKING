@@ -1,12 +1,30 @@
 VERSION_TRACKING - Phosphoric
 =====================================
 
-Current Version: 1.14.4-alpha
-Release Date: 2026-03-18
-Status: Alpha (TAP Header Auto-Detection + Post-CLOAD Rechain + Timer Exact-Zero + Type-Keys Debounce + Deferred Fast-Load Fix + Code Coverage + Documentation + ROM Analysis + CPU Profiler + CPU Trace + Display Scaling + MCP-40 Plotter + Printer + Joystick + Atmos + Save States + Full Type Safety + WAV Audio + CASTV2 + MJPEG Cast, 286 tests pass)
+Current Version: 1.15.1-alpha
+Release Date: 2026-03-22
+Status: Alpha (ACIA 6551 Serial + Modem AT + COM termios + Savestate SER + TAP Header Auto-Detection + Post-CLOAD Rechain + Timer Exact-Zero + Type-Keys Debounce + Deferred Fast-Load Fix + Code Coverage + Documentation + ROM Analysis + CPU Profiler + CPU Trace + Display Scaling + MCP-40 Plotter + Printer + Joystick + Atmos + Save States + Full Type Safety + WAV Audio + CASTV2 + MJPEG Cast, 303 tests pass)
 
 Version History:
 ----------------
+- 1.15.1-alpha (2026-03-22): ACIA 6551 Oricutron-level corrections (Sprint 33b)
+  * Fix: ACIA clock uses 1.8432 MHz crystal / 16 prescaler
+  * Fix: Frame format variable (5-8 data + parity + 1-2 stop) instead of fixed 10
+  * New: Modem backend with AT command emulation (ATD, ATA, ATH, ATZ, ATE, ATS0, +++)
+  * New: COM serial backend via termios (Linux, --serial com:baud,bits,parity,stop,device)
+  * New: TCP server mode (--serial modem:listen:port) for hosting BBS
+  * New: ACIA state in savestate (SER section in .ost format)
+  * New: Configurable ACIA base address (--acia-addr, default $031C)
+  * 6 new tests, 303 total tests
+
+- 1.15.0-alpha (2026-03-22): ACIA 6551 Serial Interface (Sprint 33)
+  * New: MOS 6551 ACIA emulation at $031C-$031F (Digitelec DTL 2000, MCP RS232-C compatible)
+  * New: Backends loopback, TCP (BBS/Minitel), PTY (pseudo-terminal)
+  * New: V23 mode (1200/75 bauds asymétriques, Minitel/Prestel)
+  * New: IRQF_SERIAL (0x04) — TX/RX interrupt support
+  * New: CLI --serial and --serial-v23 options
+  * 11 new serial tests, 297 total tests
+
 - 1.14.4-alpha (2026-03-18): TAP Header Auto-Detection (Sprint 32 bugfix — poker-asn.tap compatibility)
   * Fix: tap_read_header() auto-detects 7-byte vs 9-byte format with 0-4 byte padding
   * Validates start/end addresses to pick the correct interpretation

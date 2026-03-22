@@ -24,6 +24,8 @@
 #include "io/joystick.h"
 #include "io/printer.h"
 #include "io/microdisc.h"
+#include "io/acia6551.h"
+#include "io/serial_backend.h"
 #include "storage/sedoric.h"
 #include "hostfs/hostfs.h"
 #include "debugger.h"
@@ -31,7 +33,7 @@
 #include "utils/profiler.h"
 #include "network/cast_server.h"
 
-#define EMU_VERSION "1.14.4-alpha"
+#define EMU_VERSION "1.15.1-alpha"
 
 /**
  * @brief ORIC machine model
@@ -93,6 +95,12 @@ typedef struct emulator_s {
 
     /* Centronics parallel printer */
     oric_printer_t printer;
+
+    /* ACIA 6551 serial interface (Digitelec DTL 2000, MCP RS232-C, etc.) */
+    acia6551_t acia;
+    uint16_t acia_base_addr;
+    serial_backend_t* serial_backend;
+    bool has_serial;
 
     /* Microdisc controller */
     microdisc_t microdisc;

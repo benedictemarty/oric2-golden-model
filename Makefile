@@ -3,7 +3,7 @@
 
 CC = gcc
 CFLAGS = -Wall -Wextra -Wpedantic -std=c11 -I./include
-LDFLAGS = -lm
+LDFLAGS = -lm -lutil
 
 # Debug/Release
 DEBUG ?= 0
@@ -48,6 +48,8 @@ SOURCES = src/main.c \
           src/io/mcp40.c \
           src/io/cassette.c \
           src/io/microdisc.c \
+          src/io/acia6551.c \
+          src/io/serial_backend.c \
           src/video/video.c \
           src/video/textmode.c \
           src/video/hires.c \
@@ -91,7 +93,7 @@ BINDIR = $(PREFIX)/bin
 DATADIR = $(PREFIX)/share/phosphoric
 DOCDIR = $(PREFIX)/share/doc/phosphoric
 
-.PHONY: all clean tools tests test-cpu test-memory test-io test-storage test-system test-rom test-video test-audio test-debugger test-cast test-savestate test-atmos test-joystick test-printer test-mcp40 test-renderer test-trace test-profiler test-rominfo valgrind static-analysis coverage coverage-report install uninstall help
+.PHONY: all clean tools tests test-cpu test-memory test-io test-storage test-system test-rom test-video test-audio test-debugger test-cast test-savestate test-atmos test-joystick test-printer test-mcp40 test-renderer test-trace test-profiler test-rominfo test-serial valgrind static-analysis coverage coverage-report install uninstall help
 
 all: $(TARGET)
 
@@ -258,6 +260,13 @@ test-rominfo: $(TEST_ROMINFO_SRCS)
 	@$(CC) $(CFLAGS) $(TEST_ROMINFO_SRCS) $(LDFLAGS) -o test_rominfo
 	@./test_rominfo
 
+TEST_SERIAL_SRCS = tests/unit/test_serial.c src/io/acia6551.c \
+                   src/io/serial_backend.c src/utils/logging.c
+
+test-serial: $(TEST_SERIAL_SRCS)
+	@$(CC) $(CFLAGS) $(TEST_SERIAL_SRCS) $(LDFLAGS) -lutil -o test_serial
+	@./test_serial
+
 TEST_COVERAGE_SRCS = tests/unit/test_coverage.c src/cpu/cpu6502.c src/cpu/opcodes.c \
                      src/cpu/addressing.c src/memory/memory.c src/memory/banking.c \
                      src/io/via6522.c src/io/keyboard.c src/io/joystick.c \
@@ -271,7 +280,7 @@ test-coverage: $(TEST_COVERAGE_SRCS)
 	@$(CC) $(CFLAGS) $(TEST_COVERAGE_SRCS) $(LDFLAGS) -o test_coverage
 	@./test_coverage
 
-tests: test-cpu test-memory test-io test-storage test-system test-video test-audio test-debugger test-savestate test-atmos test-joystick test-printer test-mcp40 test-renderer test-trace test-profiler test-rominfo test-coverage
+tests: test-cpu test-memory test-io test-storage test-system test-video test-audio test-debugger test-savestate test-atmos test-joystick test-printer test-mcp40 test-renderer test-trace test-profiler test-rominfo test-serial test-coverage
 	@echo ""
 	@echo "═══════════════════════════════════════════════════════"
 	@echo "  All test suites completed!"
@@ -371,7 +380,7 @@ uninstall:
 
 clean:
 	rm -f $(OBJECTS) $(TARGET) $(TOOLS)
-	rm -f test_cpu test_memory test_io test_storage test_system test_rom test_video test_audio test_debugger test_cast test_savestate test_atmos test_joystick test_printer test_mcp40 test_renderer test_trace test_profiler test_rominfo test_coverage
+	rm -f test_cpu test_memory test_io test_storage test_system test_rom test_video test_audio test_debugger test_cast test_savestate test_atmos test_joystick test_printer test_mcp40 test_renderer test_trace test_profiler test_rominfo test_serial test_coverage
 	rm -f tools/*.o
 	find . -name '*.gcno' -o -name '*.gcda' -o -name '*.gcov' | xargs rm -f 2>/dev/null
 

@@ -409,6 +409,31 @@ including host filesystem sharing and conversion tools for legacy BASIC/machine 
 - [x] 286 tests (100% pass)
 - [x] 3 nouveaux tests (286 total, 100% pass)
 
+### Sprint 33: ACIA 6551 Serial Interface (v1.15.0-alpha) - DONE
+- [x] MOS 6551 ACIA at $031C-$031F — 4 registers (Data, Status, Command, Control)
+- [x] Compatible Digitelec DTL 2000, MCP RS232-C, Kenema 300/300, Telestrat
+- [x] Backend loopback (circular buffer 256 bytes, TX → RX, for unit tests)
+- [x] Backend TCP (non-blocking socket, BBS/Telnet/Minitel connections)
+- [x] Backend PTY (POSIX pseudo-terminal, minicom/screen interface)
+- [x] V23 Minitel/Prestel mode (1200/75 bauds asymétriques, --serial-v23)
+- [x] IRQ support: IRQF_SERIAL (0x04), RX (RDRF) and TX (TDRE) interrupts
+- [x] Baud rate table: 50-19200 from Control Register, cycle-accurate timing
+- [x] Signal lines: DCD, DSR, CTS with active-low encoding
+- [x] CLI: --serial (loopback|tcp:host:port|pty), --serial-v23
+- [x] 11 new tests (297 total, 100% pass)
+
+### Sprint 33b: ACIA Oricutron-level corrections (v1.15.1-alpha) - DONE
+- [x] Fix: ACIA clock uses 1.8432 MHz crystal / 16 prescaler (not 1 MHz CPU clock)
+- [x] Fix: Frame format variable — calcul dynamique (1 start + 5-8 data + 0-1 parity + 1-2 stop)
+- [x] Fix: Data bitmask from word length (0xFF/0x7F/0x3F/0x1F)
+- [x] New: Modem Hayes backend — AT command emulation (ATD, ATA, ATH, ATZ, ATE, ATS0, +++ escape)
+- [x] New: TCP server mode (modem:listen:port) for hosting BBS
+- [x] New: COM serial backend via termios (Linux) — baud 50-115200, databits 5-8, parity N/E/O
+- [x] New: ACIA state in savestate (.ost "SER" section, 14 fields)
+- [x] New: Configurable ACIA base address (--acia-addr, default $031C)
+- [x] New: 64KB RX/TX ring buffers for modem backend
+- [x] 6 new tests (303 total, 100% pass)
+
 ## Future Enhancements
 
 ### Advanced Features
@@ -419,6 +444,7 @@ including host filesystem sharing and conversion tools for legacy BASIC/machine 
 - [x] Printer emulation (text + MCP-40 plotter)
 - [x] Display scaling (x1, x2, x3, x4)
 - [x] Trace logging
+- [x] Serial interface (ACIA 6551, RS232, Minitel/V23)
 
 ### Developer Tools
 - [x] Memory viewer (debugger: m command)

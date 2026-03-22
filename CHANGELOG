@@ -5,6 +5,58 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.15.1-alpha] - 2026-03-22
+
+### ACIA 6551 — Corrections Oricutron-level (Sprint 33b)
+
+#### Fixed
+- **Horloge ACIA correcte** : utilise le cristal 1.8432 MHz / 16 = 115200 Hz au lieu de
+  l'approximation 1 MHz. Formule : `cpu_cycles = (1000000 * framebits) / baud`.
+- **Frame format variable** : calcul dynamique des framebits depuis Control/Command registers
+  (1 start + 5-8 data + 0-1 parité + 1-2 stop) au lieu du 10 fixe. Supporte 5-N-2, 7-E-1, etc.
+- **Bitmask donnée** : masque automatique selon word length (0xFF/0x7F/0x3F/0x1F).
+
+#### Added
+- **Backend modem Hayes (AT)** : machine à états complète pour commandes AT (ATD, ATA, ATH, ATZ,
+  ATE0/1, ATS0=N, +++). Connexion TCP via ATD host:port. Réponses CONNECT/NO CARRIER/OK/ERROR.
+  Buffers 64 Ko RX/TX. Mode serveur TCP (listen/accept) pour héberger un BBS.
+- **Backend COM série** : vrai port série via termios (Linux). Config: --serial com:115200,8,N,1,/dev/ttyUSB0.
+  Baud 50-115200, databits 5-8, parité N/E/O, stop 1-2. Non-blocking I/O + FIONREAD.
+- **Savestate ACIA** : section "SER" dans format .ost — 14 champs (registres, état, timing, signaux).
+- **Offset ACIA configurable** : --acia-addr XXXX (hex), défaut $031C, pour interfaces non-standard.
+- **6 nouveaux tests** : frame format 8-N-1/7-E-1/5-N-2, précision horloge, base addr configurable,
+  création backend modem. 303 tests totaux (100% pass).
+
+#### CLI
+- `--serial modem:host:port` — Modem Hayes avec commandes AT via TCP
+- `--serial modem:listen:port` — Mode serveur BBS (accept connections)
+- `--serial com:baud,bits,parity,stop,device` — Vrai port série
+- `--acia-addr XXXX` — Adresse de base ACIA en hexadécimal
+
+---
+
+## [1.15.0-alpha] - 2026-03-22
+
+### ACIA 6551 Serial Interface (Sprint 33 — Modem / RS232 / Minitel)
+
+#### Added
+- **ACIA 6551 emulation** at $031C-$031F (standard de facto ORIC) : 4 registres fidèles
+  au hardware réel (Data, Status, Command, Control). Compatible avec les interfaces série
+  ORIC existantes : Digitelec DTL 2000, MCP RS232-C, Kenema 300/300, Telestrat intégré.
+- **Backend loopback** : buffer circulaire 256 octets, TX → RX direct pour tests unitaires.
+- **Backend TCP** : socket non-bloquant pour connexion BBS/Telnet/Minitel (--serial tcp:host:port).
+- **Backend PTY** : pseudo-terminal POSIX pour interfacer avec minicom, screen, etc. (--serial pty).
+- **Mode V23 Minitel/Prestel** : --serial-v23 fixe 1200/75 bauds asymétriques, fidèle au
+  Digitelec DTL 2000 et aux modems V23 français.
+- **IRQ ACIA** : nouveau flag IRQF_SERIAL (0x04), IRQ RX (RDRF) et TX (TDRE) avec
+  gestion level-triggered conforme au 6502.
+- **Options CLI** : --serial (loopback|tcp:host:port|pty), --serial-v23.
+- **11 tests unitaires** : init, reset, registres R/W, TX/RX loopback, IRQ TX/RX,
+  overrun, mode V23, signaux DCD/DSR, backend loopback isolation.
+- 297 tests totaux (100% pass).
+
+---
+
 ## [1.14.4-alpha] - 2026-03-18
 
 ### TAP Header Auto-Detection (Sprint 32 bugfix — poker-asn.tap compatibility)

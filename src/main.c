@@ -234,6 +234,9 @@ static void print_usage(const char* program_name) {
     printf("      --trace-max N          Max instructions to trace (default: unlimited)\n");
     printf("      --profile FILE         Write CPU performance profile to FILE on exit\n");
     printf("      --rom-info [FILE]      Analyze ROM and print report (or write to FILE)\n");
+    printf("      --serial TYPE          Serial port: loopback, tcp:HOST:PORT, pty\n");
+    printf("      --serial-v23          V23 mode: 1200/75 baud (Minitel/Prestel/Digitelec)\n");
+    printf("      --acia-addr ADDR      ACIA base address in hex (default: 031C)\n");
     printf("      --save-state FILE      Save emulator state to FILE on exit\n");
     printf("      --load-state FILE      Load emulator state from FILE at startup\n");
     printf("  -?, --help                 Show this help\n");
@@ -257,8 +260,17 @@ static void print_usage(const char* program_name) {
 static uint8_t io_read_callback(uint16_t address, void* userdata) {
     emulator_t* emu = (emulator_t*)userdata;
 
-    /* Microdisc I/O: $0310-$031F */
+    /* ACIA 6551 serial: $031C-$031F (checked first — overlaps Microdisc range) */
+    if (emu->has_serial && address >= emu->acia_base_addr && address <= (emu->acia_base_addr + 3)) {
+        return acia_read(&emu->acia, address);
+    }
+
+    /* Microdisc I/O: $0310-$031B (reduced when ACIA present) */
     if (emu->has_microdisc && address >= 0x0310 && address <= 0x031F) {
+        /* If serial is active, ACIA owns $031C-$031F */
+        if (emu->has_serial && address >= emu->acia_base_addr) {
+            return acia_read(&emu->acia, address);
+        }
         return microdisc_read(&emu->microdisc, address);
     }
 
@@ -356,8 +368,19 @@ static uint8_t portb_read_callback(void* userdata) {
 static void io_write_callback(uint16_t address, uint8_t value, void* userdata) {
     emulator_t* emu = (emulator_t*)userdata;
 
+    /* ACIA 6551 serial: $031C-$031F */
+    if (emu->has_serial && address >= emu->acia_base_addr && address <= (emu->acia_base_addr + 3)) {
+        acia_write(&emu->acia, address, value);
+        return;
+    }
+
     /* Microdisc I/O: $0310-$031F */
     if (emu->has_microdisc && address >= 0x0310 && address <= 0x031F) {
+        /* If serial is active, ACIA owns $031C-$031F */
+        if (emu->has_serial && address >= emu->acia_base_addr) {
+            acia_write(&emu->acia, address, value);
+            return;
+        }
         microdisc_write(&emu->microdisc, address, value);
         /* Sync overlay flags to memory system */
         emu->memory.basic_rom_disabled = emu->microdisc.romdis;
@@ -412,6 +435,15 @@ static void microdisc_cpu_irq_clr(emulator_t* emu) {
     cpu_irq_clear(&emu->cpu, IRQF_DISK);
 }
 
+/* ACIA 6551 serial IRQ callbacks */
+static void acia_cpu_irq_set(emulator_t* emu) {
+    cpu_irq_set(&emu->cpu, IRQF_SERIAL);
+}
+
+static void acia_cpu_irq_clr(emulator_t* emu) {
+    cpu_irq_clear(&emu->cpu, IRQF_SERIAL);
+}
+
 static bool emulator_init(emulator_t* emu) {
     log_info("Initializing Phosphoric v%s", EMU_VERSION);
 
@@ -433,6 +465,12 @@ static bool emulator_init(emulator_t* emu) {
 
     /* Initialize printer (disabled by default) */
     oric_printer_init(&emu->printer);
+
+    /* Initialize ACIA 6551 serial interface (disabled by default) */
+    acia_init(&emu->acia);
+    emu->acia.irq_set = acia_cpu_irq_set;
+    emu->acia.irq_clr = acia_cpu_irq_clr;
+    emu->acia.irq_userdata = emu;
 
     /* Initialize PSG (AY-3-8912) with keyboard input callback */
     ay_init(&emu->psg, ORIC_CLOCK_HZ);
@@ -512,6 +550,11 @@ static void emulator_cleanup(emulator_t* emu) {
         cast_server_stop(&emu->cast_server);
     }
     oric_printer_close(&emu->printer);
+    if (emu->serial_backend) {
+        serial_backend_destroy(emu->serial_backend);
+        emu->serial_backend = NULL;
+        emu->has_serial = false;
+    }
 #ifdef HAS_SDL2
     oric_joystick_close_sdl(&emu->joystick);
 #endif
@@ -771,6 +814,13 @@ static void emulator_run(emulator_t* emu) {
             /* Microdisc FDC: process delayed DRQ/INTRQ timers */
             if (emu->has_microdisc) {
                 fdc_ticktock(&emu->microdisc.fdc, step);
+            }
+
+            /* ACIA 6551: serial TX/RX timing */
+            if (emu->has_serial) {
+                for (int s = 0; s < step; s++) {
+                    acia_tick(&emu->acia);
+                }
             }
 
             /* VSync trigger at line 256 (cycle 16384) — On real Oric hardware,
@@ -1097,9 +1147,12 @@ int main(int argc, char* argv[]) {
     const char* profile_file = NULL;
     const char* rom_info_file = NULL;
     bool rom_info_enabled = false;
+    const char* serial_arg = NULL;
+    const char* acia_addr_arg = NULL;
+    bool serial_v23 = false;
 
     /* Long option codes for options without short equivalents */
-    enum { OPT_SCREENSHOT = 256, OPT_SCREENSHOT_AT, OPT_FRAME_DUMP, OPT_FRAME_DUMP_INTERVAL, OPT_TYPE_KEYS, OPT_DISK_ROM, OPT_DISK1, OPT_DISK2, OPT_DISK3, OPT_BREAKPOINT, OPT_DEBUG_BREAK, OPT_CAST_SERVER, OPT_CAST_DISCOVER, OPT_CAST_TO, OPT_SAVE_STATE, OPT_LOAD_STATE, OPT_MODEL, OPT_JOYSTICK, OPT_PRINTER, OPT_PRINTER_TYPE, OPT_SCALE, OPT_TRACE, OPT_TRACE_MAX, OPT_PROFILE, OPT_ROM_INFO };
+    enum { OPT_SCREENSHOT = 256, OPT_SCREENSHOT_AT, OPT_FRAME_DUMP, OPT_FRAME_DUMP_INTERVAL, OPT_TYPE_KEYS, OPT_DISK_ROM, OPT_DISK1, OPT_DISK2, OPT_DISK3, OPT_BREAKPOINT, OPT_DEBUG_BREAK, OPT_CAST_SERVER, OPT_CAST_DISCOVER, OPT_CAST_TO, OPT_SAVE_STATE, OPT_LOAD_STATE, OPT_MODEL, OPT_JOYSTICK, OPT_PRINTER, OPT_PRINTER_TYPE, OPT_SCALE, OPT_TRACE, OPT_TRACE_MAX, OPT_PROFILE, OPT_ROM_INFO, OPT_SERIAL, OPT_SERIAL_V23, OPT_ACIA_ADDR };
 
     static struct option long_options[] = {
         {"tape",                required_argument, 0, 't'},
@@ -1137,6 +1190,9 @@ int main(int argc, char* argv[]) {
         {"trace-max",           required_argument, 0, OPT_TRACE_MAX},
         {"profile",             required_argument, 0, OPT_PROFILE},
         {"rom-info",            optional_argument, 0, OPT_ROM_INFO},
+        {"serial",              required_argument, 0, OPT_SERIAL},
+        {"serial-v23",          no_argument,       0, OPT_SERIAL_V23},
+        {"acia-addr",           required_argument, 0, OPT_ACIA_ADDR},
         {"help",                no_argument,       0, '?'},
         {0, 0, 0, 0}
     };
@@ -1195,6 +1251,15 @@ int main(int argc, char* argv[]) {
             case OPT_ROM_INFO:
                 rom_info_enabled = true;
                 if (optarg) rom_info_file = optarg;
+                break;
+            case OPT_SERIAL:
+                serial_arg = optarg;
+                break;
+            case OPT_SERIAL_V23:
+                serial_v23 = true;
+                break;
+            case OPT_ACIA_ADDR:
+                acia_addr_arg = optarg;
                 break;
             case '?':
             default:
@@ -1267,6 +1332,58 @@ int main(int argc, char* argv[]) {
         }
         if (!oric_printer_open(&emu.printer, printer_file)) {
             log_error("Failed to open printer output: %s", printer_file);
+        }
+    }
+
+    /* Serial interface (ACIA 6551) */
+    if (acia_addr_arg) {
+        emu.acia_base_addr = (uint16_t)strtol(acia_addr_arg, NULL, 16);
+        emu.acia.base_addr = emu.acia_base_addr;
+        log_info("ACIA base address: $%04X", emu.acia_base_addr);
+    } else {
+        emu.acia_base_addr = ACIA_DEFAULT_BASE;
+    }
+    if (serial_arg) {
+        serial_backend_t* sb = NULL;
+        if (strcmp(serial_arg, "loopback") == 0) {
+            sb = serial_backend_loopback_create();
+        } else if (strncmp(serial_arg, "tcp:", 4) == 0) {
+            /* Parse tcp:host:port */
+            char host[256] = {0};
+            uint16_t port = 23;  /* Default: telnet */
+            const char* hp = serial_arg + 4;
+            const char* colon = strrchr(hp, ':');
+            if (colon && colon != hp) {
+                size_t hlen = (size_t)(colon - hp);
+                if (hlen >= sizeof(host)) hlen = sizeof(host) - 1;
+                memcpy(host, hp, hlen);
+                host[hlen] = '\0';
+                port = (uint16_t)atoi(colon + 1);
+            } else {
+                strncpy(host, hp, sizeof(host) - 1);
+            }
+            sb = serial_backend_tcp_create(host, port);
+        } else if (strcmp(serial_arg, "pty") == 0) {
+            sb = serial_backend_pty_create();
+        } else {
+            log_error("Unknown serial backend: %s (use: loopback, tcp:host:port, pty)", serial_arg);
+            emulator_cleanup(&emu);
+            return 1;
+        }
+
+        if (sb) {
+            if (sb->open(sb)) {
+                acia_set_backend(&emu.acia, sb);
+                emu.serial_backend = sb;
+                emu.has_serial = true;
+                if (serial_v23) {
+                    acia_set_v23_mode(&emu.acia, true);
+                }
+                log_info("Serial interface enabled: %s", serial_arg);
+            } else {
+                log_error("Failed to open serial backend: %s", serial_arg);
+                serial_backend_destroy(sb);
+            }
         }
     }
 

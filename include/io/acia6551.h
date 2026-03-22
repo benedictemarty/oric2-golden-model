@@ -1,0 +1,226 @@
+/**
+ * @file acia6551.h
+ * @brief MOS 6551 ACIA (Asynchronous Communication Interface Adapter)
+ * @author bmarty <bmarty@mailo.com>
+ * @date 2026-03-22
+ *
+ * Emulates the 6551 ACIA used in ORIC serial interfaces (Digitelec DTL 2000,
+ * MCP RS232-C, Kenema 300/300, Telestrat built-in) at $031C-$031F.
+ *
+ * Register map:
+ *   $031C (R)  = Receiver Data Register (RDR)
+ *   $031C (W)  = Transmitter Data Register (TDR)
+ *   $031D (R)  = Status Register
+ *   $031D (W)  = Programmed Reset
+ *   $031E (R/W) = Command Register
+ *   $031F (R/W) = Control Register
+ *
+ * Hardware references:
+ *   - MOS 6551 datasheet (Princeton)
+ *   - Defence Force Wiki: oric:hardware:serial
+ *   - Digitelec DTL 2000 (V23 1200/75 Minitel modem)
+ */
+
+#ifndef ACIA6551_H
+#define ACIA6551_H
+
+#include <stdint.h>
+#include <stdbool.h>
+
+/* Forward declarations */
+typedef struct serial_backend_s serial_backend_t;
+typedef struct emulator_s emulator_t;
+
+/* ═══════════════════════════════════════════════════════════════════════
+ *  I/O Address Map
+ * ═══════════════════════════════════════════════════════════════════════ */
+
+#define ACIA_DEFAULT_BASE   0x031C  /* Default I/O base address */
+#define ACIA_BASE           0x031C  /* Backward compatibility */
+#define ACIA_DATA           0x031C  /* R: RDR, W: TDR */
+#define ACIA_STATUS         0x031D  /* R: Status, W: Programmed Reset */
+#define ACIA_COMMAND        0x031E  /* R/W: Command Register */
+#define ACIA_CONTROL        0x031F  /* R/W: Control Register */
+
+#define ACIA_ADDR_MASK      0x03    /* 2-bit register select (A0-A1) */
+
+/* ═══════════════════════════════════════════════════════════════════════
+ *  Status Register bits (read $031D)
+ * ═══════════════════════════════════════════════════════════════════════ */
+
+#define ACIA_STATUS_PE      0x01    /* Bit 0: Parity Error */
+#define ACIA_STATUS_FE      0x02    /* Bit 1: Framing Error */
+#define ACIA_STATUS_OVRN    0x04    /* Bit 2: Overrun */
+#define ACIA_STATUS_RDRF    0x08    /* Bit 3: Receiver Data Register Full */
+#define ACIA_STATUS_TDRE    0x10    /* Bit 4: Transmitter Data Register Empty */
+#define ACIA_STATUS_DCD     0x20    /* Bit 5: Data Carrier Detect (active low) */
+#define ACIA_STATUS_DSR     0x40    /* Bit 6: Data Set Ready (active low) */
+#define ACIA_STATUS_IRQ     0x80    /* Bit 7: IRQ occurred */
+
+/* ═══════════════════════════════════════════════════════════════════════
+ *  Command Register bits (R/W $031E)
+ * ═══════════════════════════════════════════════════════════════════════ */
+
+#define ACIA_CMD_DTR        0x01    /* Bit 0: Data Terminal Ready */
+#define ACIA_CMD_IRD        0x02    /* Bit 1: Receiver IRQ Disable (1=disabled) */
+#define ACIA_CMD_TIC_MASK   0x0C    /* Bits 3-2: Transmitter Interrupt Control */
+#define ACIA_CMD_TIC_SHIFT  2
+#define ACIA_CMD_ECHO       0x10    /* Bit 4: Echo mode (1=enabled) */
+#define ACIA_CMD_PME        0x20    /* Bit 5: Parity Mode Enable */
+#define ACIA_CMD_PMC_MASK   0xC0    /* Bits 7-6: Parity Mode Control */
+#define ACIA_CMD_PMC_SHIFT  6
+
+/* TIC field values */
+#define ACIA_TIC_RTS_HIGH_IRQ_OFF   0x00  /* RTS high, TX IRQ disabled */
+#define ACIA_TIC_RTS_LOW_IRQ_ON     0x01  /* RTS low, TX IRQ enabled */
+#define ACIA_TIC_RTS_LOW_IRQ_OFF    0x02  /* RTS low, TX IRQ disabled */
+#define ACIA_TIC_RTS_LOW_BRK        0x03  /* RTS low, TX break on line */
+
+/* ═══════════════════════════════════════════════════════════════════════
+ *  Control Register bits (R/W $031F)
+ * ═══════════════════════════════════════════════════════════════════════ */
+
+#define ACIA_CTL_BAUD_MASK  0x0F    /* Bits 3-0: Baud Rate Generator */
+#define ACIA_CTL_RXCLK      0x10    /* Bit 4: Receiver Clock Source (0=external) */
+#define ACIA_CTL_WL_MASK    0x60    /* Bits 6-5: Word Length */
+#define ACIA_CTL_WL_SHIFT   5
+#define ACIA_CTL_SBN        0x80    /* Bit 7: Stop Bit Number (0=1, 1=2) */
+
+/* Baud rate table indices (bits 3-0 of Control Register) */
+#define ACIA_BAUD_EXT       0x00    /* External clock */
+#define ACIA_BAUD_50        0x01
+#define ACIA_BAUD_75        0x02
+#define ACIA_BAUD_110       0x03
+#define ACIA_BAUD_135       0x04
+#define ACIA_BAUD_150       0x05
+#define ACIA_BAUD_300       0x06
+#define ACIA_BAUD_600       0x07
+#define ACIA_BAUD_1200      0x08
+#define ACIA_BAUD_1800      0x09
+#define ACIA_BAUD_2400      0x0A
+#define ACIA_BAUD_3600      0x0B
+#define ACIA_BAUD_4800      0x0C
+#define ACIA_BAUD_7200      0x0D
+#define ACIA_BAUD_9600      0x0E
+#define ACIA_BAUD_19200     0x0F
+
+/* Word length values (bits 6-5) */
+#define ACIA_WL_8           0x00    /* 8 data bits */
+#define ACIA_WL_7           0x01    /* 7 data bits */
+#define ACIA_WL_6           0x02    /* 6 data bits */
+#define ACIA_WL_5           0x03    /* 5 data bits */
+
+/* ═══════════════════════════════════════════════════════════════════════
+ *  V23 Minitel/Prestel mode preset
+ * ═══════════════════════════════════════════════════════════════════════ */
+
+/* V23 mode: 1200 baud receive, 75 baud transmit (half-duplex asymmetric)
+ * Used by Digitelec DTL 2000, Minitel, Prestel */
+#define ACIA_V23_RX_BAUD    1200
+#define ACIA_V23_TX_BAUD    75
+
+/* ═══════════════════════════════════════════════════════════════════════
+ *  ACIA device structure
+ * ═══════════════════════════════════════════════════════════════════════ */
+
+typedef struct acia6551_s {
+    /* Registers */
+    uint8_t tdr;                /**< Transmitter Data Register (write) */
+    uint8_t rdr;                /**< Receiver Data Register (read) */
+    uint8_t status;             /**< Status Register (read-only) */
+    uint8_t command;            /**< Command Register (R/W) */
+    uint8_t control;            /**< Control Register (R/W) */
+
+    /* Configuration */
+    uint16_t base_addr;         /**< Configurable I/O base address (default 0x031C) */
+
+    /* Frame format (decoded from control/command registers) */
+    uint8_t  framebits;         /**< Total bits per frame: start + data + parity + stop */
+    uint32_t baud_rate;         /**< Current decoded baud rate (Hz) */
+    uint8_t  bitmask;           /**< Data mask from word length (0xFF=8bit, 0x7F=7bit, etc.) */
+
+    /* Internal state */
+    bool    tx_pending;         /**< TDR has data waiting to be sent */
+    bool    rx_full;            /**< RDR has unread data */
+    bool    irq_line;           /**< Current IRQ output state */
+
+    /* Timing: cycle counter for baud rate simulation */
+    int32_t tx_cycles;          /**< Cycles until TX completes */
+    int32_t rx_cycles;          /**< Cycles until next RX poll */
+    int32_t tx_reload;          /**< Cycles per TX byte (from baud rate) */
+    int32_t rx_reload;          /**< Cycles per RX byte (from baud rate) */
+
+    /* V23 asymmetric mode (Minitel/Prestel/Digitelec DTL 2000) */
+    bool    v23_mode;           /**< Asymmetric baud: 1200 RX / 75 TX */
+
+    /* External signal lines */
+    bool    dcd;                /**< Data Carrier Detect (true = active/low) */
+    bool    dsr;                /**< Data Set Ready (true = active/low) */
+    bool    cts;                /**< Clear To Send (true = active/low) */
+
+    /* Backend (loopback, TCP, PTY) */
+    serial_backend_t* backend;
+
+    /* CPU IRQ routing */
+    void (*irq_set)(emulator_t* emu);
+    void (*irq_clr)(emulator_t* emu);
+    emulator_t* irq_userdata;
+} acia6551_t;
+
+/* ═══════════════════════════════════════════════════════════════════════
+ *  Public API
+ * ═══════════════════════════════════════════════════════════════════════ */
+
+/**
+ * @brief Initialize ACIA to power-on state
+ */
+void acia_init(acia6551_t* acia);
+
+/**
+ * @brief Hardware reset (equivalent to /RES pin)
+ */
+void acia_reset(acia6551_t* acia);
+
+/**
+ * @brief Read ACIA register
+ * @param addr Address ($031C-$031F)
+ * @return Register value
+ */
+uint8_t acia_read(acia6551_t* acia, uint16_t addr);
+
+/**
+ * @brief Write ACIA register
+ * @param addr Address ($031C-$031F)
+ * @param value Data to write
+ */
+void acia_write(acia6551_t* acia, uint16_t addr, uint8_t value);
+
+/**
+ * @brief Advance ACIA state by one CPU cycle
+ *
+ * Called once per CPU cycle from the main emulation loop.
+ * Handles TX/RX timing based on baud rate.
+ */
+void acia_tick(acia6551_t* acia);
+
+/**
+ * @brief Set V23 asymmetric baud mode (Minitel/Prestel)
+ *
+ * Forces 1200 baud RX / 75 baud TX regardless of Control Register.
+ * Used by Digitelec DTL 2000 and similar V23 modems.
+ */
+void acia_set_v23_mode(acia6551_t* acia, bool enabled);
+
+/**
+ * @brief Attach a serial backend (loopback, TCP, PTY)
+ */
+void acia_set_backend(acia6551_t* acia, serial_backend_t* backend);
+
+/**
+ * @brief Set external signal lines (DCD, DSR, CTS)
+ */
+void acia_set_dcd(acia6551_t* acia, bool active);
+void acia_set_dsr(acia6551_t* acia, bool active);
+void acia_set_cts(acia6551_t* acia, bool active);
+
+#endif /* ACIA6551_H */

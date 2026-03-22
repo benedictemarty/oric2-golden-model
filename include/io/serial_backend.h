@@ -1,0 +1,185 @@
+/**
+ * @file serial_backend.h
+ * @brief Serial backend abstraction for ACIA 6551
+ * @author bmarty <bmarty@mailo.com>
+ * @date 2026-03-22
+ *
+ * Provides pluggable backends for the ACIA serial interface:
+ *   - LOOPBACK: Internal buffer for testing (TX feeds back to RX)
+ *   - TCP:      TCP socket client for BBS/Minitel/Telnet connections
+ *   - PTY:      POSIX pseudo-terminal for local terminal access
+ */
+
+#ifndef SERIAL_BACKEND_H
+#define SERIAL_BACKEND_H
+
+#include <stdint.h>
+#include <stdbool.h>
+
+/* ═══════════════════════════════════════════════════════════════════════
+ *  Backend types
+ * ═══════════════════════════════════════════════════════════════════════ */
+
+typedef enum {
+    SERIAL_BACKEND_NONE     = 0,
+    SERIAL_BACKEND_LOOPBACK = 1,    /**< Internal loopback for testing */
+    SERIAL_BACKEND_TCP      = 2,    /**< TCP client socket */
+    SERIAL_BACKEND_PTY      = 3,    /**< POSIX pseudo-terminal */
+    SERIAL_BACKEND_MODEM    = 4,    /**< TCP with AT command emulation */
+    SERIAL_BACKEND_COM      = 5     /**< Real serial port (termios) */
+} serial_backend_type_t;
+
+/* ═══════════════════════════════════════════════════════════════════════
+ *  Loopback buffer
+ * ═══════════════════════════════════════════════════════════════════════ */
+
+#define SERIAL_LOOPBACK_BUFSZ   256
+#define SERIAL_MODEM_BUFSZ   65536  /* 64KB RX/TX buffers */
+
+/* ═══════════════════════════════════════════════════════════════════════
+ *  Backend structure (vtable pattern)
+ * ═══════════════════════════════════════════════════════════════════════ */
+
+typedef struct serial_backend_s {
+    serial_backend_type_t type;
+
+    /**
+     * @brief Open/connect the backend
+     * @return true on success
+     */
+    bool (*open)(struct serial_backend_s* self);
+
+    /**
+     * @brief Close/disconnect the backend
+     */
+    void (*close)(struct serial_backend_s* self);
+
+    /**
+     * @brief Send one byte to the remote end
+     * @return true if byte was accepted
+     */
+    bool (*send)(struct serial_backend_s* self, uint8_t byte);
+
+    /**
+     * @brief Receive one byte from the remote end
+     * @param[out] byte  Received byte
+     * @return true if a byte was available
+     */
+    bool (*recv)(struct serial_backend_s* self, uint8_t* byte);
+
+    /**
+     * @brief Check if data is available for reading
+     * @return true if recv() would return data
+     */
+    bool (*poll)(struct serial_backend_s* self);
+
+    /**
+     * @brief Check if the connection/carrier is active
+     * @return true if connected
+     */
+    bool (*connected)(struct serial_backend_s* self);
+
+    /* ── Backend-specific state (union) ── */
+    union {
+        /* Loopback */
+        struct {
+            uint8_t  buf[SERIAL_LOOPBACK_BUFSZ];
+            int      head;
+            int      tail;
+            int      count;
+        } loopback;
+
+        /* TCP */
+        struct {
+            int      sockfd;        /**< Socket file descriptor (-1 = closed) */
+            char     host[256];     /**< Remote host */
+            uint16_t port;          /**< Remote port */
+        } tcp;
+
+        /* PTY */
+        struct {
+            int      master_fd;     /**< Master side fd (-1 = closed) */
+            char     slave_name[256]; /**< Slave device path */
+        } pty;
+
+        /* Modem (TCP + AT commands) */
+        struct {
+            int      sockfd;        /**< Data socket (-1 = closed) */
+            int      listen_fd;     /**< Listen socket for server mode (-1 = none) */
+            char     host[256];     /**< Remote host for ATD */
+            uint16_t port;          /**< Remote/listen port */
+            uint8_t* rx_buf;        /**< 64KB receive buffer */
+            uint8_t* tx_buf;        /**< 64KB transmit buffer */
+            int      rx_head, rx_tail, rx_count;
+            int      tx_head, tx_tail, tx_count;
+            /* AT command state machine */
+            int      mode;          /**< 0=command, 1=data, 2=escape */
+            char     cmd_buf[256];  /**< AT command accumulator */
+            int      cmd_len;
+            /* +++ escape detection */
+            int      plus_count;
+            int64_t  last_data_time;
+            int64_t  last_plus_time;
+            /* Auto-answer */
+            int      s0_rings;      /**< ATS0= auto-answer ring count (0=disabled) */
+            bool     echo;          /**< ATE echo on/off */
+            bool     listening;     /**< Server mode active */
+        } modem;
+
+        /* COM (real serial port via termios) */
+        struct {
+            int      fd;            /**< Serial port fd (-1 = closed) */
+            char     device[256];   /**< Device path (e.g. /dev/ttyUSB0) */
+            int      baud;          /**< Baud rate */
+            int      databits;      /**< 5-8 */
+            char     parity;        /**< 'N', 'E', 'O' */
+            int      stopbits;      /**< 1-2 */
+        } com;
+    } state;
+} serial_backend_t;
+
+/* ═══════════════════════════════════════════════════════════════════════
+ *  Factory functions
+ * ═══════════════════════════════════════════════════════════════════════ */
+
+/**
+ * @brief Create a loopback backend (TX → RX circular buffer)
+ */
+serial_backend_t* serial_backend_loopback_create(void);
+
+/**
+ * @brief Create a TCP client backend
+ * @param host  Remote hostname or IP
+ * @param port  Remote port number
+ */
+serial_backend_t* serial_backend_tcp_create(const char* host, uint16_t port);
+
+/**
+ * @brief Create a PTY backend (pseudo-terminal)
+ *
+ * After open(), the slave device path is available in state.pty.slave_name
+ * for connecting minicom, screen, etc.
+ */
+serial_backend_t* serial_backend_pty_create(void);
+
+/**
+ * @brief Create a modem backend (TCP + AT command emulation)
+ * @param host        Remote host for ATD, or bind address for listen mode
+ * @param port        Remote/listen port
+ * @param listen_mode If true, start as a listening server (ATA to accept)
+ */
+serial_backend_t* serial_backend_modem_create(const char* host, uint16_t port, bool listen_mode);
+
+/**
+ * @brief Create a COM backend (real serial port via termios)
+ * @param config  Configuration string: "baud,databits,parity,stopbits,device"
+ *                Example: "115200,8,N,1,/dev/ttyUSB0"
+ */
+serial_backend_t* serial_backend_com_create(const char* config);
+
+/**
+ * @brief Destroy a backend and free resources
+ */
+void serial_backend_destroy(serial_backend_t* backend);
+
+#endif /* SERIAL_BACKEND_H */

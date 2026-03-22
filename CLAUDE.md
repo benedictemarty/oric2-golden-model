@@ -28,6 +28,7 @@ make test-memory         # Memory tests (19)
 make test-io             # VIA/I/O tests (29)
 make test-storage        # Storage tests (12)
 make test-system         # Integration tests (7)
+make test-rom            # ROM compatibility tests
 make test-video          # Video export tests (11)
 make test-audio          # PSG audio tests (8)
 make test-debugger       # Debugger tests (8)
@@ -40,6 +41,7 @@ make test-renderer       # Display scaling tests (10)
 make test-trace          # CPU trace logging tests (10)
 make test-profiler       # CPU profiler tests (10)
 make test-rominfo        # ROM analysis tests (10)
+make test-serial         # ACIA 6551 serial tests (17)
 make test-coverage       # Code coverage meta-tests
 make test-cast           # Cast server tests (requires CAST=1 build)
 make valgrind            # Memory leak detection (all suites under Valgrind)
@@ -47,7 +49,7 @@ make static-analysis     # Extra compiler warnings (-Wshadow, -Wconversion, etc.
 make coverage            # Full coverage pipeline: clean, build with gcov, run, report
 ```
 
-Test framework is custom C macros redefined in each test file (no shared header, no external dependency): `TEST()`, `RUN()`, `ASSERT_EQ()`, `ASSERT_TRUE()`, `ASSERT_FALSE()`.
+Test framework is custom C macros redefined in each test file (no shared header, no external dependency): `TEST()`, `RUN()`, `ASSERT_EQ()`, `ASSERT_TRUE()`, `ASSERT_FALSE()`. Each test file defines its own `tests_passed`/`tests_failed` counters and a `setup()` helper to initialize the relevant subsystem. To add a new test: define a `TEST(name)` function, call it via `RUN(name)` in `main()`. Tests compile and run in one step via their Makefile target.
 
 ## Architecture
 
@@ -63,6 +65,8 @@ Central struct containing all hardware subsystems. Passed as pointer to most sub
 - **io/printer.c** — Centronics printer: VIA Port A data + CA2 STROBE, text file capture
 - **io/mcp40.c** — MCP-40 4-color pen plotter: 480x400 framebuffer, Bresenham line drawing, BMP export
 - **io/cassette.c** — Cassette interface: TAP format loading/saving (CLOAD/CSAVE ROM patching, post-CLOAD rechain)
+- **io/acia6551.c** — ACIA 6551 serial at $031C-$031F: TX/RX, IRQ, baud rate timing, V23 mode (Digitelec DTL 2000, Minitel)
+- **io/serial_backend.c** — Serial backends: loopback, TCP, PTY, modem Hayes (AT commands, 64KB buffers), COM (termios)
 - **io/microdisc.c** — Microdisc: WD1793 FDC at $0310-$031F, 4 drives, overlay ROM banking
 - **video/** — ULA: text/HIRES framebuffer, PPM/BMP/ASCII export, `renderer.c` for SDL2 scaling (x1-x4)
 - **audio/** — AY-3-8910 PSG: 3 tone + noise + envelope, SDL2 audio callback
@@ -77,7 +81,10 @@ Central struct containing all hardware subsystems. Passed as pointer to most sub
 Runs `CYCLES_PER_FRAME` (19968) CPU cycles per frame at 50 FPS. Each cycle: debugger check → cpu_step → tape patches → via_tick → PSG decode. After frame: video render → SDL2 present.
 
 ### I/O routing
-Memory reads/writes at $0300-$031F trigger `io_read_callback()`/`io_write_callback()` which route to VIA ($0300-$030F) or Microdisc ($0310-$031F).
+Memory reads/writes at $0300-$031F trigger `io_read_callback()`/`io_write_callback()` which route to VIA ($0300-$030F) or Microdisc ($0310-$031F). Callbacks are registered via `memory_set_io_callbacks()` in `main.c`.
+
+### Tape loading flow
+ROM cassette routines (CLOAD/CSAVE) are intercepted by PC-matching patches (`rom_patches_t` in `emulator.h`). Patch addresses differ between BASIC 1.0 and 1.1 — selected at boot via ROM auto-detection. Post-CLOAD, BASIC line pointers are rechained (`cassette_rechain_basic()`) to fix link addresses.
 
 ### Tools (tools/)
 - `bas2tap` — BASIC text → .TAP
@@ -96,10 +103,10 @@ Memory reads/writes at $0300-$031F trigger `io_read_callback()`/`io_write_callba
 
 Every modification must:
 1. Run `make tests` — all tests must pass
-2. Update **CHANGELOG** with changes
-3. Update **VERSION_TRACKING** with version metadata
-4. Update **CIRRUS_OS** with build/test status
-5. Update **ROADMAP** with sprint progress
+2. Update **CHANGELOG** — append entry under current version section (plain text, reverse chronological)
+3. Update **VERSION_TRACKING** — version metadata, date, test count
+4. Update **CIRRUS_OS** — build/test status summary
+5. Update **ROADMAP** — sprint progress and task completion
 
 ## Running the Emulator
 
@@ -113,6 +120,12 @@ Every modification must:
 ./oric1-emu -r roms/basic10.rom --trace trace.log        # CPU instruction trace
 ./oric1-emu -r roms/basic10.rom --profile prof.txt       # CPU profiler
 ./oric1-emu -r roms/basic10.rom --rom-info               # ROM analysis
+./oric1-emu -r roms/basic10.rom --serial tcp:bbs.host:23  # Serial via TCP (BBS/telnet)
+./oric1-emu -r roms/basic10.rom --serial pty              # Serial via pseudo-terminal
+./oric1-emu -r roms/basic10.rom --serial modem:bbs.host:23 --serial-v23  # Modem Hayes + V23
+./oric1-emu -r roms/basic10.rom --serial modem:listen:2323               # BBS server mode
+./oric1-emu -r roms/basic10.rom --serial com:9600,8,N,1,/dev/ttyUSB0    # Vrai port série
+./oric1-emu -r roms/basic10.rom --serial loopback --acia-addr 0320      # Offset custom
 ```
 
 ## Dependencies
