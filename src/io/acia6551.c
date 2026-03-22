@@ -141,9 +141,6 @@ void acia_init(acia6551_t* acia)
 {
     memset(acia, 0, sizeof(acia6551_t));
 
-    /* Configurable base address (default $031C) */
-    acia->base_addr = ACIA_DEFAULT_BASE;
-
     /* Power-on state per datasheet */
     acia->status = ACIA_STATUS_TDRE;  /* Transmitter starts empty */
     acia->command = 0x00;
@@ -167,8 +164,7 @@ void acia_init(acia6551_t* acia)
     /* Calculate initial frame format and timing */
     acia_update_timing(acia);
 
-    log_info("ACIA 6551 initialized at $%04X-$%04X (xtal %d Hz / %d = %d Hz)",
-             acia->base_addr, acia->base_addr + 3,
+    log_info("ACIA 6551 initialized (xtal %d Hz / %d = %d Hz)",
              ACIA_XTAL_HZ, ACIA_PRESCALER, ACIA_INTERNAL_HZ);
 }
 
@@ -209,17 +205,19 @@ uint8_t acia_read(acia6551_t* acia, uint16_t addr)
     }
 
     case 0x01: {
-        /* $031D: Read Status Register — clears IRQ bit after read */
+        /* $031D: Read Status Register — clears IRQ bit after read.
+         * DCD/DSR bits reflect live pin state (not latched). */
         uint8_t status = acia->status;
 
-        /* Reflect external signal lines (active-low on hardware) */
+        /* DCD: bit 5 set when carrier LOST (active-low hardware line) */
         if (!acia->dcd) status |= ACIA_STATUS_DCD;
         else            status &= ~ACIA_STATUS_DCD;
 
+        /* DSR: bit 6 set when DSR inactive */
         if (!acia->dsr) status |= ACIA_STATUS_DSR;
         else            status &= ~ACIA_STATUS_DSR;
 
-        /* Reading status clears IRQ (per datasheet) */
+        /* Reading status clears IRQ bit and deasserts /IRQ line (per datasheet) */
         acia->status &= ~ACIA_STATUS_IRQ;
         if (acia->irq_line) {
             acia->irq_line = false;
@@ -250,8 +248,9 @@ void acia_write(acia6551_t* acia, uint16_t addr, uint8_t value)
     switch (addr & ACIA_ADDR_MASK) {
     case 0x00:
         /* $031C: Write Transmitter Data Register */
-        acia->tdr = value;
+        acia->tdr = value & acia->bitmask;  /* Apply word length mask */
         acia->tx_pending = true;
+        acia->tx_cycles = acia->tx_reload;  /* Start TX timing from full frame */
         acia->status &= ~ACIA_STATUS_TDRE;  /* TDR now full */
         acia_update_irq(acia);
         break;
@@ -315,7 +314,7 @@ void acia_tick(acia6551_t* acia)
                     /* Overrun: previous byte not read */
                     acia->status |= ACIA_STATUS_OVRN;
                 }
-                acia->rdr = byte;
+                acia->rdr = byte & acia->bitmask;  /* Apply word length mask */
                 acia->rx_full = true;
                 acia->status |= ACIA_STATUS_RDRF;
 
@@ -353,7 +352,12 @@ void acia_set_backend(acia6551_t* acia, serial_backend_t* backend)
 
 void acia_set_dcd(acia6551_t* acia, bool active)
 {
+    bool old = acia->dcd;
     acia->dcd = active;
+    /* DCD transition (either direction) generates IRQ per datasheet */
+    if (old != active) {
+        acia_update_irq(acia);
+    }
 }
 
 void acia_set_dsr(acia6551_t* acia, bool active)

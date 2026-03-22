@@ -1338,7 +1338,6 @@ int main(int argc, char* argv[]) {
     /* Serial interface (ACIA 6551) */
     if (acia_addr_arg) {
         emu.acia_base_addr = (uint16_t)strtol(acia_addr_arg, NULL, 16);
-        emu.acia.base_addr = emu.acia_base_addr;
         log_info("ACIA base address: $%04X", emu.acia_base_addr);
     } else {
         emu.acia_base_addr = ACIA_DEFAULT_BASE;

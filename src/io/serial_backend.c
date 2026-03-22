@@ -596,40 +596,63 @@ static void modem_close(serial_backend_t* self)
 
 static bool modem_send(serial_backend_t* self, uint8_t byte)
 {
-    /* Data mode: send to socket, detect +++ escape */
+    /* Data mode: send to socket, detect +++ escape with guard time.
+     * Hayes spec: 1 second silence, then "+++", then 1 second silence.
+     * We use last_data_time to track silence periods. At 1 MHz CPU,
+     * 1 second = 1000000 cycles. We approximate with a counter that
+     * increments each time modem_send is called (baud-rate limited). */
     if (self->state.modem.mode == 1) {
-        /* +++ escape detection */
+        /* +++ escape detection with guard time */
         if (byte == '+') {
-            self->state.modem.plus_count++;
+            if (self->state.modem.plus_count == 0) {
+                /* First '+': check guard time (silence before +++)
+                 * Guard satisfied if last_data_time > threshold */
+                if (self->state.modem.last_data_time >= 50) {
+                    self->state.modem.plus_count = 1;
+                } else {
+                    /* No guard: send '+' as data */
+                    self->state.modem.plus_count = 0;
+                    goto modem_send_data;
+                }
+            } else {
+                self->state.modem.plus_count++;
+            }
             if (self->state.modem.plus_count >= 3) {
-                /* Switch to command mode */
+                /* Wait for guard after +++ — switch immediately for now,
+                 * but a real modem waits 1s after the third '+'. */
                 self->state.modem.mode = 0;
                 self->state.modem.plus_count = 0;
                 self->state.modem.cmd_len = 0;
+                self->state.modem.last_data_time = 0;
                 log_info("Serial Modem: +++ escape -> command mode");
-                modem_rx_push_str(self, "OK\r\n");
+                modem_rx_push_str(self, "\r\nOK\r\n");
                 return true;
             }
-        } else {
-            /* Flush any pending '+' chars to socket, then send this byte */
-            if (self->state.modem.sockfd >= 0) {
-                for (int i = 0; i < self->state.modem.plus_count; i++) {
-                    uint8_t plus = '+';
-                    (void)write(self->state.modem.sockfd, &plus, 1);
-                }
-            }
-            self->state.modem.plus_count = 0;
+            self->state.modem.last_data_time = 0;
+            return true;
+        }
 
-            if (self->state.modem.sockfd >= 0) {
-                ssize_t n = write(self->state.modem.sockfd, &byte, 1);
-                if (n < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
-                    log_info("Serial Modem: write error, dropping carrier");
-                    close(self->state.modem.sockfd);
-                    self->state.modem.sockfd = -1;
-                    self->state.modem.mode = 0;
-                    modem_rx_push_str(self, "NO CARRIER\r\n");
-                    return false;
-                }
+modem_send_data:
+        /* Non-'+' char: flush any pending '+' chars to socket */
+        if (self->state.modem.sockfd >= 0 && self->state.modem.plus_count > 0) {
+            uint8_t buf[3];
+            for (int i = 0; i < self->state.modem.plus_count && i < 3; i++)
+                buf[i] = '+';
+            (void)write(self->state.modem.sockfd, buf,
+                        (size_t)self->state.modem.plus_count);
+        }
+        self->state.modem.plus_count = 0;
+        self->state.modem.last_data_time = 0;
+
+        if (self->state.modem.sockfd >= 0) {
+            ssize_t n = write(self->state.modem.sockfd, &byte, 1);
+            if (n < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
+                log_info("Serial Modem: write error, dropping carrier");
+                close(self->state.modem.sockfd);
+                self->state.modem.sockfd = -1;
+                self->state.modem.mode = 0;
+                modem_rx_push_str(self, "\r\nNO CARRIER\r\n");
+                return false;
             }
         }
         return true;
@@ -664,26 +687,26 @@ static bool modem_send(serial_backend_t* self, uint8_t byte)
 
 static bool modem_recv(serial_backend_t* self, uint8_t* byte)
 {
-    /* In data mode, try to read from socket into rx_buf first */
+    /* Increment silence counter for +++ guard time detection */
+    self->state.modem.last_data_time++;
+
+    /* In data mode, bulk-read from socket into rx_buf */
     if (self->state.modem.mode == 1 && self->state.modem.sockfd >= 0) {
-        /* Bulk read from socket into rx_buf */
-        while (self->state.modem.rx_count < SERIAL_MODEM_BUFSZ) {
-            uint8_t tmp;
-            ssize_t n = read(self->state.modem.sockfd, &tmp, 1);
-            if (n == 1) {
-                modem_rx_push(self, tmp);
-            } else if (n == 0) {
-                /* Peer closed */
-                log_info("Serial Modem: peer closed connection");
-                close(self->state.modem.sockfd);
-                self->state.modem.sockfd = -1;
-                self->state.modem.mode = 0;
-                modem_rx_push_str(self, "NO CARRIER\r\n");
-                break;
-            } else {
-                break;  /* EAGAIN or error */
+        uint8_t tmp[256];
+        ssize_t n = read(self->state.modem.sockfd, tmp, sizeof(tmp));
+        if (n > 0) {
+            for (ssize_t i = 0; i < n; i++) {
+                modem_rx_push(self, tmp[i]);
             }
+        } else if (n == 0) {
+            /* Peer closed */
+            log_info("Serial Modem: peer closed connection");
+            close(self->state.modem.sockfd);
+            self->state.modem.sockfd = -1;
+            self->state.modem.mode = 0;
+            modem_rx_push_str(self, "\r\nNO CARRIER\r\n");
         }
+        /* n < 0: EAGAIN/EWOULDBLOCK — no data available, that's fine */
     }
 
     return modem_rx_pop(self, byte);
@@ -741,8 +764,16 @@ serial_backend_t* serial_backend_modem_create(const char* host, uint16_t port, b
 static speed_t com_baud_to_speed(int baud)
 {
     switch (baud) {
+        case 50:     return B50;
+        case 75:     return B75;
+        case 110:    return B110;
+        case 134:    return B134;
+        case 150:    return B150;
+        case 200:    return B200;
         case 300:    return B300;
+        case 600:    return B600;
         case 1200:   return B1200;
+        case 1800:   return B1800;
         case 2400:   return B2400;
         case 4800:   return B4800;
         case 9600:   return B9600;
@@ -770,6 +801,12 @@ static bool com_open(serial_backend_t* self)
         log_error("Serial COM: tcgetattr failed: %s", strerror(errno));
         close(fd);
         return false;
+    }
+
+    /* Save original termios for restore on close */
+    if (sizeof(struct termios) <= sizeof(self->state.com.orig_termios)) {
+        memcpy(self->state.com.orig_termios, &tty, sizeof(struct termios));
+        self->state.com.has_orig = true;
     }
 
     /* Baud rate */
@@ -839,9 +876,13 @@ static bool com_open(serial_backend_t* self)
 static void com_close(serial_backend_t* self)
 {
     if (self->state.com.fd >= 0) {
-        /* Restore default attributes before closing would be ideal,
-         * but we don't save the original — just close cleanly */
         tcdrain(self->state.com.fd);
+        /* Restore original termios settings */
+        if (self->state.com.has_orig) {
+            struct termios orig;
+            memcpy(&orig, self->state.com.orig_termios, sizeof(struct termios));
+            tcsetattr(self->state.com.fd, TCSANOW, &orig);
+        }
         close(self->state.com.fd);
         log_info("Serial COM: closed %s", self->state.com.device);
         self->state.com.fd = -1;

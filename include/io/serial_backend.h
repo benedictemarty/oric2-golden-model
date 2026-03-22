@@ -134,6 +134,8 @@ typedef struct serial_backend_s {
             int      databits;      /**< 5-8 */
             char     parity;        /**< 'N', 'E', 'O' */
             int      stopbits;      /**< 1-2 */
+            uint8_t  orig_termios[64]; /**< Saved original termios (opaque) */
+            bool     has_orig;      /**< Original termios saved */
         } com;
     } state;
 } serial_backend_t;

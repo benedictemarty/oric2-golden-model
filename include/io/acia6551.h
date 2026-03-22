@@ -36,11 +36,12 @@ typedef struct emulator_s emulator_t;
  * ═══════════════════════════════════════════════════════════════════════ */
 
 #define ACIA_DEFAULT_BASE   0x031C  /* Default I/O base address */
-#define ACIA_BASE           0x031C  /* Backward compatibility */
-#define ACIA_DATA           0x031C  /* R: RDR, W: TDR */
-#define ACIA_STATUS         0x031D  /* R: Status, W: Programmed Reset */
-#define ACIA_COMMAND        0x031E  /* R/W: Command Register */
-#define ACIA_CONTROL        0x031F  /* R/W: Control Register */
+
+/* Register indices (low 2 bits of address, used by acia_read/acia_write) */
+#define ACIA_REG_DATA       0x00    /* R: RDR, W: TDR */
+#define ACIA_REG_STATUS     0x01    /* R: Status, W: Programmed Reset */
+#define ACIA_REG_COMMAND    0x02    /* R/W: Command Register */
+#define ACIA_REG_CONTROL    0x03    /* R/W: Control Register */
 
 #define ACIA_ADDR_MASK      0x03    /* 2-bit register select (A0-A1) */
 
@@ -130,9 +131,6 @@ typedef struct acia6551_s {
     uint8_t status;             /**< Status Register (read-only) */
     uint8_t command;            /**< Command Register (R/W) */
     uint8_t control;            /**< Control Register (R/W) */
-
-    /* Configuration */
-    uint16_t base_addr;         /**< Configurable I/O base address (default 0x031C) */
 
     /* Frame format (decoded from control/command registers) */
     uint8_t  framebits;         /**< Total bits per frame: start + data + parity + stop */

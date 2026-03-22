@@ -86,32 +86,32 @@ TEST(test_init_state) {
     acia_init(&a);
 
     /* Power-on: TDRE set, no IRQ, no errors */
-    uint8_t status = acia_read(&a, ACIA_STATUS);
+    uint8_t status = acia_read(&a, ACIA_REG_STATUS);
     ASSERT_TRUE(status & ACIA_STATUS_TDRE);
     ASSERT_FALSE(status & ACIA_STATUS_RDRF);
     ASSERT_FALSE(status & ACIA_STATUS_IRQ);
 
     /* Command and Control registers start at 0 */
-    ASSERT_EQ(acia_read(&a, ACIA_COMMAND), 0x00);
-    ASSERT_EQ(acia_read(&a, ACIA_CONTROL), 0x00);
+    ASSERT_EQ(acia_read(&a, ACIA_REG_COMMAND), 0x00);
+    ASSERT_EQ(acia_read(&a, ACIA_REG_CONTROL), 0x00);
 }
 
 TEST(test_programmed_reset) {
     setup();
 
     /* Write command register with DTR + parity bits */
-    acia_write(&acia, ACIA_COMMAND, 0xEB);  /* parity=0xE0, DTR+TIC+ECHO=0x0B */
-    ASSERT_EQ(acia_read(&acia, ACIA_COMMAND), 0xEB);
+    acia_write(&acia, ACIA_REG_COMMAND, 0xEB);  /* parity=0xE0, DTR+TIC+ECHO=0x0B */
+    ASSERT_EQ(acia_read(&acia, ACIA_REG_COMMAND), 0xEB);
 
     /* Write to status address ($031D) triggers programmed reset */
-    acia_write(&acia, ACIA_STATUS, 0x00);
+    acia_write(&acia, ACIA_REG_STATUS, 0x00);
 
     /* After reset: low 5 bits cleared, parity bits (7-5) preserved */
-    ASSERT_EQ(acia_read(&acia, ACIA_COMMAND) & 0x1F, 0x00);
-    ASSERT_EQ(acia_read(&acia, ACIA_COMMAND) & 0xE0, 0xE0);
+    ASSERT_EQ(acia_read(&acia, ACIA_REG_COMMAND) & 0x1F, 0x00);
+    ASSERT_EQ(acia_read(&acia, ACIA_REG_COMMAND) & 0xE0, 0xE0);
 
     /* TDRE should be set after reset */
-    uint8_t status = acia_read(&acia, ACIA_STATUS);
+    uint8_t status = acia_read(&acia, ACIA_REG_STATUS);
     ASSERT_TRUE(status & ACIA_STATUS_TDRE);
 
     teardown();
@@ -122,11 +122,11 @@ TEST(test_control_register_rw) {
     acia_init(&a);
 
     /* Write and read back control register */
-    acia_write(&a, ACIA_CONTROL, 0x1E);  /* 9600 baud, 8-N-1, internal clock */
-    ASSERT_EQ(acia_read(&a, ACIA_CONTROL), 0x1E);
+    acia_write(&a, ACIA_REG_CONTROL, 0x1E);  /* 9600 baud, 8-N-1, internal clock */
+    ASSERT_EQ(acia_read(&a, ACIA_REG_CONTROL), 0x1E);
 
-    acia_write(&a, ACIA_CONTROL, 0x98);  /* 1200 baud, 7-bit, 2 stop */
-    ASSERT_EQ(acia_read(&a, ACIA_CONTROL), 0x98);
+    acia_write(&a, ACIA_REG_CONTROL, 0x98);  /* 1200 baud, 7-bit, 2 stop */
+    ASSERT_EQ(acia_read(&a, ACIA_REG_CONTROL), 0x98);
 }
 
 TEST(test_command_register_rw) {
@@ -134,37 +134,37 @@ TEST(test_command_register_rw) {
     acia_init(&a);
 
     /* Write and read back command register */
-    acia_write(&a, ACIA_COMMAND, 0x0B);  /* DTR, TIC=10, no echo */
-    ASSERT_EQ(acia_read(&a, ACIA_COMMAND), 0x0B);
+    acia_write(&a, ACIA_REG_COMMAND, 0x0B);  /* DTR, TIC=10, no echo */
+    ASSERT_EQ(acia_read(&a, ACIA_REG_COMMAND), 0x0B);
 }
 
 TEST(test_loopback_tx_rx) {
     setup();
 
     /* Configure: 19200 baud, 8-N-1, DTR enabled */
-    acia_write(&acia, ACIA_CONTROL, 0x1F);  /* 19200 baud, internal clock */
-    acia_write(&acia, ACIA_COMMAND, 0x01);  /* DTR on */
+    acia_write(&acia, ACIA_REG_CONTROL, 0x1F);  /* 19200 baud, internal clock */
+    acia_write(&acia, ACIA_REG_COMMAND, 0x01);  /* DTR on */
 
     /* Send a byte */
-    acia_write(&acia, ACIA_DATA, 0x42);
+    acia_write(&acia, ACIA_REG_DATA, 0x42);
 
     /* TDRE should be clear (byte pending) */
-    ASSERT_FALSE(acia_read(&acia, ACIA_STATUS) & ACIA_STATUS_TDRE);
+    ASSERT_FALSE(acia_read(&acia, ACIA_REG_STATUS) & ACIA_STATUS_TDRE);
 
     /* Tick until TX completes and RX picks it up via loopback */
     tick_one_byte(19200);
     tick_one_byte(19200);
 
     /* RDRF should be set */
-    uint8_t status = acia_read(&acia, ACIA_STATUS);
+    uint8_t status = acia_read(&acia, ACIA_REG_STATUS);
     ASSERT_TRUE(status & ACIA_STATUS_RDRF);
 
     /* Read the received byte */
-    uint8_t data = acia_read(&acia, ACIA_DATA);
+    uint8_t data = acia_read(&acia, ACIA_REG_DATA);
     ASSERT_EQ(data, 0x42);
 
     /* RDRF should be cleared after read */
-    ASSERT_FALSE(acia_read(&acia, ACIA_STATUS) & ACIA_STATUS_RDRF);
+    ASSERT_FALSE(acia_read(&acia, ACIA_REG_STATUS) & ACIA_STATUS_RDRF);
 
     teardown();
 }
@@ -173,15 +173,15 @@ TEST(test_tx_irq) {
     setup();
 
     /* Configure: 19200 baud, DTR on, TIC=01 (RTS low, TX IRQ enabled) */
-    acia_write(&acia, ACIA_CONTROL, 0x1F);
-    acia_write(&acia, ACIA_COMMAND, 0x05);  /* DTR + TIC=01 */
+    acia_write(&acia, ACIA_REG_CONTROL, 0x1F);
+    acia_write(&acia, ACIA_REG_COMMAND, 0x05);  /* DTR + TIC=01 */
 
     /* TDRE is set at init → TX IRQ should fire */
-    uint8_t status = acia_read(&acia, ACIA_STATUS);
+    uint8_t status = acia_read(&acia, ACIA_REG_STATUS);
     ASSERT_TRUE(status & ACIA_STATUS_IRQ);
 
     /* Reading status should clear IRQ */
-    status = acia_read(&acia, ACIA_STATUS);
+    status = acia_read(&acia, ACIA_REG_STATUS);
     ASSERT_FALSE(status & ACIA_STATUS_IRQ);
 
     teardown();
@@ -191,8 +191,8 @@ TEST(test_rx_irq) {
     setup();
 
     /* Configure: 19200 baud, DTR on, RX IRQ enabled (IRD=0) */
-    acia_write(&acia, ACIA_CONTROL, 0x1F);
-    acia_write(&acia, ACIA_COMMAND, 0x01);  /* DTR, IRD=0 (RX IRQ enabled) */
+    acia_write(&acia, ACIA_REG_CONTROL, 0x1F);
+    acia_write(&acia, ACIA_REG_COMMAND, 0x01);  /* DTR, IRD=0 (RX IRQ enabled) */
 
     /* Inject byte directly into loopback */
     loopback->send(loopback, 0xAA);
@@ -201,7 +201,7 @@ TEST(test_rx_irq) {
     tick_one_byte(19200);
 
     /* IRQ should be set due to RDRF + RX IRQ enabled */
-    uint8_t status = acia_read(&acia, ACIA_STATUS);
+    uint8_t status = acia_read(&acia, ACIA_REG_STATUS);
     ASSERT_TRUE(status & ACIA_STATUS_IRQ);
     ASSERT_TRUE(status & ACIA_STATUS_RDRF);
 
@@ -212,8 +212,8 @@ TEST(test_overrun) {
     setup();
 
     /* Configure: 19200 baud, DTR on */
-    acia_write(&acia, ACIA_CONTROL, 0x1F);
-    acia_write(&acia, ACIA_COMMAND, 0x01);
+    acia_write(&acia, ACIA_REG_CONTROL, 0x1F);
+    acia_write(&acia, ACIA_REG_COMMAND, 0x01);
 
     /* Inject two bytes without reading */
     loopback->send(loopback, 0x11);
@@ -224,12 +224,12 @@ TEST(test_overrun) {
     tick_one_byte(19200);
 
     /* Overrun should be set */
-    uint8_t status = acia_read(&acia, ACIA_STATUS);
+    uint8_t status = acia_read(&acia, ACIA_REG_STATUS);
     ASSERT_TRUE(status & ACIA_STATUS_OVRN);
 
     /* Reading data should clear overrun */
-    acia_read(&acia, ACIA_DATA);
-    status = acia_read(&acia, ACIA_STATUS);
+    acia_read(&acia, ACIA_REG_DATA);
+    status = acia_read(&acia, ACIA_REG_STATUS);
     ASSERT_FALSE(status & ACIA_STATUS_OVRN);
 
     teardown();
@@ -256,18 +256,18 @@ TEST(test_dcd_dsr_status) {
     acia_init(&a);
 
     /* Default: DCD and DSR active → status bits clear (active low encoding) */
-    uint8_t status = acia_read(&a, ACIA_STATUS);
+    uint8_t status = acia_read(&a, ACIA_REG_STATUS);
     ASSERT_FALSE(status & ACIA_STATUS_DCD);
     ASSERT_FALSE(status & ACIA_STATUS_DSR);
 
     /* Deactivate DCD → bit 5 should be set */
     acia_set_dcd(&a, false);
-    status = acia_read(&a, ACIA_STATUS);
+    status = acia_read(&a, ACIA_REG_STATUS);
     ASSERT_TRUE(status & ACIA_STATUS_DCD);
 
     /* Deactivate DSR → bit 6 should be set */
     acia_set_dsr(&a, false);
-    status = acia_read(&a, ACIA_STATUS);
+    status = acia_read(&a, ACIA_REG_STATUS);
     ASSERT_TRUE(status & ACIA_STATUS_DSR);
 }
 
@@ -313,8 +313,8 @@ TEST(test_frame_format_8n1) {
     acia_init(&a);
 
     /* 8-N-1: control=0x1F (19200 baud, 8-bit, 1 stop), command=0x00 (no parity) */
-    acia_write(&a, ACIA_CONTROL, 0x1F);  /* 19200, WL=00 (8-bit), SBN=0 (1 stop) */
-    acia_write(&a, ACIA_COMMAND, 0x00);  /* No parity (PME=0) */
+    acia_write(&a, ACIA_REG_CONTROL, 0x1F);  /* 19200, WL=00 (8-bit), SBN=0 (1 stop) */
+    acia_write(&a, ACIA_REG_COMMAND, 0x00);  /* No parity (PME=0) */
 
     /* framebits = 1 start + 8 data + 0 parity + 1 stop = 10 */
     ASSERT_EQ(a.framebits, 10);
@@ -326,8 +326,8 @@ TEST(test_frame_format_7e1) {
     acia_init(&a);
 
     /* 7-E-1: control=0x2F (19200, WL=01=7-bit, SBN=0), command=0x20 (PME=1) */
-    acia_write(&a, ACIA_CONTROL, 0x2F);  /* 19200, WL=01 (7-bit), 1 stop */
-    acia_write(&a, ACIA_COMMAND, 0x20);  /* PME=1 (parity enabled) */
+    acia_write(&a, ACIA_REG_CONTROL, 0x2F);  /* 19200, WL=01 (7-bit), 1 stop */
+    acia_write(&a, ACIA_REG_COMMAND, 0x20);  /* PME=1 (parity enabled) */
 
     /* framebits = 1 start + 7 data + 1 parity + 1 stop = 10 */
     ASSERT_EQ(a.framebits, 10);
@@ -339,8 +339,8 @@ TEST(test_frame_format_5n2) {
     acia_init(&a);
 
     /* 5-N-2: control=0xEF (19200, WL=11=5-bit, SBN=1=2 stop), command=0x00 */
-    acia_write(&a, ACIA_CONTROL, 0xEF);  /* 19200, WL=11 (5-bit), 2 stop */
-    acia_write(&a, ACIA_COMMAND, 0x00);  /* No parity */
+    acia_write(&a, ACIA_REG_CONTROL, 0xEF);  /* 19200, WL=11 (5-bit), 2 stop */
+    acia_write(&a, ACIA_REG_COMMAND, 0x00);  /* No parity */
 
     /* framebits = 1 start + 5 data + 0 parity + 2 stop = 8 */
     ASSERT_EQ(a.framebits, 8);
@@ -352,27 +352,41 @@ TEST(test_acia_clock_accuracy) {
     acia_init(&a);
 
     /* 9600 baud, 8-N-1: cycles = (1000000 * 10) / 9600 = 1041 */
-    acia_write(&a, ACIA_CONTROL, 0x1E);  /* 9600 baud, 8-bit, 1 stop */
+    acia_write(&a, ACIA_REG_CONTROL, 0x1E);  /* 9600 baud, 8-bit, 1 stop */
     ASSERT_EQ(a.tx_reload, (int32_t)((1000000L * 10) / 9600));
     ASSERT_EQ(a.baud_rate, 9600u);
 
     /* 300 baud, 7-E-1: cycles = (1000000 * 10) / 300 = 33333 */
-    acia_write(&a, ACIA_CONTROL, 0x26);  /* 300 baud, WL=01 (7-bit), 1 stop */
-    acia_write(&a, ACIA_COMMAND, 0x20);  /* PME=1 */
+    acia_write(&a, ACIA_REG_CONTROL, 0x26);  /* 300 baud, WL=01 (7-bit), 1 stop */
+    acia_write(&a, ACIA_REG_COMMAND, 0x20);  /* PME=1 */
     ASSERT_EQ(a.tx_reload, (int32_t)((1000000L * 10) / 300));
     ASSERT_EQ(a.baud_rate, 300u);
 }
 
-TEST(test_configurable_base_addr) {
-    acia6551_t a;
-    acia_init(&a);
+TEST(test_bitmask_applied) {
+    setup();
 
-    /* Default base address */
-    ASSERT_EQ(a.base_addr, ACIA_DEFAULT_BASE);
+    /* Configure 7-bit mode: control WL=01 (7-bit), 19200 baud */
+    acia_write(&acia, ACIA_REG_CONTROL, 0x2F);  /* 19200, WL=01 (7-bit) */
+    acia_write(&acia, ACIA_REG_COMMAND, 0x03);   /* DTR on, IRQ disabled */
+    ASSERT_EQ(acia.bitmask, 0x7F);
 
-    /* Change base address */
-    a.base_addr = 0x0320;
-    ASSERT_EQ(a.base_addr, 0x0320);
+    /* Send byte 0xFF — should be masked to 0x7F */
+    acia_write(&acia, ACIA_REG_DATA, 0xFF);
+    ASSERT_EQ(acia.tdr, 0x7F);  /* Bit 7 stripped */
+
+    /* Wait for TX + loopback RX */
+    tick_one_byte(19200);
+    tick_one_byte(19200);
+
+    /* Received byte should also be masked */
+    uint8_t status = acia_read(&acia, ACIA_REG_STATUS);
+    if (status & ACIA_STATUS_RDRF) {
+        uint8_t data = acia_read(&acia, ACIA_REG_DATA);
+        ASSERT_EQ(data, 0x7F);
+    }
+
+    teardown();
 }
 
 TEST(test_modem_backend_create) {
@@ -410,7 +424,7 @@ int main(void) {
     RUN(test_frame_format_7e1);
     RUN(test_frame_format_5n2);
     RUN(test_acia_clock_accuracy);
-    RUN(test_configurable_base_addr);
+    RUN(test_bitmask_applied);
     RUN(test_modem_backend_create);
 
     printf("\n");
