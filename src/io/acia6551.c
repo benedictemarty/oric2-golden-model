@@ -8,11 +8,19 @@
  * (Digitelec DTL 2000, MCP RS232-C, Kenema 300/300, Telestrat).
  * Mapped at $031C-$031F (standard de facto for ORIC).
  *
+ * Emulator enhancements beyond real MOS 6551:
+ *   - RX FIFO buffer (--serial-buffer N) prevents overrun during long
+ *     CPU operations. Real programs used IRQ + software buffer.
+ *   - WDC 65C51 IRQ mode (--serial-irq-on-rdrf) re-triggers IRQ while
+ *     RDRF is set, preventing lost IRQs during simultaneous TX/RX.
+ *
  * References:
- *   - MOS 6551 datasheet
+ *   - MOS 6551 datasheet (Princeton)
+ *   - WDC W65C51N datasheet (improved IRQ behavior)
  *   - Defence Force Wiki: oric:hardware:serial
  */
 
+#include <stdlib.h>
 #include <string.h>
 #include "io/acia6551.h"
 #include "io/serial_backend.h"
@@ -41,27 +49,15 @@ static const int baud_rate_table[16] = {
 
 /**
  * @brief Calculate frame format bits from control/command registers
- *
- * Decodes word length (control bits 6-5), stop bits (control bit 7),
- * and parity enable (command bit 5/PME) to compute total bits per frame.
- * Also sets acia->bitmask based on word length.
  */
 static void acia_calc_framebits(acia6551_t* acia)
 {
-    /* Word length from control register bits 6-5: 00=8, 01=7, 10=6, 11=5 */
     uint8_t wl_field = (acia->control & ACIA_CTL_WL_MASK) >> ACIA_CTL_WL_SHIFT;
     uint8_t wordlen = (uint8_t)(8 - wl_field);
-
-    /* Stop bits from control register bit 7: 0=1 stop, 1=2 stop */
     uint8_t stopbits = (acia->control & ACIA_CTL_SBN) ? 2 : 1;
-
-    /* Parity from command register bit 5 (PME): 1=parity enabled */
     uint8_t parity = (acia->command & ACIA_CMD_PME) ? 1 : 0;
 
-    /* Total: 1 start + data + parity + stop */
     acia->framebits = (uint8_t)(1 + wordlen + parity + stopbits);
-
-    /* Data mask based on word length */
     acia->bitmask = (uint8_t)((1U << wordlen) - 1);
 }
 
@@ -70,9 +66,32 @@ static void acia_calc_framebits(acia6551_t* acia)
  */
 static int32_t cycles_per_byte(int baud, uint8_t framebits)
 {
-    if (baud <= 0) return 1;  /* External clock: instant */
-    /* CPU cycles = (CPU_CLOCK * framebits) / baud_rate */
+    if (baud <= 0) return 1;
     return (int32_t)((1000000L * framebits) / baud);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+ *  RX FIFO helpers
+ * ═══════════════════════════════════════════════════════════════════════ */
+
+static bool fifo_push(acia6551_t* acia, uint8_t byte)
+{
+    if (!acia->rx_fifo || acia->rx_fifo_count >= acia->rx_fifo_size)
+        return false;
+    acia->rx_fifo[acia->rx_fifo_head] = byte;
+    acia->rx_fifo_head = (acia->rx_fifo_head + 1) % acia->rx_fifo_size;
+    acia->rx_fifo_count++;
+    return true;
+}
+
+static bool fifo_pop(acia6551_t* acia, uint8_t* byte)
+{
+    if (!acia->rx_fifo || acia->rx_fifo_count <= 0)
+        return false;
+    *byte = acia->rx_fifo[acia->rx_fifo_tail];
+    acia->rx_fifo_tail = (acia->rx_fifo_tail + 1) % acia->rx_fifo_size;
+    acia->rx_fifo_count--;
+    return true;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
@@ -101,13 +120,35 @@ static void acia_update_irq(acia6551_t* acia)
         acia->status &= ~ACIA_STATUS_IRQ;
     }
 
-    /* Drive IRQ line (edge detection) */
-    if (irq_wanted && !acia->irq_line) {
-        acia->irq_line = true;
-        if (acia->irq_set) acia->irq_set(acia->irq_userdata);
-    } else if (!irq_wanted && acia->irq_line) {
-        acia->irq_line = false;
-        if (acia->irq_clr) acia->irq_clr(acia->irq_userdata);
+    /* Drive IRQ line.
+     * Standard MOS 6551: edge detection only (set/clear on transitions).
+     * WDC 65C51 mode (irq_on_rdrf): assert IRQ whenever RDRF is set,
+     * even if already asserted — prevents lost IRQs during TX+RX. */
+    if (acia->irq_on_rdrf) {
+        /* 65C51 mode: force IRQ state to match irq_wanted */
+        if (irq_wanted && !acia->irq_line) {
+            acia->irq_line = true;
+            if (acia->irq_set) acia->irq_set(acia->irq_userdata);
+        } else if (!irq_wanted && acia->irq_line) {
+            acia->irq_line = false;
+            if (acia->irq_clr) acia->irq_clr(acia->irq_userdata);
+        }
+        /* Re-assert if RDRF still set (key difference from MOS 6551) */
+        if ((acia->status & ACIA_STATUS_RDRF) && !(acia->command & ACIA_CMD_IRD)) {
+            if (!acia->irq_line) {
+                acia->irq_line = true;
+                if (acia->irq_set) acia->irq_set(acia->irq_userdata);
+            }
+        }
+    } else {
+        /* Standard MOS 6551: edge detection */
+        if (irq_wanted && !acia->irq_line) {
+            acia->irq_line = true;
+            if (acia->irq_set) acia->irq_set(acia->irq_userdata);
+        } else if (!irq_wanted && acia->irq_line) {
+            acia->irq_line = false;
+            if (acia->irq_clr) acia->irq_clr(acia->irq_userdata);
+        }
     }
 }
 
@@ -116,12 +157,10 @@ static void acia_update_irq(acia6551_t* acia)
  */
 static void acia_update_timing(acia6551_t* acia)
 {
-    /* Recalculate frame format (framebits, bitmask) */
     acia_calc_framebits(acia);
 
     if (acia->v23_mode) {
-        /* V23 Minitel/Prestel: asymmetric 1200 RX / 75 TX */
-        acia->baud_rate = ACIA_V23_RX_BAUD;  /* Report RX baud */
+        acia->baud_rate = ACIA_V23_RX_BAUD;
         acia->rx_reload = cycles_per_byte(ACIA_V23_RX_BAUD, acia->framebits);
         acia->tx_reload = cycles_per_byte(ACIA_V23_TX_BAUD, acia->framebits);
     } else {
@@ -131,6 +170,13 @@ static void acia_update_timing(acia6551_t* acia)
         acia->rx_reload = cycles_per_byte(baud, acia->framebits);
         acia->tx_reload = cycles_per_byte(baud, acia->framebits);
     }
+
+    /* Resynchronize counters when timing changes (baud rate switch).
+     * Clamp to new reload value if current counter is out of range. */
+    if (acia->tx_cycles <= 0 || acia->tx_cycles > acia->tx_reload)
+        acia->tx_cycles = acia->tx_reload;
+    if (acia->rx_cycles <= 0 || acia->rx_cycles > acia->rx_reload)
+        acia->rx_cycles = acia->rx_reload;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
@@ -139,10 +185,28 @@ static void acia_update_timing(acia6551_t* acia)
 
 void acia_init(acia6551_t* acia)
 {
+    /* Preserve FIFO config and IRQ callbacks across re-init */
+    uint8_t* saved_fifo = acia->rx_fifo;
+    int saved_fifo_size = acia->rx_fifo_size;
+    bool saved_irq_on_rdrf = acia->irq_on_rdrf;
+    void (*saved_irq_set)(emulator_t*) = acia->irq_set;
+    void (*saved_irq_clr)(emulator_t*) = acia->irq_clr;
+    emulator_t* saved_userdata = acia->irq_userdata;
+    serial_backend_t* saved_backend = acia->backend;
+
     memset(acia, 0, sizeof(acia6551_t));
 
+    /* Restore preserved fields */
+    acia->rx_fifo = saved_fifo;
+    acia->rx_fifo_size = saved_fifo_size;
+    acia->irq_on_rdrf = saved_irq_on_rdrf;
+    acia->irq_set = saved_irq_set;
+    acia->irq_clr = saved_irq_clr;
+    acia->irq_userdata = saved_userdata;
+    acia->backend = saved_backend;
+
     /* Power-on state per datasheet */
-    acia->status = ACIA_STATUS_TDRE;  /* Transmitter starts empty */
+    acia->status = ACIA_STATUS_TDRE;
     acia->command = 0x00;
     acia->control = 0x00;
     acia->tx_pending = false;
@@ -155,29 +219,38 @@ void acia_init(acia6551_t* acia)
     acia->cts = true;
 
     acia->v23_mode = false;
-    acia->backend = NULL;
 
-    acia->irq_set = NULL;
-    acia->irq_clr = NULL;
-    acia->irq_userdata = NULL;
+    /* Reset FIFO state (keep buffer allocated) */
+    acia->rx_fifo_head = 0;
+    acia->rx_fifo_tail = 0;
+    acia->rx_fifo_count = 0;
 
-    /* Calculate initial frame format and timing */
+    /* Calculate timing and initialize cycle counters to full frame */
     acia_update_timing(acia);
 
-    log_info("ACIA 6551 initialized (xtal %d Hz / %d = %d Hz)",
-             ACIA_XTAL_HZ, ACIA_PRESCALER, ACIA_INTERNAL_HZ);
+    log_info("ACIA 6551 initialized (xtal %d Hz / %d = %d Hz%s%s)",
+             ACIA_XTAL_HZ, ACIA_PRESCALER, ACIA_INTERNAL_HZ,
+             acia->rx_fifo ? ", FIFO=" : "",
+             acia->rx_fifo ? "" : "");
+    if (acia->rx_fifo) {
+        log_info("  RX FIFO: %d bytes", acia->rx_fifo_size);
+    }
+    if (acia->irq_on_rdrf) {
+        log_info("  IRQ mode: WDC 65C51 (re-trigger on RDRF)");
+    }
 }
 
 void acia_reset(acia6551_t* acia)
 {
-    /* Programmed reset (write to $031D):
-     * - Clears overrun, resets status
-     * - Disables receiver/transmitter
-     * - Does NOT affect Control Register (per datasheet) */
     acia->status = ACIA_STATUS_TDRE;
-    acia->command = acia->command & 0xE0;  /* Preserve parity bits, clear DTR/IRD/TIC/ECHO */
+    acia->command = acia->command & 0xE0;
     acia->tx_pending = false;
     acia->rx_full = false;
+
+    /* Flush FIFO on reset */
+    acia->rx_fifo_head = 0;
+    acia->rx_fifo_tail = 0;
+    acia->rx_fifo_count = 0;
 
     /* Deassert IRQ */
     if (acia->irq_line) {
@@ -199,39 +272,55 @@ uint8_t acia_read(acia6551_t* acia, uint16_t addr)
         /* $031C: Read Receiver Data Register */
         uint8_t data = acia->rdr;
         acia->rx_full = false;
-        acia->status &= ~(ACIA_STATUS_RDRF | ACIA_STATUS_OVRN | ACIA_STATUS_PE | ACIA_STATUS_FE);
+        acia->status &= ~(ACIA_STATUS_RDRF | ACIA_STATUS_OVRN |
+                          ACIA_STATUS_PE | ACIA_STATUS_FE);
+
+        /* FIFO: auto-load next byte if available */
+        if (acia->rx_fifo && acia->rx_fifo_count > 0) {
+            uint8_t next;
+            if (fifo_pop(acia, &next)) {
+                acia->rdr = next;
+                acia->rx_full = true;
+                acia->status |= ACIA_STATUS_RDRF;
+            }
+        }
+
         acia_update_irq(acia);
         return data;
     }
 
     case 0x01: {
-        /* $031D: Read Status Register — clears IRQ bit after read.
-         * DCD/DSR bits reflect live pin state (not latched). */
+        /* $031D: Read Status Register.
+         * DCD/DSR bits reflect live pin state (not latched).
+         * Reading clears IRQ bit (MOS 6551 behavior).
+         * In 65C51 mode, IRQ re-asserts if RDRF still set. */
         uint8_t status = acia->status;
 
-        /* DCD: bit 5 set when carrier LOST (active-low hardware line) */
         if (!acia->dcd) status |= ACIA_STATUS_DCD;
         else            status &= ~ACIA_STATUS_DCD;
 
-        /* DSR: bit 6 set when DSR inactive */
         if (!acia->dsr) status |= ACIA_STATUS_DSR;
         else            status &= ~ACIA_STATUS_DSR;
 
-        /* Reading status clears IRQ bit and deasserts /IRQ line (per datasheet) */
+        /* Clear IRQ on status read (MOS 6551 datasheet) */
         acia->status &= ~ACIA_STATUS_IRQ;
         if (acia->irq_line) {
             acia->irq_line = false;
             if (acia->irq_clr) acia->irq_clr(acia->irq_userdata);
         }
+
+        /* 65C51 mode: immediately re-assert if RDRF still set */
+        if (acia->irq_on_rdrf) {
+            acia_update_irq(acia);
+        }
+
         return status;
     }
 
     case 0x02:
-        /* $031E: Read Command Register */
         return acia->command;
 
     case 0x03:
-        /* $031F: Read Control Register */
         return acia->control;
 
     default:
@@ -247,29 +336,25 @@ void acia_write(acia6551_t* acia, uint16_t addr, uint8_t value)
 {
     switch (addr & ACIA_ADDR_MASK) {
     case 0x00:
-        /* $031C: Write Transmitter Data Register */
-        acia->tdr = value & acia->bitmask;  /* Apply word length mask */
+        acia->tdr = value & acia->bitmask;
         acia->tx_pending = true;
-        acia->tx_cycles = acia->tx_reload;  /* Start TX timing from full frame */
-        acia->status &= ~ACIA_STATUS_TDRE;  /* TDR now full */
+        acia->tx_cycles = acia->tx_reload;
+        acia->status &= ~ACIA_STATUS_TDRE;
         acia_update_irq(acia);
         break;
 
     case 0x01:
-        /* $031D: Programmed Reset (any write triggers reset) */
         (void)value;
         acia_reset(acia);
         break;
 
     case 0x02:
-        /* $031E: Write Command Register */
         acia->command = value;
-        acia_update_timing(acia);  /* PME bit affects framebits */
+        acia_update_timing(acia);
         acia_update_irq(acia);
         break;
 
     case 0x03:
-        /* $031F: Write Control Register */
         acia->control = value;
         acia_update_timing(acia);
         break;
@@ -282,7 +367,6 @@ void acia_write(acia6551_t* acia, uint16_t addr, uint8_t value)
 
 void acia_tick(acia6551_t* acia)
 {
-    /* Skip if no backend or DTR not asserted */
     if (!acia->backend) return;
     if (!(acia->command & ACIA_CMD_DTR)) return;
 
@@ -290,7 +374,6 @@ void acia_tick(acia6551_t* acia)
     if (acia->tx_pending) {
         acia->tx_cycles--;
         if (acia->tx_cycles <= 0) {
-            /* Send byte to backend if CTS allows */
             if (acia->cts && acia->backend->send) {
                 acia->backend->send(acia->backend, acia->tdr);
             }
@@ -306,19 +389,35 @@ void acia_tick(acia6551_t* acia)
     if (acia->rx_cycles <= 0) {
         acia->rx_cycles = acia->rx_reload;
 
-        /* Try to receive if DCD is active and backend has data */
-        if (acia->dcd && acia->backend->poll && acia->backend->poll(acia->backend)) {
+        if (acia->dcd && acia->backend->poll &&
+            acia->backend->poll(acia->backend)) {
             uint8_t byte;
             if (acia->backend->recv(acia->backend, &byte)) {
-                if (acia->rx_full) {
-                    /* Overrun: previous byte not read */
-                    acia->status |= ACIA_STATUS_OVRN;
-                }
-                acia->rdr = byte & acia->bitmask;  /* Apply word length mask */
-                acia->rx_full = true;
-                acia->status |= ACIA_STATUS_RDRF;
+                byte &= acia->bitmask;
 
-                /* Echo mode: retransmit received byte */
+                if (acia->rx_fifo) {
+                    /* ── FIFO mode: queue byte ── */
+                    if (!acia->rx_full) {
+                        /* RDR empty: load directly */
+                        acia->rdr = byte;
+                        acia->rx_full = true;
+                        acia->status |= ACIA_STATUS_RDRF;
+                    } else if (!fifo_push(acia, byte)) {
+                        /* FIFO full: overrun */
+                        acia->status |= ACIA_STATUS_OVRN;
+                    }
+                    /* else: queued in FIFO, RDR will load on next read */
+                } else {
+                    /* ── Classic 1-byte mode: overwrite RDR ── */
+                    if (acia->rx_full) {
+                        acia->status |= ACIA_STATUS_OVRN;
+                    }
+                    acia->rdr = byte;
+                    acia->rx_full = true;
+                    acia->status |= ACIA_STATUS_RDRF;
+                }
+
+                /* Echo mode */
                 if (acia->command & ACIA_CMD_ECHO) {
                     if (acia->backend->send) {
                         acia->backend->send(acia->backend, byte);
@@ -354,7 +453,6 @@ void acia_set_dcd(acia6551_t* acia, bool active)
 {
     bool old = acia->dcd;
     acia->dcd = active;
-    /* DCD transition (either direction) generates IRQ per datasheet */
     if (old != active) {
         acia_update_irq(acia);
     }
@@ -368,4 +466,34 @@ void acia_set_dsr(acia6551_t* acia, bool active)
 void acia_set_cts(acia6551_t* acia, bool active)
 {
     acia->cts = active;
+}
+
+void acia_set_rx_fifo(acia6551_t* acia, int size)
+{
+    /* Free existing FIFO */
+    free(acia->rx_fifo);
+    acia->rx_fifo = NULL;
+    acia->rx_fifo_size = 0;
+    acia->rx_fifo_head = 0;
+    acia->rx_fifo_tail = 0;
+    acia->rx_fifo_count = 0;
+
+    if (size > 0) {
+        if (size > ACIA_FIFO_MAX_SIZE) size = ACIA_FIFO_MAX_SIZE;
+        acia->rx_fifo = (uint8_t*)malloc((size_t)size);
+        if (acia->rx_fifo) {
+            acia->rx_fifo_size = size;
+            log_info("ACIA RX FIFO enabled: %d bytes", size);
+        } else {
+            log_error("ACIA RX FIFO: allocation failed for %d bytes", size);
+        }
+    }
+}
+
+void acia_set_irq_on_rdrf(acia6551_t* acia, bool enabled)
+{
+    acia->irq_on_rdrf = enabled;
+    if (enabled) {
+        log_info("ACIA IRQ mode: WDC 65C51 (re-trigger while RDRF set)");
+    }
 }

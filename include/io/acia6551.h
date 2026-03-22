@@ -121,6 +121,26 @@ typedef struct emulator_s emulator_t;
 #define ACIA_V23_TX_BAUD    75
 
 /* ═══════════════════════════════════════════════════════════════════════
+ *  RX FIFO buffer (emulator enhancement)
+ *
+ *  The real MOS 6551 has only a 1-byte RX buffer, causing overrun when
+ *  the CPU can't read fast enough (e.g. screen clear = 46000 cycles,
+ *  5 bytes lost at 1200 baud). Real ORIC programs used IRQ + software
+ *  buffer to work around this.
+ *
+ *  The FIFO option (--serial-buffer N) adds a transparent receive queue.
+ *  When enabled, incoming bytes are queued in the FIFO instead of
+ *  overwriting RDR. The ACIA still presents one byte at a time via RDR,
+ *  but the next byte is automatically loaded from the FIFO when RDR is
+ *  read. RDRF stays set as long as the FIFO is non-empty.
+ *
+ *  The WDC 65C51 improved on the MOS 6551 by re-triggering IRQ while
+ *  RDRF is set. The --serial-irq-on-rdrf option emulates this behavior.
+ * ═══════════════════════════════════════════════════════════════════════ */
+
+#define ACIA_FIFO_MAX_SIZE  4096    /* Maximum configurable FIFO depth */
+
+/* ═══════════════════════════════════════════════════════════════════════
  *  ACIA device structure
  * ═══════════════════════════════════════════════════════════════════════ */
 
@@ -156,7 +176,17 @@ typedef struct acia6551_s {
     bool    dsr;                /**< Data Set Ready (true = active/low) */
     bool    cts;                /**< Clear To Send (true = active/low) */
 
-    /* Backend (loopback, TCP, PTY) */
+    /* RX FIFO buffer (emulator enhancement, not in real 6551) */
+    uint8_t* rx_fifo;           /**< Ring buffer (NULL = disabled, 1-byte mode) */
+    int     rx_fifo_size;       /**< Configured FIFO depth (0 = disabled) */
+    int     rx_fifo_head;       /**< Write position */
+    int     rx_fifo_tail;       /**< Read position */
+    int     rx_fifo_count;      /**< Bytes in FIFO */
+
+    /* Enhanced IRQ mode (WDC 65C51 behavior) */
+    bool    irq_on_rdrf;        /**< Re-trigger IRQ while RDRF set (--serial-irq-on-rdrf) */
+
+    /* Backend (loopback, TCP, PTY, modem, COM) */
     serial_backend_t* backend;
 
     /* CPU IRQ routing */
@@ -220,5 +250,24 @@ void acia_set_backend(acia6551_t* acia, serial_backend_t* backend);
 void acia_set_dcd(acia6551_t* acia, bool active);
 void acia_set_dsr(acia6551_t* acia, bool active);
 void acia_set_cts(acia6551_t* acia, bool active);
+
+/**
+ * @brief Enable RX FIFO buffer (emulator enhancement)
+ *
+ * Adds a software receive queue to prevent overrun when the CPU
+ * can't service RDR fast enough. Not present in real MOS 6551.
+ *
+ * @param size  FIFO depth in bytes (0 = disable, 1-4096)
+ */
+void acia_set_rx_fifo(acia6551_t* acia, int size);
+
+/**
+ * @brief Enable WDC 65C51-style IRQ re-trigger on RDRF
+ *
+ * When enabled, the IRQ line stays asserted as long as RDRF is set,
+ * even after reading the status register. This prevents lost IRQs
+ * during simultaneous TX/RX (the MOS 6551 bug).
+ */
+void acia_set_irq_on_rdrf(acia6551_t* acia, bool enabled);
 
 #endif /* ACIA6551_H */
