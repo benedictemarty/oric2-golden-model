@@ -26,7 +26,8 @@ typedef enum {
     SERIAL_BACKEND_TCP      = 2,    /**< TCP client socket */
     SERIAL_BACKEND_PTY      = 3,    /**< POSIX pseudo-terminal */
     SERIAL_BACKEND_MODEM    = 4,    /**< TCP with AT command emulation */
-    SERIAL_BACKEND_COM      = 5     /**< Real serial port (termios) */
+    SERIAL_BACKEND_COM      = 5,    /**< Real serial port (termios) */
+    SERIAL_BACKEND_DIGITELEC = 6    /**< Digitelec DTL 2000 V23/V21 modem */
 } serial_backend_type_t;
 
 /* ═══════════════════════════════════════════════════════════════════════
@@ -137,6 +138,35 @@ typedef struct serial_backend_s {
             uint8_t  orig_termios[64]; /**< Saved original termios (opaque) */
             bool     has_orig;      /**< Original termios saved */
         } com;
+
+        /* Digitelec DTL 2000 V23/V21 modem emulation.
+         * Autonomous external modem with internal buffering, flow control
+         * via CTS/RTS, carrier detect via DCD, and DTR-controlled dialing.
+         * No AT commands — controlled entirely via RS232 signal lines. */
+        struct {
+            int      sockfd;            /**< TCP data socket (-1 = disconnected) */
+            char     host[256];         /**< Remote host (BBS/Minitel server) */
+            uint16_t port;              /**< Remote port */
+
+            /* Internal modem buffers (the real DTL 2000 had its own RAM) */
+            uint8_t  rx_buf[512];       /**< RX ring buffer (line → ORIC) */
+            int      rx_head, rx_tail, rx_count;
+            uint8_t  tx_buf[512];       /**< TX ring buffer (ORIC → line) */
+            int      tx_head, tx_tail, tx_count;
+
+            /* Modem state */
+            bool     carrier;           /**< Carrier detected (TCP connected) */
+            bool     dtr_was_on;        /**< Previous DTR state (edge detect) */
+            int      mode;              /**< 0=V23 (1200/75), 1=V21 (300/300) */
+
+            /* Flow control thresholds */
+            int      cts_high_water;    /**< Deassert CTS when RX buf above this */
+            int      cts_low_water;     /**< Reassert CTS when RX buf below this */
+            bool     cts_active;        /**< Current CTS state driven to ACIA */
+
+            /* Pointer to ACIA for driving signal lines */
+            void*    acia_ptr;          /**< acia6551_t* (avoid circular include) */
+        } digitelec;
     } state;
 } serial_backend_t;
 
@@ -178,6 +208,21 @@ serial_backend_t* serial_backend_modem_create(const char* host, uint16_t port, b
  *                Example: "115200,8,N,1,/dev/ttyUSB0"
  */
 serial_backend_t* serial_backend_com_create(const char* config);
+
+/**
+ * @brief Create a Digitelec DTL 2000 modem backend
+ *
+ * Emulates the Digitelec DTL 2000 external V23/V21 modem.
+ * Connection is controlled via DTR (assert DTR = dial/connect).
+ * Flow control via CTS (modem deasserts CTS when buffer full).
+ * Carrier detect via DCD (TCP connection = carrier).
+ * No AT commands — the real Digitelec predates the Hayes standard.
+ *
+ * @param host  Remote host (BBS/Minitel server)
+ * @param port  Remote port
+ * @param acia  Pointer to ACIA for driving DCD/DSR/CTS signals
+ */
+serial_backend_t* serial_backend_digitelec_create(const char* host, uint16_t port, void* acia);
 
 /**
  * @brief Destroy a backend and free resources

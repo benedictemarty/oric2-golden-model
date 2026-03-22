@@ -236,6 +236,7 @@ static void print_usage(const char* program_name) {
     printf("      --rom-info [FILE]      Analyze ROM and print report (or write to FILE)\n");
     printf("      --serial TYPE          Serial port: loopback, tcp:HOST:PORT, pty\n");
     printf("      --serial-v23          V23 mode: 1200/75 baud (Minitel/Prestel/Digitelec)\n");
+    printf("                            (auto-enabled with digitelec backend)\n");
     printf("      --serial-buffer N     RX FIFO buffer N bytes (prevents overrun, default: off)\n");
     printf("      --serial-irq-on-rdrf  WDC 65C51 IRQ mode (re-trigger while RDRF set)\n");
     printf("      --acia-addr ADDR      ACIA base address in hex (default: 031C)\n");
@@ -1378,8 +1379,24 @@ int main(int argc, char* argv[]) {
             sb = serial_backend_tcp_create(host, port);
         } else if (strcmp(serial_arg, "pty") == 0) {
             sb = serial_backend_pty_create();
+        } else if (strncmp(serial_arg, "digitelec:", 10) == 0) {
+            /* Parse digitelec:host:port */
+            char host[256] = {0};
+            uint16_t port = 23;
+            const char* hp = serial_arg + 10;
+            const char* colon = strrchr(hp, ':');
+            if (colon && colon != hp) {
+                size_t hlen = (size_t)(colon - hp);
+                if (hlen >= sizeof(host)) hlen = sizeof(host) - 1;
+                memcpy(host, hp, hlen);
+                host[hlen] = '\0';
+                port = (uint16_t)atoi(colon + 1);
+            } else {
+                strncpy(host, hp, sizeof(host) - 1);
+            }
+            sb = serial_backend_digitelec_create(host, port, &emu.acia);
         } else {
-            log_error("Unknown serial backend: %s (use: loopback, tcp:host:port, pty)", serial_arg);
+            log_error("Unknown serial backend: %s (use: loopback, tcp:host:port, pty, digitelec:host:port)", serial_arg);
             emulator_cleanup(&emu);
             return 1;
         }
@@ -1389,7 +1406,7 @@ int main(int argc, char* argv[]) {
                 acia_set_backend(&emu.acia, sb);
                 emu.serial_backend = sb;
                 emu.has_serial = true;
-                if (serial_v23) {
+                if (serial_v23 || sb->type == SERIAL_BACKEND_DIGITELEC) {
                     acia_set_v23_mode(&emu.acia, true);
                 }
                 if (serial_buffer_size > 0) {

@@ -963,6 +963,297 @@ serial_backend_t* serial_backend_com_create(const char* config)
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
+ *  DIGITELEC DTL 2000 backend — V23/V21 modem emulation
+ *
+ *  The Digitelec DTL 2000 (1984, ~1490 FF) was an autonomous external
+ *  modem supporting V23 (1200/75 baud, Minitel) and V21 (300/300 baud).
+ *  It connected to the ORIC via a card on the expansion bus and
+ *  communicated with the ACIA via standard RS232 signals.
+ *
+ *  Key behaviors emulated:
+ *  - Internal buffering (the modem had its own RAM)
+ *  - CTS flow control: modem deasserts CTS when RX buffer is near full,
+ *    preventing the remote end from overrunning the ORIC
+ *  - DCD: reflects TCP connection state (carrier = connected)
+ *  - DTR: ORIC asserts DTR to "dial" (trigger TCP connect)
+ *    ORIC deasserts DTR to "hang up" (close TCP)
+ *  - No AT commands (the Digitelec predates the Hayes standard)
+ * ═══════════════════════════════════════════════════════════════════════ */
+
+#include "io/acia6551.h"  /* For acia_set_dcd/cts */
+
+static bool digitelec_open(serial_backend_t* self)
+{
+    self->state.digitelec.rx_head = 0;
+    self->state.digitelec.rx_tail = 0;
+    self->state.digitelec.rx_count = 0;
+    self->state.digitelec.tx_head = 0;
+    self->state.digitelec.tx_tail = 0;
+    self->state.digitelec.tx_count = 0;
+
+    self->state.digitelec.carrier = false;
+    self->state.digitelec.dtr_was_on = false;
+    self->state.digitelec.sockfd = -1;
+
+    /* Flow control: CTS off when RX buffer > 400 bytes, on when < 256 */
+    self->state.digitelec.cts_high_water = 400;
+    self->state.digitelec.cts_low_water = 256;
+    self->state.digitelec.cts_active = true;
+
+    /* Drive initial signal lines on ACIA */
+    acia6551_t* acia = (acia6551_t*)self->state.digitelec.acia_ptr;
+    if (acia) {
+        acia_set_dcd(acia, false);   /* No carrier yet */
+        acia_set_dsr(acia, true);    /* Modem ready */
+        acia_set_cts(acia, true);    /* Clear to send */
+    }
+
+    log_info("Digitelec DTL 2000: modem ready (V23 1200/75, host=%s:%u)",
+             self->state.digitelec.host, self->state.digitelec.port);
+    return true;
+}
+
+static void digitelec_close(serial_backend_t* self)
+{
+    if (self->state.digitelec.sockfd >= 0) {
+        close(self->state.digitelec.sockfd);
+        self->state.digitelec.sockfd = -1;
+    }
+    self->state.digitelec.carrier = false;
+
+    acia6551_t* acia = (acia6551_t*)self->state.digitelec.acia_ptr;
+    if (acia) {
+        acia_set_dcd(acia, false);
+    }
+
+    log_info("Digitelec DTL 2000: modem closed");
+}
+
+/**
+ * @brief Attempt TCP connection (triggered by DTR rising edge)
+ */
+static bool digitelec_connect(serial_backend_t* self)
+{
+    struct addrinfo hints, *res, *rp;
+    char port_str[16];
+
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_family = AF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
+    snprintf(port_str, sizeof(port_str), "%u", self->state.digitelec.port);
+
+    int err = getaddrinfo(self->state.digitelec.host, port_str, &hints, &res);
+    if (err != 0) {
+        log_error("Digitelec DTL 2000: connect failed (%s)", gai_strerror(err));
+        return false;
+    }
+
+    int fd = -1;
+    for (rp = res; rp != NULL; rp = rp->ai_next) {
+        fd = socket(rp->ai_family, rp->ai_socktype, rp->ai_protocol);
+        if (fd < 0) continue;
+        if (connect(fd, rp->ai_addr, rp->ai_addrlen) == 0) break;
+        close(fd);
+        fd = -1;
+    }
+    freeaddrinfo(res);
+
+    if (fd < 0) {
+        log_error("Digitelec DTL 2000: no carrier (%s:%u)",
+                  self->state.digitelec.host, self->state.digitelec.port);
+        return false;
+    }
+
+    /* Non-blocking + TCP_NODELAY */
+    int flags = fcntl(fd, F_GETFL, 0);
+    fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+    int one = 1;
+    setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &one, sizeof(one));
+
+    self->state.digitelec.sockfd = fd;
+    self->state.digitelec.carrier = true;
+
+    /* Drive DCD on ACIA */
+    acia6551_t* acia = (acia6551_t*)self->state.digitelec.acia_ptr;
+    if (acia) {
+        acia_set_dcd(acia, true);  /* Carrier detected */
+    }
+
+    log_info("Digitelec DTL 2000: CARRIER DETECT (%s:%u, fd=%d)",
+             self->state.digitelec.host, self->state.digitelec.port, fd);
+    return true;
+}
+
+/**
+ * @brief Disconnect (triggered by DTR falling edge)
+ */
+static void digitelec_disconnect(serial_backend_t* self)
+{
+    if (self->state.digitelec.sockfd >= 0) {
+        close(self->state.digitelec.sockfd);
+        self->state.digitelec.sockfd = -1;
+    }
+    self->state.digitelec.carrier = false;
+
+    /* Flush buffers on hangup */
+    self->state.digitelec.rx_head = 0;
+    self->state.digitelec.rx_tail = 0;
+    self->state.digitelec.rx_count = 0;
+    self->state.digitelec.tx_head = 0;
+    self->state.digitelec.tx_tail = 0;
+    self->state.digitelec.tx_count = 0;
+
+    acia6551_t* acia = (acia6551_t*)self->state.digitelec.acia_ptr;
+    if (acia) {
+        acia_set_dcd(acia, false);  /* No carrier */
+        acia_set_cts(acia, true);   /* Reset CTS */
+    }
+    self->state.digitelec.cts_active = true;
+
+    log_info("Digitelec DTL 2000: NO CARRIER (hangup)");
+}
+
+static bool digitelec_send(serial_backend_t* self, uint8_t byte)
+{
+    /* Check DTR state from ACIA for connect/disconnect control */
+    acia6551_t* acia = (acia6551_t*)self->state.digitelec.acia_ptr;
+    if (acia) {
+        bool dtr_on = (acia->command & ACIA_CMD_DTR) != 0;
+        if (dtr_on && !self->state.digitelec.dtr_was_on) {
+            /* DTR rising edge → "dial" (connect) */
+            if (!self->state.digitelec.carrier) {
+                digitelec_connect(self);
+            }
+        } else if (!dtr_on && self->state.digitelec.dtr_was_on) {
+            /* DTR falling edge → "hang up" */
+            if (self->state.digitelec.carrier) {
+                digitelec_disconnect(self);
+            }
+        }
+        self->state.digitelec.dtr_was_on = dtr_on;
+    }
+
+    if (!self->state.digitelec.carrier || self->state.digitelec.sockfd < 0)
+        return false;
+
+    /* Send directly to TCP (modem transmits immediately on the "line") */
+    ssize_t n = write(self->state.digitelec.sockfd, &byte, 1);
+    if (n < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
+        log_info("Digitelec DTL 2000: write error, carrier lost");
+        digitelec_disconnect(self);
+        return false;
+    }
+    return true;
+}
+
+static bool digitelec_recv(serial_backend_t* self, uint8_t* byte)
+{
+    /* Bulk-read from TCP socket into modem's internal RX buffer */
+    if (self->state.digitelec.carrier && self->state.digitelec.sockfd >= 0) {
+        while (self->state.digitelec.rx_count < 512) {
+            uint8_t tmp[64];
+            int space = 512 - self->state.digitelec.rx_count;
+            if (space > (int)sizeof(tmp)) space = (int)sizeof(tmp);
+            ssize_t n = read(self->state.digitelec.sockfd, tmp, (size_t)space);
+            if (n > 0) {
+                for (ssize_t i = 0; i < n; i++) {
+                    self->state.digitelec.rx_buf[self->state.digitelec.rx_head] = tmp[i];
+                    self->state.digitelec.rx_head = (self->state.digitelec.rx_head + 1) % 512;
+                    self->state.digitelec.rx_count++;
+                }
+            } else if (n == 0) {
+                log_info("Digitelec DTL 2000: peer closed, carrier lost");
+                digitelec_disconnect(self);
+                break;
+            } else {
+                break;  /* EAGAIN */
+            }
+        }
+
+        /* Flow control: manage CTS based on buffer level */
+        acia6551_t* acia = (acia6551_t*)self->state.digitelec.acia_ptr;
+        if (acia) {
+            if (self->state.digitelec.cts_active &&
+                self->state.digitelec.rx_count >= self->state.digitelec.cts_high_water) {
+                /* Buffer near full → deassert CTS to pause remote */
+                self->state.digitelec.cts_active = false;
+                acia_set_cts(acia, false);
+            } else if (!self->state.digitelec.cts_active &&
+                       self->state.digitelec.rx_count <= self->state.digitelec.cts_low_water) {
+                /* Buffer drained → reassert CTS */
+                self->state.digitelec.cts_active = true;
+                acia_set_cts(acia, true);
+            }
+        }
+    }
+
+    /* Pop one byte from modem RX buffer */
+    if (self->state.digitelec.rx_count <= 0)
+        return false;
+    *byte = self->state.digitelec.rx_buf[self->state.digitelec.rx_tail];
+    self->state.digitelec.rx_tail = (self->state.digitelec.rx_tail + 1) % 512;
+    self->state.digitelec.rx_count--;
+    return true;
+}
+
+static bool digitelec_poll(serial_backend_t* self)
+{
+    /* Check DTR state for connect/disconnect (even without send) */
+    acia6551_t* acia = (acia6551_t*)self->state.digitelec.acia_ptr;
+    if (acia) {
+        bool dtr_on = (acia->command & ACIA_CMD_DTR) != 0;
+        if (dtr_on && !self->state.digitelec.dtr_was_on) {
+            if (!self->state.digitelec.carrier) {
+                digitelec_connect(self);
+            }
+        } else if (!dtr_on && self->state.digitelec.dtr_was_on) {
+            if (self->state.digitelec.carrier) {
+                digitelec_disconnect(self);
+            }
+        }
+        self->state.digitelec.dtr_was_on = dtr_on;
+    }
+
+    /* Data available in modem's internal buffer */
+    if (self->state.digitelec.rx_count > 0)
+        return true;
+
+    /* Check TCP socket for new data */
+    if (self->state.digitelec.carrier && self->state.digitelec.sockfd >= 0) {
+        struct pollfd pfd = { .fd = self->state.digitelec.sockfd, .events = POLLIN };
+        return poll(&pfd, 1, 0) > 0 && (pfd.revents & POLLIN);
+    }
+    return false;
+}
+
+static bool digitelec_connected(serial_backend_t* self)
+{
+    return self->state.digitelec.carrier;
+}
+
+serial_backend_t* serial_backend_digitelec_create(const char* host, uint16_t port, void* acia)
+{
+    serial_backend_t* b = calloc(1, sizeof(serial_backend_t));
+    if (!b) return NULL;
+
+    b->type = SERIAL_BACKEND_DIGITELEC;
+    b->open = digitelec_open;
+    b->close = digitelec_close;
+    b->send = digitelec_send;
+    b->recv = digitelec_recv;
+    b->poll = digitelec_poll;
+    b->connected = digitelec_connected;
+
+    if (host) {
+        strncpy(b->state.digitelec.host, host, sizeof(b->state.digitelec.host) - 1);
+    }
+    b->state.digitelec.port = port;
+    b->state.digitelec.sockfd = -1;
+    b->state.digitelec.acia_ptr = acia;
+    return b;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
  *  Common destroy
  * ═══════════════════════════════════════════════════════════════════════ */
 
