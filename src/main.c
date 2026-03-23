@@ -241,6 +241,7 @@ static void print_usage(const char* program_name) {
     printf("      --serial-irq-on-rdrf  WDC 65C51 IRQ mode (re-trigger while RDRF set)\n");
     printf("      --serial-trace FILE   Serial debug trace (TX/RX/signals with timestamps)\n");
     printf("      --acia-addr ADDR      ACIA base address in hex (default: 031C)\n");
+    printf("      --ula2                ULA2 mode: per-cell Color RAM at $B000 (no serial attrs)\n");
     printf("      --save-state FILE      Save emulator state to FILE on exit\n");
     printf("      --load-state FILE      Load emulator state from FILE at startup\n");
     printf("  -?, --help                 Show this help\n");
@@ -1161,9 +1162,10 @@ int main(int argc, char* argv[]) {
     int serial_buffer_size = 0;
     bool serial_irq_on_rdrf = false;
     const char* serial_trace_file = NULL;
+    bool ula2_mode = false;
 
     /* Long option codes for options without short equivalents */
-    enum { OPT_SCREENSHOT = 256, OPT_SCREENSHOT_AT, OPT_FRAME_DUMP, OPT_FRAME_DUMP_INTERVAL, OPT_TYPE_KEYS, OPT_DISK_ROM, OPT_DISK1, OPT_DISK2, OPT_DISK3, OPT_BREAKPOINT, OPT_DEBUG_BREAK, OPT_CAST_SERVER, OPT_CAST_DISCOVER, OPT_CAST_TO, OPT_SAVE_STATE, OPT_LOAD_STATE, OPT_MODEL, OPT_JOYSTICK, OPT_PRINTER, OPT_PRINTER_TYPE, OPT_SCALE, OPT_TRACE, OPT_TRACE_MAX, OPT_PROFILE, OPT_ROM_INFO, OPT_SERIAL, OPT_SERIAL_V23, OPT_ACIA_ADDR, OPT_SERIAL_BUFFER, OPT_SERIAL_IRQ_RDRF, OPT_SERIAL_TRACE };
+    enum { OPT_SCREENSHOT = 256, OPT_SCREENSHOT_AT, OPT_FRAME_DUMP, OPT_FRAME_DUMP_INTERVAL, OPT_TYPE_KEYS, OPT_DISK_ROM, OPT_DISK1, OPT_DISK2, OPT_DISK3, OPT_BREAKPOINT, OPT_DEBUG_BREAK, OPT_CAST_SERVER, OPT_CAST_DISCOVER, OPT_CAST_TO, OPT_SAVE_STATE, OPT_LOAD_STATE, OPT_MODEL, OPT_JOYSTICK, OPT_PRINTER, OPT_PRINTER_TYPE, OPT_SCALE, OPT_TRACE, OPT_TRACE_MAX, OPT_PROFILE, OPT_ROM_INFO, OPT_SERIAL, OPT_SERIAL_V23, OPT_ACIA_ADDR, OPT_SERIAL_BUFFER, OPT_SERIAL_IRQ_RDRF, OPT_SERIAL_TRACE, OPT_ULA2 };
 
     static struct option long_options[] = {
         {"tape",                required_argument, 0, 't'},
@@ -1206,6 +1208,7 @@ int main(int argc, char* argv[]) {
         {"serial-buffer",       required_argument, 0, OPT_SERIAL_BUFFER},
         {"serial-irq-on-rdrf",  no_argument,       0, OPT_SERIAL_IRQ_RDRF},
         {"serial-trace",        required_argument, 0, OPT_SERIAL_TRACE},
+        {"ula2",                no_argument,       0, OPT_ULA2},
         {"acia-addr",           required_argument, 0, OPT_ACIA_ADDR},
         {"help",                no_argument,       0, '?'},
         {0, 0, 0, 0}
@@ -1281,6 +1284,9 @@ int main(int argc, char* argv[]) {
             case OPT_SERIAL_TRACE:
                 serial_trace_file = optarg;
                 break;
+            case OPT_ULA2:
+                ula2_mode = true;
+                break;
             case OPT_ACIA_ADDR:
                 acia_addr_arg = optarg;
                 break;
@@ -1316,6 +1322,19 @@ int main(int argc, char* argv[]) {
     }
 
     emu.fast_load = fast_load;
+
+    /* ULA2: enable per-cell Color RAM and initialize to white-on-black */
+    if (ula2_mode) {
+        emu.video.ula2_enabled = true;
+        /* Initialize Color RAM at $B000: ink=7 (white), paper=0 (black) */
+        for (int i = 0; i < ORIC_COLOR_RAM_SIZE; i++) {
+            emu.memory.ram[ORIC_COLOR_RAM_ADDR + i] = 0x07;  /* ink=7, paper=0, no inverse */
+        }
+        log_info("ULA2 mode enabled: Color RAM at $%04X-$%04X (%d bytes)",
+                 ORIC_COLOR_RAM_ADDR,
+                 ORIC_COLOR_RAM_ADDR + ORIC_COLOR_RAM_SIZE - 1,
+                 ORIC_COLOR_RAM_SIZE);
+    }
     emu.max_cycles = max_cycles;
     emu.screenshot_file = screenshot_file;
 

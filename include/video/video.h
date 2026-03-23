@@ -19,6 +19,22 @@
 #define ORIC_CHAR_H     8
 #define ORIC_FPS         50
 
+/* ULA2 Color RAM (emulator enhancement) */
+#define ORIC_COLOR_RAM_ADDR  0xB000  /* Color RAM mapped at $B000-$B45F */
+#define ORIC_COLOR_RAM_SIZE  1120    /* 40 cols × 28 rows = 1120 bytes */
+
+/* Color RAM byte format:
+ *   bits 0-2 : ink (foreground color 0-7)
+ *   bits 3-5 : paper (background color 0-7)
+ *   bit 6    : alternate charset (0=standard, 1=alternate)
+ *   bit 7    : inverse (0=normal, 1=inverted)
+ */
+#define ULA2_INK_MASK    0x07
+#define ULA2_PAPER_MASK  0x38
+#define ULA2_PAPER_SHIFT 3
+#define ULA2_ALT_CHAR    0x40
+#define ULA2_INVERSE     0x80
+
 /* ORIC colors */
 #define ORIC_BLACK   0
 #define ORIC_RED     1
@@ -37,6 +53,12 @@ typedef struct video_s {
     uint8_t* charset;       /* Character set ROM */
     uint8_t vid_mode;       /* ULA video mode (persistent, set by serial attrs 24-31).
                              * Bit 2: HIRES when set. Initialized to 2 (TEXT/PAL50). */
+
+    /* ULA2: per-cell color attributes (emulator enhancement).
+     * When enabled, colors come from color_ram[] instead of serial attributes.
+     * Serial attribute bytes in video RAM are rendered as characters, not consumed.
+     * Color RAM is mapped at $B000-$B45F (read/write by the 6502). */
+    bool ula2_enabled;      /**< ULA2 mode active (--ula2) */
 } video_t;
 
 bool video_init(video_t* vid);
