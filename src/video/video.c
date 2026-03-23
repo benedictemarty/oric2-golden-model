@@ -262,6 +262,13 @@ ula2_hires_done:
             bool inverse  = (cattr & ULA2_INVERSE) != 0;
 
             int sy = 200 + (row - 25) * 8;
+
+            /* Filter ROM serial attributes as paper-filled cells */
+            if ((byte & 0x60) == 0) {
+                render_attr_block(vid, col * 6, sy, paper, 8);
+                continue;
+            }
+
             render_text_char(vid, memory, col * 6, sy, byte, ink, paper, inverse);
         }
     }
