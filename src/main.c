@@ -795,6 +795,20 @@ static void emulator_run(emulator_t* emu) {
             uint16_t prof_pc = emu->cpu.PC;
 
             tape_patches(emu);
+
+            /* ULA2: writing $07 to the last Color RAM byte ($B45F = 46175)
+             * acts as a "reset all Color RAM" trigger. This is the ULA2
+             * control register — a real FPGA ULA2 would have this.
+             * The program does: POKE 46175,255 to reset all colors. */
+            if (emu->video.ula2_enabled) {
+                uint16_t trigger_addr = ORIC_COLOR_RAM_ADDR + ORIC_COLOR_RAM_SIZE - 1;
+                if (emu->memory.ram[trigger_addr] == 0xFF) {
+                    for (int i = 0; i < ORIC_COLOR_RAM_SIZE; i++) {
+                        emu->memory.ram[ORIC_COLOR_RAM_ADDR + i] = 0x07;
+                    }
+                }
+            }
+
             int step = cpu_step(&emu->cpu);
             frame_cycles += step;
 
