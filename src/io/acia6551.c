@@ -71,6 +71,71 @@ static int32_t cycles_per_byte(int baud, uint8_t framebits)
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
+ *  Serial trace helpers
+ * ═══════════════════════════════════════════════════════════════════════ */
+
+static void trace_header(acia6551_t* acia)
+{
+    if (!acia->trace_file) return;
+    fprintf(acia->trace_file,
+            "# Phosphoric ACIA 6551 Serial Trace\n"
+            "# CYCLE      DIR  HEX  CHR  STATUS    FIFO  SIGNALS\n"
+            "# ────────── ───  ──── ───  ────────  ────  ──────────────────\n");
+    fflush(acia->trace_file);
+}
+
+static void trace_signals(acia6551_t* acia, char* buf, int size)
+{
+    snprintf(buf, (size_t)size, "DTR=%d DCD=%d CTS=%d DSR=%d",
+             (acia->command & ACIA_CMD_DTR) ? 1 : 0,
+             acia->dcd ? 1 : 0,
+             acia->cts ? 1 : 0,
+             acia->dsr ? 1 : 0);
+}
+
+static void trace_data(acia6551_t* acia, const char* dir, uint8_t byte)
+{
+    if (!acia->trace_file) return;
+    char sig[64];
+    trace_signals(acia, sig, (int)sizeof(sig));
+    char ch = (byte >= 32 && byte < 127) ? (char)byte : '.';
+    fprintf(acia->trace_file, "%010llu  %-3s  %02X   %c    %c%c%c%c%c%c%c%c  %3d   %s\n",
+            (unsigned long long)acia->trace_cycle,
+            dir, byte, ch,
+            (acia->status & ACIA_STATUS_IRQ)  ? 'I' : '.',
+            (acia->status & ACIA_STATUS_DSR)  ? 'D' : '.',
+            (acia->status & ACIA_STATUS_DCD)  ? 'C' : '.',
+            (acia->status & ACIA_STATUS_TDRE) ? 'T' : '.',
+            (acia->status & ACIA_STATUS_RDRF) ? 'R' : '.',
+            (acia->status & ACIA_STATUS_OVRN) ? 'O' : '.',
+            (acia->status & ACIA_STATUS_FE)   ? 'F' : '.',
+            (acia->status & ACIA_STATUS_PE)   ? 'P' : '.',
+            acia->rx_fifo ? acia->rx_fifo_count : 0,
+            sig);
+    fflush(acia->trace_file);
+}
+
+static void trace_event(acia6551_t* acia, const char* event)
+{
+    if (!acia->trace_file) return;
+    char sig[64];
+    trace_signals(acia, sig, (int)sizeof(sig));
+    fprintf(acia->trace_file, "%010llu  %-3s  --   -    --------  ---   %s  %s\n",
+            (unsigned long long)acia->trace_cycle,
+            "SIG", sig, event);
+    fflush(acia->trace_file);
+}
+
+static void trace_reg(acia6551_t* acia, const char* dir, const char* reg, uint8_t val)
+{
+    if (!acia->trace_file) return;
+    fprintf(acia->trace_file, "%010llu  %-3s  %02X   -    %-8s  ---   %s\n",
+            (unsigned long long)acia->trace_cycle,
+            dir, val, reg, "");
+    fflush(acia->trace_file);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
  *  RX FIFO helpers
  * ═══════════════════════════════════════════════════════════════════════ */
 
@@ -350,12 +415,14 @@ void acia_write(acia6551_t* acia, uint16_t addr, uint8_t value)
 
     case 0x02:
         acia->command = value;
+        trace_reg(acia, "WR", "CMD", value);
         acia_update_timing(acia);
         acia_update_irq(acia);
         break;
 
     case 0x03:
         acia->control = value;
+        trace_reg(acia, "WR", "CTL", value);
         acia_update_timing(acia);
         break;
     }
@@ -376,6 +443,7 @@ void acia_tick(acia6551_t* acia)
         if (acia->tx_cycles <= 0) {
             if (acia->cts && acia->backend->send) {
                 acia->backend->send(acia->backend, acia->tdr);
+                trace_data(acia, "TX", acia->tdr);
             }
             acia->tx_pending = false;
             acia->status |= ACIA_STATUS_TDRE;
@@ -395,22 +463,23 @@ void acia_tick(acia6551_t* acia)
             if (acia->backend->recv(acia->backend, &byte)) {
                 byte &= acia->bitmask;
 
+                trace_data(acia, "RX", byte);
+
                 if (acia->rx_fifo) {
                     /* ── FIFO mode: queue byte ── */
                     if (!acia->rx_full) {
-                        /* RDR empty: load directly */
                         acia->rdr = byte;
                         acia->rx_full = true;
                         acia->status |= ACIA_STATUS_RDRF;
                     } else if (!fifo_push(acia, byte)) {
-                        /* FIFO full: overrun */
                         acia->status |= ACIA_STATUS_OVRN;
+                        trace_event(acia, "OVERRUN (FIFO full)");
                     }
-                    /* else: queued in FIFO, RDR will load on next read */
                 } else {
                     /* ── Classic 1-byte mode: overwrite RDR ── */
                     if (acia->rx_full) {
                         acia->status |= ACIA_STATUS_OVRN;
+                        trace_event(acia, "OVERRUN (RDR not read)");
                     }
                     acia->rdr = byte;
                     acia->rx_full = true;
@@ -454,6 +523,7 @@ void acia_set_dcd(acia6551_t* acia, bool active)
     bool old = acia->dcd;
     acia->dcd = active;
     if (old != active) {
+        trace_event(acia, active ? "DCD ON (carrier)" : "DCD OFF (no carrier)");
         acia_update_irq(acia);
     }
 }
@@ -496,4 +566,28 @@ void acia_set_irq_on_rdrf(acia6551_t* acia, bool enabled)
     if (enabled) {
         log_info("ACIA IRQ mode: WDC 65C51 (re-trigger while RDRF set)");
     }
+}
+
+void acia_set_trace(acia6551_t* acia, const char* filename)
+{
+    /* Close existing trace */
+    if (acia->trace_file) {
+        fclose(acia->trace_file);
+        acia->trace_file = NULL;
+    }
+
+    if (filename) {
+        acia->trace_file = fopen(filename, "w");
+        if (acia->trace_file) {
+            trace_header(acia);
+            log_info("ACIA serial trace: %s", filename);
+        } else {
+            log_error("ACIA serial trace: failed to open %s", filename);
+        }
+    }
+}
+
+void acia_set_trace_cycle(acia6551_t* acia, uint64_t cycle)
+{
+    acia->trace_cycle = cycle;
 }

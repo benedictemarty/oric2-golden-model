@@ -26,6 +26,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <stdio.h>
 
 /* Forward declarations */
 typedef struct serial_backend_s serial_backend_t;
@@ -186,6 +187,10 @@ typedef struct acia6551_s {
     /* Enhanced IRQ mode (WDC 65C51 behavior) */
     bool    irq_on_rdrf;        /**< Re-trigger IRQ while RDRF set (--serial-irq-on-rdrf) */
 
+    /* Serial trace / debug dump (--serial-trace FILE) */
+    FILE*   trace_file;         /**< Trace output file (NULL = disabled) */
+    uint64_t trace_cycle;       /**< Current CPU cycle for timestamping */
+
     /* Backend (loopback, TCP, PTY, modem, COM) */
     serial_backend_t* backend;
 
@@ -269,5 +274,22 @@ void acia_set_rx_fifo(acia6551_t* acia, int size);
  * during simultaneous TX/RX (the MOS 6551 bug).
  */
 void acia_set_irq_on_rdrf(acia6551_t* acia, bool enabled);
+
+/**
+ * @brief Enable serial trace logging to file
+ *
+ * Logs all TX/RX bytes, register access, and signal line changes
+ * with CPU cycle timestamps. Format:
+ *   CYCLE     DIR  HEX  CHR  STATUS    SIGNALS
+ *   00042510  TX   42   B    TDRE      DTR=1 DCD=1 CTS=1
+ *
+ * @param filename  Output file path (NULL to disable)
+ */
+void acia_set_trace(acia6551_t* acia, const char* filename);
+
+/**
+ * @brief Update cycle counter for trace timestamps
+ */
+void acia_set_trace_cycle(acia6551_t* acia, uint64_t cycle);
 
 #endif /* ACIA6551_H */

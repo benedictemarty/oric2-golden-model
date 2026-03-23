@@ -239,6 +239,7 @@ static void print_usage(const char* program_name) {
     printf("                            (auto-enabled with digitelec backend)\n");
     printf("      --serial-buffer N     RX FIFO buffer N bytes (prevents overrun, default: off)\n");
     printf("      --serial-irq-on-rdrf  WDC 65C51 IRQ mode (re-trigger while RDRF set)\n");
+    printf("      --serial-trace FILE   Serial debug trace (TX/RX/signals with timestamps)\n");
     printf("      --acia-addr ADDR      ACIA base address in hex (default: 031C)\n");
     printf("      --save-state FILE      Save emulator state to FILE on exit\n");
     printf("      --load-state FILE      Load emulator state from FILE at startup\n");
@@ -558,7 +559,8 @@ static void emulator_cleanup(emulator_t* emu) {
         emu->serial_backend = NULL;
         emu->has_serial = false;
     }
-    /* Free ACIA RX FIFO */
+    /* Close ACIA trace and free RX FIFO */
+    acia_set_trace(&emu->acia, NULL);
     acia_set_rx_fifo(&emu->acia, 0);
 #ifdef HAS_SDL2
     oric_joystick_close_sdl(&emu->joystick);
@@ -823,6 +825,7 @@ static void emulator_run(emulator_t* emu) {
 
             /* ACIA 6551: serial TX/RX timing */
             if (emu->has_serial) {
+                acia_set_trace_cycle(&emu->acia, emu->cpu.cycles);
                 for (int s = 0; s < step; s++) {
                     acia_tick(&emu->acia);
                 }
@@ -1157,9 +1160,10 @@ int main(int argc, char* argv[]) {
     bool serial_v23 = false;
     int serial_buffer_size = 0;
     bool serial_irq_on_rdrf = false;
+    const char* serial_trace_file = NULL;
 
     /* Long option codes for options without short equivalents */
-    enum { OPT_SCREENSHOT = 256, OPT_SCREENSHOT_AT, OPT_FRAME_DUMP, OPT_FRAME_DUMP_INTERVAL, OPT_TYPE_KEYS, OPT_DISK_ROM, OPT_DISK1, OPT_DISK2, OPT_DISK3, OPT_BREAKPOINT, OPT_DEBUG_BREAK, OPT_CAST_SERVER, OPT_CAST_DISCOVER, OPT_CAST_TO, OPT_SAVE_STATE, OPT_LOAD_STATE, OPT_MODEL, OPT_JOYSTICK, OPT_PRINTER, OPT_PRINTER_TYPE, OPT_SCALE, OPT_TRACE, OPT_TRACE_MAX, OPT_PROFILE, OPT_ROM_INFO, OPT_SERIAL, OPT_SERIAL_V23, OPT_ACIA_ADDR, OPT_SERIAL_BUFFER, OPT_SERIAL_IRQ_RDRF };
+    enum { OPT_SCREENSHOT = 256, OPT_SCREENSHOT_AT, OPT_FRAME_DUMP, OPT_FRAME_DUMP_INTERVAL, OPT_TYPE_KEYS, OPT_DISK_ROM, OPT_DISK1, OPT_DISK2, OPT_DISK3, OPT_BREAKPOINT, OPT_DEBUG_BREAK, OPT_CAST_SERVER, OPT_CAST_DISCOVER, OPT_CAST_TO, OPT_SAVE_STATE, OPT_LOAD_STATE, OPT_MODEL, OPT_JOYSTICK, OPT_PRINTER, OPT_PRINTER_TYPE, OPT_SCALE, OPT_TRACE, OPT_TRACE_MAX, OPT_PROFILE, OPT_ROM_INFO, OPT_SERIAL, OPT_SERIAL_V23, OPT_ACIA_ADDR, OPT_SERIAL_BUFFER, OPT_SERIAL_IRQ_RDRF, OPT_SERIAL_TRACE };
 
     static struct option long_options[] = {
         {"tape",                required_argument, 0, 't'},
@@ -1201,6 +1205,7 @@ int main(int argc, char* argv[]) {
         {"serial-v23",          no_argument,       0, OPT_SERIAL_V23},
         {"serial-buffer",       required_argument, 0, OPT_SERIAL_BUFFER},
         {"serial-irq-on-rdrf",  no_argument,       0, OPT_SERIAL_IRQ_RDRF},
+        {"serial-trace",        required_argument, 0, OPT_SERIAL_TRACE},
         {"acia-addr",           required_argument, 0, OPT_ACIA_ADDR},
         {"help",                no_argument,       0, '?'},
         {0, 0, 0, 0}
@@ -1272,6 +1277,9 @@ int main(int argc, char* argv[]) {
                 break;
             case OPT_SERIAL_IRQ_RDRF:
                 serial_irq_on_rdrf = true;
+                break;
+            case OPT_SERIAL_TRACE:
+                serial_trace_file = optarg;
                 break;
             case OPT_ACIA_ADDR:
                 acia_addr_arg = optarg;
@@ -1414,6 +1422,9 @@ int main(int argc, char* argv[]) {
                 }
                 if (serial_irq_on_rdrf) {
                     acia_set_irq_on_rdrf(&emu.acia, true);
+                }
+                if (serial_trace_file) {
+                    acia_set_trace(&emu.acia, serial_trace_file);
                 }
                 log_info("Serial interface enabled: %s", serial_arg);
             } else {
