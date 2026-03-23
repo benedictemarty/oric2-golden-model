@@ -157,28 +157,55 @@ void memory_write(memory_t* mem, uint16_t address, uint8_t value) {
     if (address < 0xC000) {
         mem->ram[address] = value;
 
-        /* ULA2: auto-reset Color RAM when screen is cleared.
-         * TEXT screen: $BB80-$BF3F — ROM writes $20 (space) on CLS.
-         * HIRES screen: $A000-$BFDF — ROM writes $40 on HIRES init.
-         * Also reset for serial attribute bytes (< $20) that ROM places. */
-        if (mem->ula2_enabled) {
-            /* TEXT area: $BB80-$BF3F */
-            if (address >= 0xBB80 && address <= 0xBF3F) {
-                if (value == 0x20 || (value & 0x60) == 0) {
-                    uint16_t color_addr = 0xB000 + (address - 0xBB80);
-                    mem->ram[color_addr] = 0x07;
+        /* ULA2: intercept writes to screen RAM for Color RAM management.
+         *
+         * The ROM BASIC doesn't know about Color RAM. We translate its
+         * actions into Color RAM operations:
+         *
+         * 1. Space ($20) → reset color to default (CLS, scroll)
+         * 2. Serial attribute with ink (0-7) → set ink in Color RAM
+         *    for the rest of the current row (from this column onward)
+         * 3. Serial attribute with paper (16-23) → set paper similarly
+         * 4. HIRES clear ($40) → reset color for that cell
+         */
+        if (mem->ula2_enabled && address >= 0xBB80 && address <= 0xBF3F) {
+            uint16_t offset = address - 0xBB80;
+            uint16_t color_addr = 0xB000 + offset;
+            int col = offset % 40;
+            int row = offset / 40;
+
+            if (value == 0x20) {
+                /* Space: reset this cell to default */
+                mem->ram[color_addr] = 0x07;
+            } else if ((value & 0x60) == 0) {
+                /* Serial attribute byte: apply to rest of row */
+                uint8_t val = value & 0x1F;
+                if ((val & 0x18) == 0x00) {
+                    /* INK attribute (0-7): set ink for rest of row */
+                    uint8_t new_ink = val & 0x07;
+                    for (int c = col; c < 40; c++) {
+                        uint16_t ca = (uint16_t)(0xB000 + row * 40 + c);
+                        mem->ram[ca] = (mem->ram[ca] & 0xF8) | new_ink;
+                    }
+                } else if ((val & 0x18) == 0x10) {
+                    /* PAPER attribute (16-23): set paper for rest of row */
+                    uint8_t new_paper = val & 0x07;
+                    for (int c = col; c < 40; c++) {
+                        uint16_t ca = (uint16_t)(0xB000 + row * 40 + c);
+                        mem->ram[ca] = (mem->ram[ca] & 0xC7) | (new_paper << 3);
+                    }
                 }
             }
-            /* HIRES area: $A000-$BFDF — reset Color RAM for the 6x8 cell */
-            if (address >= 0xA000 && address < 0xBB80 && value == 0x40) {
-                int offset = (int)(address - 0xA000);
-                int row = offset / 40;
-                int col = offset % 40;
-                int cell_row = row / 8;
-                if (cell_row < 25) {
-                    uint16_t color_addr = (uint16_t)(0xB000 + cell_row * 40 + col);
-                    mem->ram[color_addr] = 0x07;
-                }
+        }
+        /* HIRES area: $A000-$BB7F — reset Color RAM for cleared cells */
+        if (mem->ula2_enabled && address >= 0xA000 && address < 0xBB80 && value == 0x40) {
+            int off = (int)(address - 0xA000);
+            int hrow = off / 40;
+            int hcol = off % 40;
+            int cell_row = hrow / 8;
+            if (cell_row < 25) {
+                uint16_t ca = (uint16_t)(0xB000 + cell_row * 40 + hcol);
+                mem->ram[ca] = 0x07;
             }
         }
 
