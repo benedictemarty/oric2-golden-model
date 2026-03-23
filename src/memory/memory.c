@@ -187,12 +187,29 @@ void memory_write(memory_t* mem, uint16_t address, uint8_t value) {
                         uint16_t ca = (uint16_t)(0xB000 + row * 40 + c);
                         mem->ram[ca] = (mem->ram[ca] & 0xF8) | new_ink;
                     }
+                } else if ((val & 0x18) == 0x08) {
+                    /* Text attribute (8-15): charset/blink — ignored for now */
                 } else if ((val & 0x18) == 0x10) {
                     /* PAPER attribute (16-23): set paper for rest of row */
                     uint8_t new_paper = val & 0x07;
                     for (int c = col; c < 40; c++) {
                         uint16_t ca = (uint16_t)(0xB000 + row * 40 + c);
                         mem->ram[ca] = (mem->ram[ca] & 0xC7) | (new_paper << 3);
+                    }
+                } else if ((val & 0x18) == 0x18) {
+                    /* Mode/inverse attribute (24-31) */
+                    if (val == 28) {
+                        /* Normal text: clear inverse for rest of row */
+                        for (int c = col; c < 40; c++) {
+                            uint16_t ca = (uint16_t)(0xB000 + row * 40 + c);
+                            mem->ram[ca] = mem->ram[ca] & 0x7F;
+                        }
+                    } else if (val == 29) {
+                        /* Inverse text: set inverse for rest of row */
+                        for (int c = col; c < 40; c++) {
+                            uint16_t ca = (uint16_t)(0xB000 + row * 40 + c);
+                            mem->ram[ca] = mem->ram[ca] | 0x80;
+                        }
                     }
                 }
             }
