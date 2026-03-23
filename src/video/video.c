@@ -170,9 +170,22 @@ static void render_ula2_text(video_t* vid, const uint8_t* memory) {
             uint8_t ink   = cattr & ULA2_INK_MASK;
             uint8_t paper = (cattr & ULA2_PAPER_MASK) >> ULA2_PAPER_SHIFT;
             bool inverse  = (cattr & ULA2_INVERSE) != 0;
-            /* bit 6 (ULA2_ALT_CHAR) reserved for future alternate charset */
 
             int sy = (row < 25) ? row * 8 : 200 + (row - 25) * 8;
+
+            /* ROM compatibility: bytes that would be serial attributes
+             * in classic ULA ((byte & 0x60) == 0) are rendered as paper-
+             * filled cells instead of as characters. The ROM BASIC places
+             * these in column 0 of each line for default ink/paper setup.
+             * Without this, they show as random charset glyphs. */
+            if ((byte & 0x60) == 0) {
+                uint8_t pr, pg, pb;
+                video_get_rgb(paper, &pr, &pg, &pb);
+                for (int cy = 0; cy < 8; cy++)
+                    for (int bx = 0; bx < 6; bx++)
+                        set_pixel(vid, col * 6 + bx, sy + cy, pr, pg, pb);
+                continue;
+            }
 
             uint8_t fg = inverse ? paper : ink;
             uint8_t bg = inverse ? ink : paper;
@@ -196,7 +209,10 @@ static void render_ula2_text(video_t* vid, const uint8_t* memory) {
 
 static void render_ula2_hires(video_t* vid, const uint8_t* memory) {
     /* HIRES with ULA2: color per 6x8 cell block.
-     * Color RAM maps 40×25 cells covering 200 scanlines. */
+     * Color RAM maps 40×25 cells covering 200 scanlines.
+     * ALL bytes are pixel data — no serial attribute detection.
+     * Bytes with (byte & 0x60)==0 are rendered as pixel data too,
+     * unlike classic ULA which would treat them as attributes. */
     for (int y = 0; y < 200; y++) {
         int cell_row = y / 8;
         for (int col = 0; col < 40; col++) {
@@ -206,7 +222,6 @@ static void render_ula2_hires(video_t* vid, const uint8_t* memory) {
             uint8_t ink   = cattr & ULA2_INK_MASK;
             uint8_t paper = (cattr & ULA2_PAPER_MASK) >> ULA2_PAPER_SHIFT;
 
-            /* All bytes are pixel data — no attribute detection */
             render_hires_block(vid, col * 6, y, byte, ink, paper);
         }
     }
