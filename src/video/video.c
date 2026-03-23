@@ -252,6 +252,18 @@ void video_render_frame(video_t* vid, const uint8_t* memory) {
     /* ── ULA2 mode: per-cell color RAM, no serial attributes ── */
     if (vid->ula2_enabled) {
         bool hires = (vid->vid_mode & 0x04) != 0;
+
+        /* Detect mode change (HIRES↔TEXT) and reset Color RAM.
+         * When the ROM switches mode, the screen layout changes completely
+         * and old Color RAM values become garbage. Reset to default. */
+        if (hires != vid->hires_mode) {
+            /* Use non-const cast — Color RAM is emulator-managed, not ROM */
+            uint8_t* ram = (uint8_t*)memory;
+            for (int i = 0; i < ORIC_COLOR_RAM_SIZE; i++) {
+                ram[ORIC_COLOR_RAM_ADDR + i] = 0x07;
+            }
+        }
+
         if (hires) {
             render_ula2_hires(vid, memory);
         } else {

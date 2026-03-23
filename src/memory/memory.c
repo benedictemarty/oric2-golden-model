@@ -157,14 +157,29 @@ void memory_write(memory_t* mem, uint16_t address, uint8_t value) {
     if (address < 0xC000) {
         mem->ram[address] = value;
 
-        /* ULA2: auto-reset Color RAM when screen cell is written with $20.
-         * Screen RAM: $BB80-$BF3F (1120 bytes, 40×28).
-         * Color RAM:  $B000-$B45F (1120 bytes, parallel).
-         * When a screen cell becomes a space, reset its color to default. */
-        if (mem->ula2_enabled && value == 0x20 &&
-            address >= 0xBB80 && address <= 0xBF3F) {
-            uint16_t color_addr = 0xB000 + (address - 0xBB80);
-            mem->ram[color_addr] = 0x07;  /* ink=7 (white), paper=0 (black) */
+        /* ULA2: auto-reset Color RAM when screen is cleared.
+         * TEXT screen: $BB80-$BF3F — ROM writes $20 (space) on CLS.
+         * HIRES screen: $A000-$BFDF — ROM writes $40 on HIRES init.
+         * Also reset for serial attribute bytes (< $20) that ROM places. */
+        if (mem->ula2_enabled) {
+            /* TEXT area: $BB80-$BF3F */
+            if (address >= 0xBB80 && address <= 0xBF3F) {
+                if (value == 0x20 || (value & 0x60) == 0) {
+                    uint16_t color_addr = 0xB000 + (address - 0xBB80);
+                    mem->ram[color_addr] = 0x07;
+                }
+            }
+            /* HIRES area: $A000-$BFDF — reset Color RAM for the 6x8 cell */
+            if (address >= 0xA000 && address < 0xBB80 && value == 0x40) {
+                int offset = (int)(address - 0xA000);
+                int row = offset / 40;
+                int col = offset % 40;
+                int cell_row = row / 8;
+                if (cell_row < 25) {
+                    uint16_t color_addr = (uint16_t)(0xB000 + cell_row * 40 + col);
+                    mem->ram[color_addr] = 0x07;
+                }
+            }
         }
 
         return;
