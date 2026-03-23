@@ -156,6 +156,17 @@ void memory_write(memory_t* mem, uint16_t address, uint8_t value) {
     /* RAM: $0000-$BFFF always writable */
     if (address < 0xC000) {
         mem->ram[address] = value;
+
+        /* ULA2: auto-reset Color RAM when screen cell is written with $20.
+         * Screen RAM: $BB80-$BF3F (1120 bytes, 40×28).
+         * Color RAM:  $B000-$B45F (1120 bytes, parallel).
+         * When a screen cell becomes a space, reset its color to default. */
+        if (mem->ula2_enabled && value == 0x20 &&
+            address >= 0xBB80 && address <= 0xBF3F) {
+            uint16_t color_addr = 0xB000 + (address - 0xBB80);
+            mem->ram[color_addr] = 0x07;  /* ink=7 (white), paper=0 (black) */
+        }
+
         return;
     }
 

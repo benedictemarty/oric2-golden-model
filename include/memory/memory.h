@@ -68,6 +68,11 @@ typedef struct memory_s {
     /* Memory access tracing (for debugging) */
     bool trace_enabled;
     void (*trace_callback)(uint16_t address, uint8_t value, mem_access_type_t type);
+
+    /* ULA2: auto-reset Color RAM when screen RAM is written with $20.
+     * When CLS or scroll fills screen with spaces, the corresponding
+     * Color RAM cells are reset to default (ink=7, paper=0). */
+    bool ula2_enabled;
 } memory_t;
 
 /**
