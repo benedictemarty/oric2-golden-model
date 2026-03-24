@@ -28,13 +28,6 @@
 
 /* ═══════════════════════════════════════════════════════════════════════
  *  ACIA 6551 crystal oscillator and baud rate
- *
- *  The 6551 has its own 1.8432 MHz crystal, divided internally by 16,
- *  giving a 115200 Hz internal clock. The baud rate generator further
- *  divides this to produce the selected baud rate.
- *
- *  CPU cycles per byte = (CPU_CLOCK * framebits) / baud_rate
- *                      = (1000000 * framebits) / baud_rate
  * ═══════════════════════════════════════════════════════════════════════ */
 
 #define ACIA_XTAL_HZ       1843200
@@ -71,7 +64,7 @@ static int32_t cycles_per_byte(int baud, uint8_t framebits)
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
- *  Serial trace helpers
+ *  Serial trace helpers — flushed once per frame via acia_trace_flush()
  * ═══════════════════════════════════════════════════════════════════════ */
 
 static void trace_header(acia6551_t* acia)
@@ -112,7 +105,7 @@ static void trace_data(acia6551_t* acia, const char* dir, uint8_t byte)
             (acia->status & ACIA_STATUS_PE)   ? 'P' : '.',
             acia->rx_fifo ? acia->rx_fifo_count : 0,
             sig);
-    fflush(acia->trace_file);
+    /* No fflush here — flushed per frame via acia_trace_flush() */
 }
 
 static void trace_event(acia6551_t* acia, const char* event)
@@ -120,19 +113,15 @@ static void trace_event(acia6551_t* acia, const char* event)
     if (!acia->trace_file) return;
     char sig[64];
     trace_signals(acia, sig, (int)sizeof(sig));
-    fprintf(acia->trace_file, "%010llu  %-3s  --   -    --------  ---   %s  %s\n",
-            (unsigned long long)acia->trace_cycle,
-            "SIG", sig, event);
-    fflush(acia->trace_file);
+    fprintf(acia->trace_file, "%010llu  SIG  --   -    --------  ---   %s  %s\n",
+            (unsigned long long)acia->trace_cycle, sig, event);
 }
 
 static void trace_reg(acia6551_t* acia, const char* dir, const char* reg, uint8_t val)
 {
     if (!acia->trace_file) return;
-    fprintf(acia->trace_file, "%010llu  %-3s  %02X   -    %-8s  ---   %s\n",
-            (unsigned long long)acia->trace_cycle,
-            dir, val, reg, "");
-    fflush(acia->trace_file);
+    fprintf(acia->trace_file, "%010llu  %-3s  %02X   -    %-8s  ---\n",
+            (unsigned long long)acia->trace_cycle, dir, val, reg);
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
@@ -185,28 +174,28 @@ static void acia_update_irq(acia6551_t* acia)
         acia->status &= ~ACIA_STATUS_IRQ;
     }
 
-    /* Drive IRQ line.
-     * Standard MOS 6551: edge detection only (set/clear on transitions).
-     * WDC 65C51 mode (irq_on_rdrf): assert IRQ whenever RDRF is set,
-     * even if already asserted — prevents lost IRQs during TX+RX. */
     if (acia->irq_on_rdrf) {
-        /* 65C51 mode: force IRQ state to match irq_wanted */
-        if (irq_wanted && !acia->irq_line) {
-            acia->irq_line = true;
-            if (acia->irq_set) acia->irq_set(acia->irq_userdata);
-        } else if (!irq_wanted && acia->irq_line) {
-            acia->irq_line = false;
-            if (acia->irq_clr) acia->irq_clr(acia->irq_userdata);
-        }
-        /* Re-assert if RDRF still set (key difference from MOS 6551) */
-        if ((acia->status & ACIA_STATUS_RDRF) && !(acia->command & ACIA_CMD_IRD)) {
+        /* WDC 65C51 mode: IRQ is level-triggered on RDRF.
+         * Assert /IRQ whenever irq_wanted is true, regardless of previous state.
+         * Deassert only when irq_wanted goes false.
+         * This means: even if irq_line is already true and status was read
+         * (which clears irq_line), the NEXT call to acia_update_irq will
+         * re-assert it if RDRF is still set. */
+        if (irq_wanted) {
             if (!acia->irq_line) {
                 acia->irq_line = true;
                 if (acia->irq_set) acia->irq_set(acia->irq_userdata);
             }
+        } else {
+            if (acia->irq_line) {
+                acia->irq_line = false;
+                if (acia->irq_clr) acia->irq_clr(acia->irq_userdata);
+            }
         }
     } else {
-        /* Standard MOS 6551: edge detection */
+        /* Standard MOS 6551: edge-triggered IRQ.
+         * Only fires on false→true transition. Once irq_line is true,
+         * it stays true until cleared by reading STATUS register. */
         if (irq_wanted && !acia->irq_line) {
             acia->irq_line = true;
             if (acia->irq_set) acia->irq_set(acia->irq_userdata);
@@ -234,10 +223,12 @@ static void acia_update_timing(acia6551_t* acia)
         acia->baud_rate = (uint32_t)baud;
         acia->rx_reload = cycles_per_byte(baud, acia->framebits);
         acia->tx_reload = cycles_per_byte(baud, acia->framebits);
+        if (baud == 0) {
+            log_warning("ACIA: baud rate 0 (external clock) — using instant transfer");
+        }
     }
 
-    /* Resynchronize counters when timing changes (baud rate switch).
-     * Clamp to new reload value if current counter is out of range. */
+    /* Resynchronize counters when timing changes */
     if (acia->tx_cycles <= 0 || acia->tx_cycles > acia->tx_reload)
         acia->tx_cycles = acia->tx_reload;
     if (acia->rx_cycles <= 0 || acia->rx_cycles > acia->rx_reload)
@@ -267,12 +258,7 @@ void acia_init(acia6551_t* acia)
 
     acia->v23_mode = false;
 
-    /* Reset FIFO state (keep buffer allocated) */
-    acia->rx_fifo_head = 0;
-    acia->rx_fifo_tail = 0;
-    acia->rx_fifo_count = 0;
-
-    /* Calculate timing and initialize cycle counters to full frame */
+    /* Calculate timing and initialize cycle counters */
     acia_update_timing(acia);
 
     log_info("ACIA 6551 initialized (xtal %d Hz / %d = %d Hz)",
@@ -297,6 +283,7 @@ void acia_reset(acia6551_t* acia)
         if (acia->irq_clr) acia->irq_clr(acia->irq_userdata);
     }
 
+    trace_event(acia, "PROGRAMMED RESET");
     log_debug("ACIA 6551 programmed reset");
 }
 
@@ -330,16 +317,8 @@ uint8_t acia_read(acia6551_t* acia, uint16_t addr)
 
     case 0x01: {
         /* $031D: Read Status Register.
-         * DCD/DSR bits reflect live pin state (not latched).
-         * Reading clears IRQ bit (MOS 6551 behavior).
-         * In 65C51 mode, IRQ re-asserts if RDRF still set. */
+         * DCD/DSR bits reflect live pin state (stored in acia->status). */
         uint8_t status = acia->status;
-
-        if (!acia->dcd) status |= ACIA_STATUS_DCD;
-        else            status &= ~ACIA_STATUS_DCD;
-
-        if (!acia->dsr) status |= ACIA_STATUS_DSR;
-        else            status &= ~ACIA_STATUS_DSR;
 
         /* Clear IRQ on status read (MOS 6551 datasheet) */
         acia->status &= ~ACIA_STATUS_IRQ;
@@ -348,7 +327,7 @@ uint8_t acia_read(acia6551_t* acia, uint16_t addr)
             if (acia->irq_clr) acia->irq_clr(acia->irq_userdata);
         }
 
-        /* 65C51 mode: immediately re-assert if RDRF still set */
+        /* 65C51 mode: immediately re-evaluate IRQ (re-assert if RDRF set) */
         if (acia->irq_on_rdrf) {
             acia_update_irq(acia);
         }
@@ -375,6 +354,11 @@ void acia_write(acia6551_t* acia, uint16_t addr, uint8_t value)
 {
     switch (addr & ACIA_ADDR_MASK) {
     case 0x00:
+        /* TX overwrite check: if TDR is still pending, the previous byte
+         * is lost (program didn't check TDRE before writing) */
+        if (acia->tx_pending) {
+            trace_event(acia, "TX OVERWRITE (TDR written before TDRE)");
+        }
         acia->tdr = value & acia->bitmask;
         acia->tx_pending = true;
         acia->tx_cycles = acia->tx_reload;
@@ -403,17 +387,21 @@ void acia_write(acia6551_t* acia, uint16_t addr, uint8_t value)
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
- *  Tick — called once per CPU cycle from main loop
+ *  Tick — advance ACIA state by N CPU cycles (aggregated)
+ *
+ *  Called once per CPU instruction with the cycle count of that
+ *  instruction (typically 2-7). This avoids N individual calls per
+ *  instruction and reduces overhead significantly.
  * ═══════════════════════════════════════════════════════════════════════ */
 
-void acia_tick(acia6551_t* acia)
+void acia_tick(acia6551_t* acia, int cycles)
 {
     if (!acia->backend) return;
     if (!(acia->command & ACIA_CMD_DTR)) return;
 
     /* ── TX path ── */
     if (acia->tx_pending) {
-        acia->tx_cycles--;
+        acia->tx_cycles -= cycles;
         if (acia->tx_cycles <= 0) {
             if (acia->cts && acia->backend->send) {
                 acia->backend->send(acia->backend, acia->tdr);
@@ -427,7 +415,7 @@ void acia_tick(acia6551_t* acia)
     }
 
     /* ── RX path ── */
-    acia->rx_cycles--;
+    acia->rx_cycles -= cycles;
     if (acia->rx_cycles <= 0) {
         acia->rx_cycles = acia->rx_reload;
 
@@ -450,7 +438,7 @@ void acia_tick(acia6551_t* acia)
                         trace_event(acia, "OVERRUN (FIFO full)");
                     }
                 } else {
-                    /* ── Classic 1-byte mode: overwrite RDR ── */
+                    /* ── Classic 1-byte mode ── */
                     if (acia->rx_full) {
                         acia->status |= ACIA_STATUS_OVRN;
                         trace_event(acia, "OVERRUN (RDR not read)");
@@ -460,11 +448,18 @@ void acia_tick(acia6551_t* acia)
                     acia->status |= ACIA_STATUS_RDRF;
                 }
 
-                /* Echo mode */
+                /* Echo mode: queue echo byte through TX path.
+                 * On real hardware, echo uses the transmitter (subject to
+                 * baud rate). We set tx_pending so the echo byte goes through
+                 * normal TX timing instead of being sent immediately. */
                 if (acia->command & ACIA_CMD_ECHO) {
-                    if (acia->backend->send) {
-                        acia->backend->send(acia->backend, byte);
+                    if (!acia->tx_pending) {
+                        acia->tdr = byte;
+                        acia->tx_pending = true;
+                        acia->tx_cycles = acia->tx_reload;
+                        acia->status &= ~ACIA_STATUS_TDRE;
                     }
+                    /* If TX is busy, echo byte is lost (real hw behavior) */
                 }
 
                 acia_update_irq(acia);
@@ -496,6 +491,9 @@ void acia_set_dcd(acia6551_t* acia, bool active)
 {
     bool old = acia->dcd;
     acia->dcd = active;
+    /* Update DCD bit in status register (bit 5: 1=carrier lost) */
+    if (active) acia->status &= ~ACIA_STATUS_DCD;
+    else        acia->status |= ACIA_STATUS_DCD;
     if (old != active) {
         trace_event(acia, active ? "DCD ON (carrier)" : "DCD OFF (no carrier)");
         acia_update_irq(acia);
@@ -505,6 +503,9 @@ void acia_set_dcd(acia6551_t* acia, bool active)
 void acia_set_dsr(acia6551_t* acia, bool active)
 {
     acia->dsr = active;
+    /* Update DSR bit in status register (bit 6: 1=DSR inactive) */
+    if (active) acia->status &= ~ACIA_STATUS_DSR;
+    else        acia->status |= ACIA_STATUS_DSR;
 }
 
 void acia_set_cts(acia6551_t* acia, bool active)
@@ -514,7 +515,6 @@ void acia_set_cts(acia6551_t* acia, bool active)
 
 void acia_set_rx_fifo(acia6551_t* acia, int size)
 {
-    /* Free existing FIFO */
     free(acia->rx_fifo);
     acia->rx_fifo = NULL;
     acia->rx_fifo_size = 0;
@@ -544,7 +544,6 @@ void acia_set_irq_on_rdrf(acia6551_t* acia, bool enabled)
 
 void acia_set_trace(acia6551_t* acia, const char* filename)
 {
-    /* Close existing trace */
     if (acia->trace_file) {
         fclose(acia->trace_file);
         acia->trace_file = NULL;
@@ -559,6 +558,11 @@ void acia_set_trace(acia6551_t* acia, const char* filename)
             log_error("ACIA serial trace: failed to open %s", filename);
         }
     }
+}
+
+void acia_trace_flush(acia6551_t* acia)
+{
+    if (acia->trace_file) fflush(acia->trace_file);
 }
 
 void acia_set_trace_cycle(acia6551_t* acia, uint64_t cycle)

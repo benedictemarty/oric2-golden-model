@@ -229,12 +229,14 @@ uint8_t acia_read(acia6551_t* acia, uint16_t addr);
 void acia_write(acia6551_t* acia, uint16_t addr, uint8_t value);
 
 /**
- * @brief Advance ACIA state by one CPU cycle
+ * @brief Advance ACIA state by N CPU cycles (aggregated)
  *
- * Called once per CPU cycle from the main emulation loop.
- * Handles TX/RX timing based on baud rate.
+ * Called once per CPU instruction with the cycle count of that
+ * instruction (typically 2-7). Handles TX/RX timing based on baud rate.
+ *
+ * @param cycles  Number of CPU cycles elapsed (from cpu_step return)
  */
-void acia_tick(acia6551_t* acia);
+void acia_tick(acia6551_t* acia, int cycles);
 
 /**
  * @brief Set V23 asymmetric baud mode (Minitel/Prestel)
@@ -291,5 +293,10 @@ void acia_set_trace(acia6551_t* acia, const char* filename);
  * @brief Update cycle counter for trace timestamps
  */
 void acia_set_trace_cycle(acia6551_t* acia, uint64_t cycle);
+
+/**
+ * @brief Flush trace file buffer (call once per frame)
+ */
+void acia_trace_flush(acia6551_t* acia);
 
 #endif /* ACIA6551_H */

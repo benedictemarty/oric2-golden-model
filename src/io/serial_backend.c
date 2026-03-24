@@ -44,6 +44,24 @@
 #include "utils/logging.h"
 
 /* ═══════════════════════════════════════════════════════════════════════
+ *  EINTR-safe read/write helpers
+ * ═══════════════════════════════════════════════════════════════════════ */
+
+static ssize_t safe_read(int fd, void* buf, size_t count)
+{
+    ssize_t n;
+    do { n = read(fd, buf, count); } while (n < 0 && errno == EINTR);
+    return n;
+}
+
+static ssize_t safe_write(int fd, const void* buf, size_t count)
+{
+    ssize_t n;
+    do { n = write(fd, buf, count); } while (n < 0 && errno == EINTR);
+    return n;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
  *  LOOPBACK backend — TX → circular buffer → RX
  * ═══════════════════════════════════════════════════════════════════════ */
 
@@ -177,14 +195,14 @@ static void tcp_close(serial_backend_t* self)
 static bool tcp_send(serial_backend_t* self, uint8_t byte)
 {
     if (self->state.tcp.sockfd < 0) return false;
-    ssize_t n = write(self->state.tcp.sockfd, &byte, 1);
+    ssize_t n = safe_write(self->state.tcp.sockfd, &byte, 1);
     return n == 1;
 }
 
 static bool tcp_recv(serial_backend_t* self, uint8_t* byte)
 {
     if (self->state.tcp.sockfd < 0) return false;
-    ssize_t n = read(self->state.tcp.sockfd, byte, 1);
+    ssize_t n = safe_read(self->state.tcp.sockfd, byte, 1);
     if (n == 1) return true;
     if (n == 0) {
         /* Connection closed by peer */
@@ -271,14 +289,14 @@ static void pty_close(serial_backend_t* self)
 static bool pty_send(serial_backend_t* self, uint8_t byte)
 {
     if (self->state.pty.master_fd < 0) return false;
-    ssize_t n = write(self->state.pty.master_fd, &byte, 1);
+    ssize_t n = safe_write(self->state.pty.master_fd, &byte, 1);
     return n == 1;
 }
 
 static bool pty_recv(serial_backend_t* self, uint8_t* byte)
 {
     if (self->state.pty.master_fd < 0) return false;
-    ssize_t n = read(self->state.pty.master_fd, byte, 1);
+    ssize_t n = safe_read(self->state.pty.master_fd, byte, 1);
     return n == 1;
 }
 
@@ -638,14 +656,14 @@ modem_send_data:
             uint8_t buf[3];
             for (int i = 0; i < self->state.modem.plus_count && i < 3; i++)
                 buf[i] = '+';
-            (void)write(self->state.modem.sockfd, buf,
+            (void)safe_write(self->state.modem.sockfd, buf,
                         (size_t)self->state.modem.plus_count);
         }
         self->state.modem.plus_count = 0;
         self->state.modem.last_data_time = 0;
 
         if (self->state.modem.sockfd >= 0) {
-            ssize_t n = write(self->state.modem.sockfd, &byte, 1);
+            ssize_t n = safe_write(self->state.modem.sockfd, &byte, 1);
             if (n < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
                 log_info("Serial Modem: write error, dropping carrier");
                 close(self->state.modem.sockfd);
@@ -693,7 +711,7 @@ static bool modem_recv(serial_backend_t* self, uint8_t* byte)
     /* In data mode, bulk-read from socket into rx_buf */
     if (self->state.modem.mode == 1 && self->state.modem.sockfd >= 0) {
         uint8_t tmp[256];
-        ssize_t n = read(self->state.modem.sockfd, tmp, sizeof(tmp));
+        ssize_t n = safe_read(self->state.modem.sockfd, tmp, sizeof(tmp));
         if (n > 0) {
             for (ssize_t i = 0; i < n; i++) {
                 modem_rx_push(self, tmp[i]);
@@ -892,14 +910,14 @@ static void com_close(serial_backend_t* self)
 static bool com_send(serial_backend_t* self, uint8_t byte)
 {
     if (self->state.com.fd < 0) return false;
-    ssize_t n = write(self->state.com.fd, &byte, 1);
+    ssize_t n = safe_write(self->state.com.fd, &byte, 1);
     return n == 1;
 }
 
 static bool com_recv(serial_backend_t* self, uint8_t* byte)
 {
     if (self->state.com.fd < 0) return false;
-    ssize_t n = read(self->state.com.fd, byte, 1);
+    ssize_t n = safe_read(self->state.com.fd, byte, 1);
     return n == 1;
 }
 
@@ -1113,31 +1131,31 @@ static void digitelec_disconnect(serial_backend_t* self)
     log_info("Digitelec DTL 2000: NO CARRIER (hangup)");
 }
 
+/**
+ * @brief Check DTR edge for connect/disconnect (called from send and poll)
+ */
+static void digitelec_check_dtr(serial_backend_t* self)
+{
+    acia6551_t* acia = (acia6551_t*)self->state.digitelec.acia_ptr;
+    if (!acia) return;
+    bool dtr_on = (acia->command & ACIA_CMD_DTR) != 0;
+    if (dtr_on && !self->state.digitelec.dtr_was_on) {
+        if (!self->state.digitelec.carrier) digitelec_connect(self);
+    } else if (!dtr_on && self->state.digitelec.dtr_was_on) {
+        if (self->state.digitelec.carrier) digitelec_disconnect(self);
+    }
+    self->state.digitelec.dtr_was_on = dtr_on;
+}
+
 static bool digitelec_send(serial_backend_t* self, uint8_t byte)
 {
-    /* Check DTR state from ACIA for connect/disconnect control */
-    acia6551_t* acia = (acia6551_t*)self->state.digitelec.acia_ptr;
-    if (acia) {
-        bool dtr_on = (acia->command & ACIA_CMD_DTR) != 0;
-        if (dtr_on && !self->state.digitelec.dtr_was_on) {
-            /* DTR rising edge → "dial" (connect) */
-            if (!self->state.digitelec.carrier) {
-                digitelec_connect(self);
-            }
-        } else if (!dtr_on && self->state.digitelec.dtr_was_on) {
-            /* DTR falling edge → "hang up" */
-            if (self->state.digitelec.carrier) {
-                digitelec_disconnect(self);
-            }
-        }
-        self->state.digitelec.dtr_was_on = dtr_on;
-    }
+    digitelec_check_dtr(self);
 
     if (!self->state.digitelec.carrier || self->state.digitelec.sockfd < 0)
         return false;
 
     /* Send directly to TCP (modem transmits immediately on the "line") */
-    ssize_t n = write(self->state.digitelec.sockfd, &byte, 1);
+    ssize_t n = safe_write(self->state.digitelec.sockfd, &byte, 1);
     if (n < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
         log_info("Digitelec DTL 2000: write error, carrier lost");
         digitelec_disconnect(self);
@@ -1154,7 +1172,7 @@ static bool digitelec_recv(serial_backend_t* self, uint8_t* byte)
             uint8_t tmp[64];
             int space = 512 - self->state.digitelec.rx_count;
             if (space > (int)sizeof(tmp)) space = (int)sizeof(tmp);
-            ssize_t n = read(self->state.digitelec.sockfd, tmp, (size_t)space);
+            ssize_t n = safe_read(self->state.digitelec.sockfd, tmp, (size_t)space);
             if (n > 0) {
                 for (ssize_t i = 0; i < n; i++) {
                     self->state.digitelec.rx_buf[self->state.digitelec.rx_head] = tmp[i];
@@ -1198,21 +1216,7 @@ static bool digitelec_recv(serial_backend_t* self, uint8_t* byte)
 
 static bool digitelec_poll(serial_backend_t* self)
 {
-    /* Check DTR state for connect/disconnect (even without send) */
-    acia6551_t* acia = (acia6551_t*)self->state.digitelec.acia_ptr;
-    if (acia) {
-        bool dtr_on = (acia->command & ACIA_CMD_DTR) != 0;
-        if (dtr_on && !self->state.digitelec.dtr_was_on) {
-            if (!self->state.digitelec.carrier) {
-                digitelec_connect(self);
-            }
-        } else if (!dtr_on && self->state.digitelec.dtr_was_on) {
-            if (self->state.digitelec.carrier) {
-                digitelec_disconnect(self);
-            }
-        }
-        self->state.digitelec.dtr_was_on = dtr_on;
-    }
+    digitelec_check_dtr(self);
 
     /* Data available in modem's internal buffer */
     if (self->state.digitelec.rx_count > 0)

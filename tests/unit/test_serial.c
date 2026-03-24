@@ -71,9 +71,12 @@ static void teardown(void) {
 
 /* Helper: tick ACIA enough cycles for one byte at given baud */
 static void tick_one_byte(int baud) {
-    int cycles = (1000000 / baud) * 10 + 10;  /* extra margin */
-    for (int i = 0; i < cycles; i++) {
-        acia_tick(&acia);
+    int total = (1000000 / baud) * 10 + 10;  /* extra margin */
+    /* Use small step sizes to simulate realistic CPU instruction timing */
+    while (total > 0) {
+        int step = (total >= 4) ? 4 : total;
+        acia_tick(&acia, step);
+        total -= step;
     }
 }
 
@@ -398,6 +401,85 @@ TEST(test_modem_backend_create) {
     serial_backend_destroy(mb);
 }
 
+TEST(test_rx_fifo) {
+    setup();
+
+    /* Enable 4-byte FIFO */
+    acia_set_rx_fifo(&acia, 4);
+
+    /* Configure 19200 baud, DTR on, IRQ disabled */
+    acia_write(&acia, ACIA_REG_CONTROL, 0x1F);
+    acia_write(&acia, ACIA_REG_COMMAND, 0x03);
+
+    /* Inject 3 bytes into loopback rapidly */
+    loopback->send(loopback, 0x41);  /* A */
+    loopback->send(loopback, 0x42);  /* B */
+    loopback->send(loopback, 0x43);  /* C */
+
+    /* Tick enough for all 3 to be received */
+    tick_one_byte(19200);
+    tick_one_byte(19200);
+    tick_one_byte(19200);
+
+    /* First byte should be in RDR, rest in FIFO */
+    ASSERT_TRUE(acia_read(&acia, ACIA_REG_STATUS) & ACIA_STATUS_RDRF);
+    uint8_t b1 = acia_read(&acia, ACIA_REG_DATA);
+    ASSERT_EQ(b1, 0x41);
+
+    /* FIFO auto-load: RDRF should still be set */
+    ASSERT_TRUE(acia_read(&acia, ACIA_REG_STATUS) & ACIA_STATUS_RDRF);
+    uint8_t b2 = acia_read(&acia, ACIA_REG_DATA);
+    ASSERT_EQ(b2, 0x42);
+
+    /* Third byte */
+    ASSERT_TRUE(acia_read(&acia, ACIA_REG_STATUS) & ACIA_STATUS_RDRF);
+    uint8_t b3 = acia_read(&acia, ACIA_REG_DATA);
+    ASSERT_EQ(b3, 0x43);
+
+    /* Now empty */
+    ASSERT_FALSE(acia_read(&acia, ACIA_REG_STATUS) & ACIA_STATUS_RDRF);
+
+    acia_set_rx_fifo(&acia, 0);  /* Disable FIFO */
+    teardown();
+}
+
+TEST(test_irq_65c51_mode) {
+    setup();
+
+    /* Enable 65C51 IRQ mode */
+    acia_set_irq_on_rdrf(&acia, true);
+
+    /* Configure 19200 baud, DTR on, IRQ RX enabled (IRD=0) */
+    acia_write(&acia, ACIA_REG_CONTROL, 0x1F);
+    acia_write(&acia, ACIA_REG_COMMAND, 0x01);  /* DTR on, IRD=0 */
+
+    /* Inject byte */
+    loopback->send(loopback, 0x55);
+    tick_one_byte(19200);
+
+    /* IRQ should be set (RDRF=1, IRD=0) */
+    uint8_t status = acia_read(&acia, ACIA_REG_STATUS);
+    ASSERT_TRUE(status & ACIA_STATUS_IRQ);
+    ASSERT_TRUE(status & ACIA_STATUS_RDRF);
+
+    /* Reading status cleared IRQ on the line...
+     * but in 65C51 mode, IRQ should re-assert since RDRF is still set
+     * (we didn't read DATA yet) */
+    status = acia_read(&acia, ACIA_REG_STATUS);
+    /* In 65C51 mode, IRQ bit should be back because RDRF is still set */
+    ASSERT_TRUE(status & ACIA_STATUS_IRQ);
+
+    /* Now read DATA to clear RDRF */
+    acia_read(&acia, ACIA_REG_DATA);
+
+    /* IRQ should be gone now */
+    status = acia_read(&acia, ACIA_REG_STATUS);
+    ASSERT_FALSE(status & ACIA_STATUS_IRQ);
+
+    acia_set_irq_on_rdrf(&acia, false);
+    teardown();
+}
+
 /* ═══════════════════════════════════════════════════════════════════════
  *  Main
  * ═══════════════════════════════════════════════════════════════════════ */
@@ -426,6 +508,8 @@ int main(void) {
     RUN(test_acia_clock_accuracy);
     RUN(test_bitmask_applied);
     RUN(test_modem_backend_create);
+    RUN(test_rx_fifo);
+    RUN(test_irq_65c51_mode);
 
     printf("\n");
     printf("═══════════════════════════════════════════════════════\n");

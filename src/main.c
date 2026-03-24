@@ -843,12 +843,10 @@ static void emulator_run(emulator_t* emu) {
                 fdc_ticktock(&emu->microdisc.fdc, step);
             }
 
-            /* ACIA 6551: serial TX/RX timing */
+            /* ACIA 6551: serial TX/RX timing (aggregated, one call per instruction) */
             if (emu->has_serial) {
                 acia_set_trace_cycle(&emu->acia, emu->cpu.cycles);
-                for (int s = 0; s < step; s++) {
-                    acia_tick(&emu->acia);
-                }
+                acia_tick(&emu->acia, step);
             }
 
             /* VSync trigger at line 256 (cycle 16384) — On real Oric hardware,
@@ -970,6 +968,11 @@ static void emulator_run(emulator_t* emu) {
                     }
                 }
             }
+        }
+
+        /* Flush serial trace once per frame (not per byte) */
+        if (emu->has_serial) {
+            acia_trace_flush(&emu->acia);
         }
 
         /* Render video frame */
