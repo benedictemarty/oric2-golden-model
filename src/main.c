@@ -234,7 +234,7 @@ static void print_usage(const char* program_name) {
     printf("      --trace-max N          Max instructions to trace (default: unlimited)\n");
     printf("      --profile FILE         Write CPU performance profile to FILE on exit\n");
     printf("      --rom-info [FILE]      Analyze ROM and print report (or write to FILE)\n");
-    printf("      --serial TYPE          Serial port: loopback, tcp:HOST:PORT, pty\n");
+    printf("      --serial TYPE          Serial: loopback, tcp:H:P, pty, modem:H:P, com:B,D,P,S,DEV, digitelec:H:P\n");
     printf("      --serial-v23          V23 mode: 1200/75 baud (Minitel/Prestel/Digitelec)\n");
     printf("                            (auto-enabled with digitelec backend)\n");
     printf("      --serial-buffer N     RX FIFO buffer N bytes (prevents overrun, default: off)\n");
@@ -1388,8 +1388,34 @@ int main(int argc, char* argv[]) {
             sb = serial_backend_tcp_create(host, port);
         } else if (strcmp(serial_arg, "pty") == 0) {
             sb = serial_backend_pty_create();
+        } else if (strncmp(serial_arg, "modem:", 6) == 0) {
+            /* Parse modem:host:port or modem:listen:port
+             * Hayes AT modem: ATD to dial, ATH to hangup, +++ to escape */
+            const char* hp = serial_arg + 6;
+            bool listen_mode = false;
+            char host[256] = {0};
+            uint16_t port = 23;
+            if (strncmp(hp, "listen:", 7) == 0) {
+                listen_mode = true;
+                port = (uint16_t)atoi(hp + 7);
+            } else {
+                const char* colon = strrchr(hp, ':');
+                if (colon && colon != hp) {
+                    size_t hlen = (size_t)(colon - hp);
+                    if (hlen >= sizeof(host)) hlen = sizeof(host) - 1;
+                    memcpy(host, hp, hlen);
+                    host[hlen] = '\0';
+                    port = (uint16_t)atoi(colon + 1);
+                } else {
+                    strncpy(host, hp, sizeof(host) - 1);
+                }
+            }
+            sb = serial_backend_modem_create(host, port, listen_mode);
+        } else if (strncmp(serial_arg, "com:", 4) == 0) {
+            /* Parse com:baud,bits,parity,stop,device */
+            sb = serial_backend_com_create(serial_arg + 4);
         } else if (strncmp(serial_arg, "digitelec:", 10) == 0) {
-            /* Parse digitelec:host:port */
+            /* Parse digitelec:host:port — Digitelec DTL 2000 V23 modem */
             char host[256] = {0};
             uint16_t port = 23;
             const char* hp = serial_arg + 10;
@@ -1405,7 +1431,9 @@ int main(int argc, char* argv[]) {
             }
             sb = serial_backend_digitelec_create(host, port, &emu.acia);
         } else {
-            log_error("Unknown serial backend: %s (use: loopback, tcp:host:port, pty, digitelec:host:port)", serial_arg);
+            log_error("Unknown serial backend: %s", serial_arg);
+            log_error("  loopback, tcp:host:port, pty, modem:host:port,");
+            log_error("  modem:listen:port, com:baud,bits,P,stop,device, digitelec:host:port");
             emulator_cleanup(&emu);
             return 1;
         }
