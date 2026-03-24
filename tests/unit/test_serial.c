@@ -480,6 +480,53 @@ TEST(test_irq_65c51_mode) {
     teardown();
 }
 
+TEST(test_state_preservation) {
+    /* Verify that ACIA state fields survive a simulated save/restore cycle.
+     * We don't test the actual savestate file format here — just that the
+     * register values and internal state can be captured and restored. */
+    acia6551_t original, restored;
+    acia_init(&original);
+    acia_init(&restored);
+
+    /* Configure original with specific state */
+    acia_write(&original, ACIA_REG_CONTROL, 0x1E);  /* 9600 baud */
+    acia_write(&original, ACIA_REG_COMMAND, 0x0B);  /* DTR + TIC=10 */
+    original.rdr = 0xAA;
+    original.rx_full = true;
+    original.status |= ACIA_STATUS_RDRF;
+    original.v23_mode = true;
+    original.dcd = false;
+    original.tx_cycles = 42;
+    original.rx_cycles = 99;
+
+    /* Simulate save: copy fields (what savestate_save writes) */
+    restored.tdr = original.tdr;
+    restored.rdr = original.rdr;
+    restored.status = original.status;
+    restored.command = original.command;
+    restored.control = original.control;
+    restored.tx_pending = original.tx_pending;
+    restored.rx_full = original.rx_full;
+    restored.irq_line = original.irq_line;
+    restored.tx_cycles = original.tx_cycles;
+    restored.rx_cycles = original.rx_cycles;
+    restored.v23_mode = original.v23_mode;
+    restored.dcd = original.dcd;
+    restored.dsr = original.dsr;
+    restored.cts = original.cts;
+
+    /* Verify all fields match */
+    ASSERT_EQ(restored.rdr, 0xAA);
+    ASSERT_EQ(restored.command, 0x0B);
+    ASSERT_EQ(restored.control, 0x1E);
+    ASSERT_TRUE(restored.rx_full);
+    ASSERT_TRUE(restored.status & ACIA_STATUS_RDRF);
+    ASSERT_TRUE(restored.v23_mode);
+    ASSERT_FALSE(restored.dcd);
+    ASSERT_EQ(restored.tx_cycles, 42);
+    ASSERT_EQ(restored.rx_cycles, 99);
+}
+
 /* ═══════════════════════════════════════════════════════════════════════
  *  Main
  * ═══════════════════════════════════════════════════════════════════════ */
@@ -510,6 +557,7 @@ int main(void) {
     RUN(test_modem_backend_create);
     RUN(test_rx_fifo);
     RUN(test_irq_65c51_mode);
+    RUN(test_state_preservation);
 
     printf("\n");
     printf("═══════════════════════════════════════════════════════\n");

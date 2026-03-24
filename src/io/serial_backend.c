@@ -620,24 +620,12 @@ static bool modem_send(serial_backend_t* self, uint8_t byte)
      * 1 second = 1000000 cycles. We approximate with a counter that
      * increments each time modem_send is called (baud-rate limited). */
     if (self->state.modem.mode == 1) {
-        /* +++ escape detection with guard time */
-        if (byte == '+') {
-            if (self->state.modem.plus_count == 0) {
-                /* First '+': check guard time (silence before +++)
-                 * Guard satisfied if last_data_time > threshold */
-                if (self->state.modem.last_data_time >= 50) {
-                    self->state.modem.plus_count = 1;
-                } else {
-                    /* No guard: send '+' as data */
-                    self->state.modem.plus_count = 0;
-                    goto modem_send_data;
-                }
-            } else {
-                self->state.modem.plus_count++;
-            }
+        /* +++ escape detection with guard time.
+         * Hayes spec: silence → +++ → silence → command mode.
+         * Guard satisfied if last_data_time >= 50 (baud-rate polls). */
+        if (byte == '+' && self->state.modem.last_data_time >= 50) {
+            self->state.modem.plus_count++;
             if (self->state.modem.plus_count >= 3) {
-                /* Wait for guard after +++ — switch immediately for now,
-                 * but a real modem waits 1s after the third '+'. */
                 self->state.modem.mode = 0;
                 self->state.modem.plus_count = 0;
                 self->state.modem.cmd_len = 0;
@@ -650,8 +638,7 @@ static bool modem_send(serial_backend_t* self, uint8_t byte)
             return true;
         }
 
-modem_send_data:
-        /* Non-'+' char: flush any pending '+' chars to socket */
+        /* Non-escape or '+' without guard: flush pending '+' and send data */
         if (self->state.modem.sockfd >= 0 && self->state.modem.plus_count > 0) {
             uint8_t buf[3];
             for (int i = 0; i < self->state.modem.plus_count && i < 3; i++)
