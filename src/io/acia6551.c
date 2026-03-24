@@ -250,25 +250,7 @@ static void acia_update_timing(acia6551_t* acia)
 
 void acia_init(acia6551_t* acia)
 {
-    /* Preserve FIFO config and IRQ callbacks across re-init */
-    uint8_t* saved_fifo = acia->rx_fifo;
-    int saved_fifo_size = acia->rx_fifo_size;
-    bool saved_irq_on_rdrf = acia->irq_on_rdrf;
-    void (*saved_irq_set)(emulator_t*) = acia->irq_set;
-    void (*saved_irq_clr)(emulator_t*) = acia->irq_clr;
-    emulator_t* saved_userdata = acia->irq_userdata;
-    serial_backend_t* saved_backend = acia->backend;
-
     memset(acia, 0, sizeof(acia6551_t));
-
-    /* Restore preserved fields */
-    acia->rx_fifo = saved_fifo;
-    acia->rx_fifo_size = saved_fifo_size;
-    acia->irq_on_rdrf = saved_irq_on_rdrf;
-    acia->irq_set = saved_irq_set;
-    acia->irq_clr = saved_irq_clr;
-    acia->irq_userdata = saved_userdata;
-    acia->backend = saved_backend;
 
     /* Power-on state per datasheet */
     acia->status = ACIA_STATUS_TDRE;
@@ -293,16 +275,8 @@ void acia_init(acia6551_t* acia)
     /* Calculate timing and initialize cycle counters to full frame */
     acia_update_timing(acia);
 
-    log_info("ACIA 6551 initialized (xtal %d Hz / %d = %d Hz%s%s)",
-             ACIA_XTAL_HZ, ACIA_PRESCALER, ACIA_INTERNAL_HZ,
-             acia->rx_fifo ? ", FIFO=" : "",
-             acia->rx_fifo ? "" : "");
-    if (acia->rx_fifo) {
-        log_info("  RX FIFO: %d bytes", acia->rx_fifo_size);
-    }
-    if (acia->irq_on_rdrf) {
-        log_info("  IRQ mode: WDC 65C51 (re-trigger on RDRF)");
-    }
+    log_info("ACIA 6551 initialized (xtal %d Hz / %d = %d Hz)",
+             ACIA_XTAL_HZ, ACIA_PRESCALER, ACIA_INTERNAL_HZ);
 }
 
 void acia_reset(acia6551_t* acia)
