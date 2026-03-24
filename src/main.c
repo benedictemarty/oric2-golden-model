@@ -1400,10 +1400,13 @@ int main(int argc, char* argv[]) {
             sb = serial_backend_tcp_create(host, port);
         } else if (strcmp(serial_arg, "pty") == 0) {
             sb = serial_backend_pty_create();
-        } else if (strncmp(serial_arg, "modem:", 6) == 0) {
-            /* Parse modem:host:port or modem:listen:port
-             * Hayes AT modem: ATD to dial, ATH to hangup, +++ to escape */
-            const char* hp = serial_arg + 6;
+        } else if (strcmp(serial_arg, "modem") == 0 ||
+                   strncmp(serial_arg, "modem:", 6) == 0) {
+            /* Hayes AT modem. Modes:
+             *   --serial modem              Pure command mode (use ATD to dial)
+             *   --serial modem:host:port    Preset host (ATD without args connects here)
+             *   --serial modem:listen:port  Server mode (ATA to accept) */
+            const char* hp = (serial_arg[5] == ':') ? serial_arg + 6 : "";
             bool listen_mode = false;
             char host[256] = {0};
             uint16_t port = 23;
