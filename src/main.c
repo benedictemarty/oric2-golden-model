@@ -357,6 +357,18 @@ static uint8_t psg_porta_read(void* userdata) {
  */
 static uint8_t portb_read_callback(void* userdata) {
     emulator_t* emu = (emulator_t*)userdata;
+
+    /* AY register 7 bit 6 controls Port A direction:
+     * bit 6 = 0 → Port A in output mode → keyboard scan fails (bus conflict)
+     * bit 6 = 1 → Port A in input mode → keyboard scan works
+     * This matches Oricutron's ay_update_keybits() behavior.
+     * Programs that play sound with reg7 bit 6=0 must restore it to
+     * enable keyboard scanning (e.g. ay_write(7, $7F)). */
+    if (!(emu->psg.registers[7] & 0x40)) {
+        /* Port A in output mode → PB3 always 0 (no key detected) */
+        return 0xF7;
+    }
+
     uint8_t col = emu->via.orb & 0x07;
     uint8_t reg14 = emu->psg.registers[14];
 
