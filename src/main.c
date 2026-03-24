@@ -781,7 +781,14 @@ static void emulator_run(emulator_t* emu) {
     uint64_t frame_count = 0;
     bool screenshot_at_done = false;
 
+#ifdef HAS_SDL2
+    uint32_t frame_start_ticks = SDL_GetTicks();
+#endif
+
     while (emu->running && g_running) {
+#ifdef HAS_SDL2
+        frame_start_ticks = SDL_GetTicks();
+#endif
         /* Execute one frame worth of CPU cycles */
         int frame_cycles = 0;
         bool vsync_triggered = false;
@@ -1100,6 +1107,19 @@ static void emulator_run(emulator_t* emu) {
         }
 
         frame_count++;
+
+#ifdef HAS_SDL2
+        /* Frame limiter: 50 Hz PAL = 20ms per frame.
+         * Without this, the emulator runs at monitor refresh rate (60 Hz+)
+         * which is 20% faster than real ORIC hardware.
+         * SDL_Delay has ~1ms resolution, good enough for frame pacing. */
+        if (!emu->headless) {
+            uint32_t frame_elapsed = SDL_GetTicks() - frame_start_ticks;
+            if (frame_elapsed < 20) {
+                SDL_Delay(20 - frame_elapsed);
+            }
+        }
+#endif
 
         /* Check cycle limit for headless/test mode */
         if (emu->max_cycles >= 0 && (int64_t)total_executed >= emu->max_cycles) {
