@@ -41,7 +41,7 @@ make test-renderer       # Display scaling tests (10)
 make test-trace          # CPU trace logging tests (10)
 make test-profiler       # CPU profiler tests (10)
 make test-rominfo        # ROM analysis tests (10)
-make test-serial         # ACIA 6551 serial tests (17)
+make test-serial         # ACIA 6551 serial tests (19)
 make test-coverage       # Code coverage meta-tests
 make test-cast           # Cast server tests (requires CAST=1 build)
 make valgrind            # Memory leak detection (all suites under Valgrind)
@@ -125,7 +125,11 @@ Every modification must:
 ./oric1-emu -r roms/basic10.rom --serial modem:bbs.host:23 --serial-v23  # Modem Hayes + V23
 ./oric1-emu -r roms/basic10.rom --serial modem:listen:2323               # BBS server mode
 ./oric1-emu -r roms/basic10.rom --serial com:9600,8,N,1,/dev/ttyUSB0    # Vrai port série
+./oric1-emu -r roms/basic10.rom --serial modem                           # Modem AT pur (ATD pour dial)
 ./oric1-emu -r roms/basic10.rom --serial loopback --acia-addr 0320      # Offset custom
+./oric1-emu -r roms/basic10.rom --serial digitelec:minitel.host:516     # Digitelec DTL 2000
+./oric1-emu -r roms/basic10.rom --serial tcp:host:23 --serial-buffer 256 --serial-irq-on-rdrf  # FIFO + 65C51
+./oric1-emu -r roms/basic10.rom --serial loopback --serial-trace serial.log  # Debug trace
 ```
 
 ## Dependencies

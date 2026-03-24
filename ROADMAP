@@ -434,6 +434,23 @@ including host filesystem sharing and conversion tools for legacy BASIC/machine 
 - [x] New: 64KB RX/TX ring buffers for modem backend
 - [x] 6 new tests (303 total, 100% pass)
 
+### Sprint 34: Serial hardening + bas2tap + AY fix + frame limiter (v1.16.0-alpha) - DONE
+- [x] Fix: 50 Hz PAL frame limiter (SDL_Delay pacing, was running at 60 Hz+)
+- [x] Fix: AY-3-8912 reg7 bit 6 controls keyboard scan (Port A direction)
+- [x] Fix: acia_init() garbage from uninitialized stack (memset before read)
+- [x] Fix: WDC 65C51 IRQ mode re-asserts while RDRF set (was no-op)
+- [x] Fix: acia_tick() aggregated (one call per instruction, ~5x less overhead)
+- [x] Fix: Echo via TX timing, DCD/DSR in status, TX overwrite traced, EINTR
+- [x] New: --serial modem (pure AT command mode, ATD host:port to dial)
+- [x] New: --serial digitelec:host:port (DTL 2000 V23 modem, DTR/CTS/DCD)
+- [x] New: --serial com:baud,bits,P,stop,device (real serial port, termios)
+- [x] New: --serial-trace FILE (debug TX/RX/signals with CPU timestamps)
+- [x] New: --serial-buffer N (RX FIFO) + --serial-irq-on-rdrf (65C51 mode)
+- [x] New: bas2tap tokenizer with 120 keywords extracted from ROM $C0EA
+- [x] New: Digitelec DTR edge-detect factored (digitelec_check_dtr)
+- [x] New: EINTR-safe read/write in all backends
+- [x] 2 new tests (test_rx_fifo, test_irq_65c51_mode), 305 total
+
 ## Future Enhancements
 
 ### Advanced Features

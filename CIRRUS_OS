@@ -2,9 +2,9 @@ CIRRUS_OS - Phosphoric Build & Development Status
 ======================================================
 
 Project: Phosphoric — ORIC-1/Atmos Cycle-Accurate Emulator
-Version: 1.15.1-alpha
-Build Status: ALPHA (ACIA 6551 Serial + TAP Header Auto-Detection + Post-CLOAD Rechain + Timer Exact-Zero + Type-Keys Debounce + Deferred Fast-Load Fix + Code Coverage + Documentation + ROM Analysis + CPU Profiler + CPU Trace + Display Scaling + MCP-40 Plotter + Printer + Joystick + Atmos + Save States + Full Type Safety + WAV Audio + CASTV2 + MJPEG Cast)
-Last Updated: 2026-03-22
+Version: 1.16.0-alpha
+Build Status: ALPHA (Serial hardening + Modem Hayes + Digitelec DTL 2000 + bas2tap tokenizer + AY reg7 fix + 50Hz frame limiter + FIFO RX + WDC 65C51 IRQ + Serial trace)
+Last Updated: 2026-03-24
 
 ================================================================
 
@@ -55,7 +55,7 @@ BUILD STATUS
 [V] CPU Performance Profiler - Complete (--profile FILE, hotspots, opcode histogram)
 [V] ROM Analysis Tools    - Complete (--rom-info, vectors, targets, strings, usage)
 [V] ACIA 6551 Serial     - Complete (Digitelec DTL 2000, MCP RS232-C, V23 Minitel, Modem AT, COM termios, TCP/PTY/loopback)
-[V] Test Suite            - Complete (303 tests via make tests, 100% pass)
+[V] Test Suite            - Complete (305 tests via make tests, 100% pass)
 [V] ROM Compatibility     - Validated (ORIC-1 BASIC 1.0 + Atmos BASIC 1.1 ROMs)
 [V] Performance           - Benchmarked (~90+ MHz, target met)
 [V] Static Analysis       - Run (no critical issues)
@@ -67,7 +67,7 @@ Legend: [V] Complete [*] In Progress [ ] Not Started [X] Failed
 
 TEST RESULTS
 ------------
-Unit Tests: 303/303 passed (100%)
+Unit Tests: 305/305 passed (100%)
 Integration Tests: 7/7 passed (100%)
 ROM Compatibility: 12/12 passed (100%)
 Video Export Tests: 11/11 passed (100%)
@@ -76,7 +76,7 @@ Debugger Tests: 8/8 passed (100%)
 Save State Tests: 8/8 passed (100%)
 Atmos Tests: 10/10 passed (100%)
 Cast Tests: 24/24 passed (100%)
-Serial Tests: 17/17 passed (100%)
+Serial Tests: 19/19 passed (100%)
 Last Test Run: 2026-03-22 (Sprint 33)
 
 CPU Tests:          74/74 passed
@@ -98,7 +98,7 @@ Cast Tests:         24/24 passed
 Trace Tests:        10/10 passed
 Profiler Tests:     10/10 passed
 ROM Info Tests:     10/10 passed
-Serial Tests:       17/17 passed
+Serial Tests:       19/19 passed
 Coverage Tests:     24/24 passed
 Last Test Run: 2026-03-22 (Sprint 33)
 

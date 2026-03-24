@@ -1,12 +1,24 @@
 VERSION_TRACKING - Phosphoric
 =====================================
 
-Current Version: 1.15.1-alpha
-Release Date: 2026-03-22
-Status: Alpha (ACIA 6551 Serial + Modem AT + COM termios + Savestate SER + TAP Header Auto-Detection + Post-CLOAD Rechain + Timer Exact-Zero + Type-Keys Debounce + Deferred Fast-Load Fix + Code Coverage + Documentation + ROM Analysis + CPU Profiler + CPU Trace + Display Scaling + MCP-40 Plotter + Printer + Joystick + Atmos + Save States + Full Type Safety + WAV Audio + CASTV2 + MJPEG Cast, 303 tests pass)
+Current Version: 1.16.0-alpha
+Release Date: 2026-03-24
+Status: Alpha (Serial hardening + bas2tap tokenizer + AY reg7 fix + 50Hz frame limiter + Modem Hayes + Digitelec DTL 2000 + COM termios + Serial trace + FIFO RX + WDC 65C51 IRQ, 305 tests pass)
 
 Version History:
 ----------------
+- 1.16.0-alpha (2026-03-24): Serial hardening + bas2tap + AY fix + frame limiter (Sprint 34)
+  * Fix: 50 Hz PAL frame limiter (was running at monitor refresh rate)
+  * Fix: AY-3-8912 reg7 bit 6 controls keyboard scan (Port A direction)
+  * Fix: acia_init() garbage from uninitialized stack
+  * Fix: WDC 65C51 IRQ mode actually re-asserts while RDRF set
+  * Fix: acia_tick() aggregated (one call per instruction, not N×1 loop)
+  * Fix: echo via TX timing, DCD/DSR in status, TX overwrite traced, EINTR
+  * New: --serial modem (pure AT command mode), modem:listen, com:, digitelec:
+  * New: --serial-trace FILE (debug TX/RX/signals with CPU timestamps)
+  * New: bas2tap tokenizer with 120 tokens extracted from ROM $C0EA
+  * 2 new tests (test_rx_fifo, test_irq_65c51_mode), 305 total
+
 - 1.15.1-alpha (2026-03-22): ACIA 6551 Oricutron-level corrections (Sprint 33b)
   * Fix: ACIA clock uses 1.8432 MHz crystal / 16 prescaler
   * Fix: Frame format variable (5-8 data + parity + 1-2 stop) instead of fixed 10

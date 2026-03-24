@@ -5,6 +5,45 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.16.0-alpha] - 2026-03-24
+
+### Serial hardening + bas2tap tokenizer + AY fix + frame limiter (Sprint 34)
+
+#### Fixed
+- **Frame limiter 50 Hz PAL** : l'émulateur tournait à la fréquence du moniteur (60 Hz+)
+  au lieu des 50 Hz de l'ORIC réel. Ajout de SDL_Delay frame pacing (20 ms/frame).
+- **AY-3-8912 registre 7 bit 6** : le scan clavier n'était pas bloqué quand Port A
+  en output (bit 6=0). Les programmes qui jouent du son avec reg7=$38 bloquaient
+  le clavier. Aligné sur le comportement Oricutron.
+- **acia_init() garbage** : la préservation de champs avant memset lisait des valeurs
+  stack non-initialisées (FIFO fantôme de 49152 octets, callbacks garbage).
+- **Mode WDC 65C51 IRQ** : le mode irq_on_rdrf était un no-op (même code que MOS 6551).
+  Corrigé pour re-assert l'IRQ tant que RDRF est set après lecture STATUS.
+- **acia_tick() optimisé** : appel agrégé `acia_tick(acia, cycles)` au lieu d'une
+  boucle N×1. ~5x moins d'overhead par instruction CPU.
+- **Echo via TX timing** : le mode echo passe maintenant par le TX path normal
+  (soumis au baud rate) au lieu de bypasser directement au backend.
+- **DCD/DSR dans status register** : les bits sont maintenant mis à jour dans
+  acia->status directement (pas seulement dans la copie retournée par acia_read).
+- **TX overwrite tracé** : écrire dans TDR avant TDRE log "TX OVERWRITE".
+- **EINTR** : tous les read()/write() backends utilisent safe_read/safe_write.
+- **Digitelec DTR dédupliqué** : digitelec_check_dtr() factorisé.
+- **Trace flush par frame** : fflush() 50/s au lieu de ~4000/s à 19200 baud.
+
+#### Added
+- **--serial modem** : mode commande pur (ATD host:port pour connecter).
+- **--serial modem:host:port** : host prédéfini pour ATD sans argument.
+- **--serial modem:listen:port** : mode serveur BBS.
+- **--serial com:baud,bits,P,stop,device** : vrai port série via termios.
+- **--serial digitelec:host:port** : émulation Digitelec DTL 2000 (V23, DTR, CTS).
+- **--serial-trace FILE** : debug trace TX/RX/signaux avec timestamps CPU.
+- **bas2tap tokenizer** : table 120 tokens BASIC extraite de la ROM $C0EA.
+  Corrige les SYNTAX ERROR sur tous les programmes convertis.
+- **2 nouveaux tests** : test_rx_fifo (FIFO auto-load) + test_irq_65c51_mode.
+- 305 tests totaux (100% pass).
+
+---
+
 ## [1.15.1-alpha] - 2026-03-22
 
 ### ACIA 6551 — Corrections Oricutron-level (Sprint 33b)
