@@ -451,6 +451,13 @@ including host filesystem sharing and conversion tools for legacy BASIC/machine 
 - [x] New: EINTR-safe read/write in all backends
 - [x] 2 new tests (test_rx_fifo, test_irq_65c51_mode), 305 total
 
+### Sprint 34b: HIRES bit 7 fix + keyboard tests (v1.16.1-alpha) - DONE
+- [x] Fix: HIRES bit 7 inversion swap encre/papier (was XOR ^7 color complement)
+- [x] New: 21 keyboard mapping tests (init, press_char, arrows QWERTY/AZERTY, multi-touch)
+- [x] New: keytest.bas example program (key code display utility)
+- [x] Docs: CLAUDE.md improvements (dynamic test counts, ACIA I/O routing, condensed CLI)
+- [x] 22 new tests, 327 total
+
 ## Future Enhancements
 
 ### Advanced Features
@@ -481,13 +488,13 @@ including host filesystem sharing and conversion tools for legacy BASIC/machine 
 - [ ] <5% CPU overhead on modern hardware
 
 ### Quality
-- [x] 283 tests passing (make tests)
+- [x] 327 tests passing (make tests)
 - [x] Zero critical bugs in test suite
 - [x] API documentation complete
 - [x] Comprehensive user guide
 
 ---
 
-**Last Updated**: 2026-03-04
-**Current Version**: 1.14.1-alpha
+**Last Updated**: 2026-03-28
+**Current Version**: 1.16.1-alpha
 **Next Milestone**: 2.0.0 (Telestrat / stable release)

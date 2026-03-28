@@ -1,12 +1,13 @@
 VERSION_TRACKING - Phosphoric
 =====================================
 
-Current Version: 1.16.0-alpha
-Release Date: 2026-03-24
-Status: Alpha (Serial hardening + bas2tap tokenizer + AY reg7 fix + 50Hz frame limiter + Modem Hayes + Digitelec DTL 2000 + COM termios + Serial trace + FIFO RX + WDC 65C51 IRQ, 305 tests pass)
+Current Version: 1.16.1-alpha
+Release Date: 2026-03-28
+Status: Alpha (HIRES bit 7 inversion fix + keyboard tests, 327 tests pass)
 
 Version History:
 ----------------
+- 1.16.1-alpha (2026-03-28): HIRES bit 7 fix + 21 keyboard tests (Sprint 34b)
 - 1.16.0-alpha (2026-03-24): Serial hardening + bas2tap + AY fix + frame limiter (Sprint 34)
   * Fix: 50 Hz PAL frame limiter (was running at monitor refresh rate)
   * Fix: AY-3-8912 reg7 bit 6 controls keyboard scan (Port A direction)

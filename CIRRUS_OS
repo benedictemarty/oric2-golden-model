@@ -2,9 +2,9 @@ CIRRUS_OS - Phosphoric Build & Development Status
 ======================================================
 
 Project: Phosphoric — ORIC-1/Atmos Cycle-Accurate Emulator
-Version: 1.16.0-alpha
-Build Status: ALPHA (Serial hardening + Modem Hayes + Digitelec DTL 2000 + bas2tap tokenizer + AY reg7 fix + 50Hz frame limiter + FIFO RX + WDC 65C51 IRQ + Serial trace)
-Last Updated: 2026-03-24
+Version: 1.16.1-alpha
+Build Status: ALPHA (HIRES bit 7 inversion fix + keyboard tests + Serial hardening)
+Last Updated: 2026-03-28
 
 ================================================================
 
@@ -30,7 +30,7 @@ BUILD STATUS
 [V] HIRES Text Rows       - Fixed (serial attributes in bottom 3 rows)
 [V] SDL2 Keyboard         - Complete (64 keys, QWERTY + AZERTY layouts)
 [V] CLOAD ROM Patching    - Complete (getsync + readbyte interception + post-CLOAD rechain)
-[V] HIRES Rendering       - Fixed (attribute detection, bit 7 inversion, $9800 charset)
+[V] HIRES Rendering       - Fixed (attribute detection, bit 7 swap encre/papier, $9800 charset)
 [V] HIRES Mode Detection  - Fixed ($26A bit 1, not bit 2)
 [V] Keyboard Automation   - Complete (--type-keys, press_char/release_all API)
 [V] Microdisc Controller  - Complete (I/O $0310-$031F, overlay ROM, IRQ routing)

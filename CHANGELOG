@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.16.1-alpha] - 2026-03-28
+
+### HIRES bit 7 inversion fix + keyboard tests (Sprint 34b)
+
+#### Fixed
+- **HIRES bit 7 inversion** : le bit 7 des octets pixel HIRES faisait un complément
+  de couleur (XOR ^7 : rouge→cyan) au lieu d'un swap encre/papier. Les démos et jeux
+  utilisant l'inversion par octet (ex: moteur texte Bagman) affichaient des couleurs
+  incorrectes. Aligné sur le comportement ULA réel et le mode TEXT.
+
+#### Added
+- **21 tests clavier** (test_keyboard) : init/reset, press_char ASCII, flèches
+  QWERTY et AZERTY, release, multi-touches simultanées, SPACE, RETURN.
+- **Programme BASIC keytest** (examples/keytest.bas/.tap) : affiche code décimal,
+  hex et nom de chaque touche pressée (flèches, ESC, CTRL+, DEL).
+
+#### Changed
+- **CLAUDE.md** : compteurs de tests dynamiques (renvoi VERSION_TRACKING), I/O
+  routing ACIA documenté, section Running condensée, Per-Commit Requirements précisés.
+
 ## [1.16.0-alpha] - 2026-03-24
 
 ### Serial hardening + bas2tap tokenizer + AY fix + frame limiter (Sprint 34)

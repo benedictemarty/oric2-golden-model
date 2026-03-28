@@ -91,8 +91,8 @@ static bool decode_attr(video_t* vid, uint8_t attr,
 static void render_hires_block(video_t* vid, int x, int y,
                                uint8_t byte, uint8_t ink, uint8_t paper) {
     bool inv = (byte & 0x80) != 0;
-    uint8_t fg = inv ? (ink ^ 7) : ink;
-    uint8_t bg = inv ? (paper ^ 7) : paper;
+    uint8_t fg = inv ? paper : ink;
+    uint8_t bg = inv ? ink : paper;
     uint8_t ir, ig, ib, pr, pg, pb;
     video_get_rgb(fg, &ir, &ig, &ib);
     video_get_rgb(bg, &pr, &pg, &pb);
