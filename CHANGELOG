@@ -5,6 +5,60 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.18.0-alpha] - 2026-05-07
+
+### Oric 2 — Jalon B1.4 : opcodes 6502-équivalents en mode émulation
+
+ADR-11 ratifiée option (c) hybride : reproduit le bug `JMP ($xxFF)`,
+opcodes illégaux NMOS = NOP, séquence RMW interne suit WDC. Cf. §2 du
+CLAUDE.md racine.
+
+#### Added — Sous-jalons B1.4a–i intégrés en un commit unique
+
+- **B1.4a — Infrastructure** (`src/cpu/cpu65c816_opcodes.c`) : helpers
+  `cpu816_mem_read/write`, `cpu816_fetch_byte/word_pc`, `cpu816_push/pull/_word`
+  (stack en page 1 forcée mode E), modes d'adressage complets (ZP, ZP,X,
+  ZP,Y, ABS, ABS,X, ABS,Y avec page-cross, IND avec bug ADR-11, IND,X,
+  IND,Y avec page-cross, REL).
+- **B1.4b — Load/Store** : LDA/LDX/LDY/STA/STX/STY tous modes.
+- **B1.4c — ALU** : ADC, SBC (incluant BCD), AND, ORA, EOR, CMP, CPX, CPY, BIT.
+- **B1.4d — Shift/Rotate** : ASL, LSR, ROL, ROR (accumulator + mémoire).
+- **B1.4e — Inc/Dec/Transfer** : INC, DEC, INX, DEX, INY, DEY, TAX, TAY,
+  TXA, TYA, TSX, TXS.
+- **B1.4f — Branch + Jump** : BCC, BCS, BEQ, BNE, BMI, BPL, BVC, BVS
+  (avec page-cross penalty), JMP abs, JMP indirect (bug NMOS reproduit ADR-11).
+- **B1.4g — Stack/Subroutine** : PHA, PLA, PHP (B forcé), PLP (B nettoyé),
+  JSR, RTS, BRK (push PC+1, vecteur $FFFE, B=1), RTI (P + PC restaurés), NOP.
+- **B1.4h — IRQ/NMI vectoring** dans `cpu816_step()` : NMI prioritaire
+  (vecteur $FFFA, 7 cycles), IRQ servi si I=0 (vecteur $FFFE, 7 cycles),
+  IRQ masqué sinon ; WAI réveillé sur NMI/IRQ.
+- **B1.4i — CLI** : `--cpu 65c816` désormais accepté et lance le 6502 en
+  mode émulation. Mode N (E=0) reste partiellement supporté (opcodes
+  triviaux mode-agnostiques OK ; semantique complète en B1.7+).
+- **`src/cpu/cpu65c816_opcodes.c`** : ~600 lignes, port direct du
+  cœur 6502 Phosphoric vers `cpu65c816_t` en mode E (M=X=1). Cycle
+  counts identiques au 6502 (ADR-10) ; partage `opcode_table[]` du 6502
+  pour la taille d'opérande des illégaux.
+- **48 tests `test_cpu65c816_e_mode`** : LD/ST (8 modes), ALU+BCD,
+  shift/rotate, INC/DEC, transfers, stack (PHA/PLA/PHP/PLP), branches
+  taken/not-taken/cross-page, JMP indirect normal+bug ADR-11, JSR/RTS,
+  BRK/IRQ/NMI/RTI, illégaux NMOS, B préservé sur ops 8b, programme
+  Fibonacci 11 termes (vérifie composition cohérente).
+
+#### Changed
+- `cpu65c816.c::step()` orchestre désormais NMI/IRQ puis dispatch via
+  `cpu816_execute_opcode_e()`. La rejection mode N a été levée pour
+  permettre la bascule via XCE pendant les tests B1.3 ; documenté.
+- Test B1.3 `test_unimplemented_opcode_returns_error` retiré (en mode E
+  tous les opcodes ont une sémantique définie après B1.4).
+
+#### Notes
+- Total tests : ~406 (était 359, +48 mode-E -1 obsolète).
+- Aucune régression sur les 23 suites existantes.
+- B1.5 (Klaus Dormann functional test) et B1.6 (boot ROM réel) restent
+  à faire avant de fermer B1 ; le 65C816 n'a pas encore subi le test
+  d'équivalence stricte cycle-exact contre une référence externe.
+
 ## [1.17.2-alpha] - 2026-05-07
 
 ### Oric 2 — Jalon B1.3 : XCE + flag instructions

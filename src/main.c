@@ -1371,12 +1371,9 @@ int main(int argc, char* argv[]) {
             fprintf(stderr, "Invalid --cpu value: %s (expected: 6502 | 65c816)\n", cpu_arg);
             return 1;
         }
-        if (k == CPU_KIND_65C816) {
-            /* B1.2 : squelette init/reset uniquement, aucun opcode décodé.
-             * L'exécution réelle viendra avec XCE et les opcodes en B1.3+. */
-            fprintf(stderr, "--cpu 65c816: skeleton only (B1.2), no opcodes yet — use --cpu 6502.\n");
-            return 1;
-        }
+        /* B1.4 : 65C816 mode E (émulation) opérationnel. Mode N (E=0) reste
+         * non exécutable (jalon B1.7+) — toute tentative de bascule via XCE
+         * sera trappée à l'exécution avec log_error. */
         emu.cpu_kind = k;
     }
 

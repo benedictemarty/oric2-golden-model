@@ -467,7 +467,8 @@ Voir `/home/bmarty/oric2/CLAUDE.md` pour la vision Oric 2 (machine chimère
 - [x] **B1.1** Abstraction vtable `cpu_core_t`, wrapper 6502, flag `--cpu` (v1.17.0-alpha, 2026-05-07)
 - [x] **B1.2** Squelette 65C816 : registres, init/reset (E=1), vtable wired (v1.17.1-alpha, 2026-05-07)
 - [x] **B1.3** XCE + flag manipulation (CLC/SEC/CLI/SEI/CLD/SED/CLV) (v1.17.2-alpha, 2026-05-07)
-- [ ] **B1.4** Opcodes 6502-équivalents en mode E (passe les tests Oric 1 sous --cpu 65c816)
+- [x] **B1.4** Opcodes 6502-équivalents en mode E — ADR-11(c) hybride (v1.18.0-alpha, 2026-05-07)
+       Sous-jalons a-i (infra/load-store/ALU/shift/inc-dec/branch/stack/IRQ/CLI) consolidés
 - [ ] **B1.5** Klaus Dormann functional test intégré sur les deux cœurs
 - [ ] **B1.6** Boot ROM Oric 1 sous --cpu 65c816 validé
 - [ ] **B1.7** Mode natif : REP/SEP, registres 16 bits, bus 24 bits gated
@@ -514,7 +515,7 @@ Voir `/home/bmarty/oric2/CLAUDE.md` pour la vision Oric 2 (machine chimère
 - [ ] <5% CPU overhead on modern hardware
 
 ### Quality
-- [x] 359 tests passing (make tests)
+- [x] ~406 tests passing (make tests)
 - [x] Zero critical bugs in test suite
 - [x] API documentation complete
 - [x] Comprehensive user guide
@@ -522,5 +523,5 @@ Voir `/home/bmarty/oric2/CLAUDE.md` pour la vision Oric 2 (machine chimère
 ---
 
 **Last Updated**: 2026-05-07
-**Current Version**: 1.17.2-alpha
-**Next Milestone**: B1.4 (opcodes 6502-équivalents en mode E) — bloqué par ADR-11
+**Current Version**: 1.18.0-alpha
+**Next Milestone**: B1.5 (Klaus Dormann functional test sur les deux cœurs)

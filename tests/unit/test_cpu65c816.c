@@ -331,17 +331,10 @@ TEST(test_xce_consumes_two_cycles) {
     ASSERT_EQ((int)(cpu.cycles - before), 2);
 }
 
-/* ─── Opcodes non implémentés (B1.4) ────────────────────────────────── */
-
-TEST(test_unimplemented_opcode_returns_error) {
-    cpu65c816_t cpu; memory_t mem; boot(&cpu, &mem);
-    /* LDA #imm ($A9) — pas encore implémenté en B1.3. */
-    const uint8_t prog[] = { 0xA9, 0x42 }; load_prog(&mem, 0x0200, prog, 2);
-    int rc = cpu816_step(&cpu);
-    ASSERT_TRUE(rc < 0);
-    /* PC doit être restauré pour aider le debug */
-    ASSERT_EQ((int)cpu.PC, 0x0200);
-}
+/* ─── B1.4 a complété tous les opcodes 6502-équivalents : il n'existe
+ *     plus d'« opcode non implémenté » en mode E (les illégaux NMOS sont
+ *     traités comme NOP par défaut, ADR-11 hybride). Le test correspondant
+ *     de B1.3 est devenu obsolète et a été retiré. ─── */
 
 int main(void) {
     printf("\n");
@@ -370,7 +363,6 @@ int main(void) {
     RUN(test_xce_native_to_e_forces_emulation_invariants);
     RUN(test_xce_round_trip_preserves_b_high_byte_of_C);
     RUN(test_xce_consumes_two_cycles);
-    RUN(test_unimplemented_opcode_returns_error);
 
     printf("\n═══════════════════════════════════════════════════════\n");
     printf("  Results: %d passed, %d failed\n", tests_passed, tests_failed);
