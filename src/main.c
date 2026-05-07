@@ -471,6 +471,19 @@ static bool emulator_init(emulator_t* emu) {
 
     cpu_init(&emu->cpu, &emu->memory);
 
+    /* B2 (Oric 2) : en mode oric2, alloue banks 1-3 (192 KiB additionnels)
+     * pour exposer 256 KiB minimum (cf. docs/MEMORY_MAP.md). Bank 0 = ram/rom
+     * existant. Banks 4-255 restent lazy. */
+    if (emu->machine == ORIC_MACHINE_ORIC2) {
+        for (uint8_t bank = 1; bank <= 3; bank++) {
+            if (!memory_alloc_bank(&emu->memory, bank)) {
+                log_error("Failed to allocate bank $%02X for Oric 2 mode", bank);
+                return false;
+            }
+        }
+        log_info("Oric 2 machine: banks 0-3 ready (256 KiB)");
+    }
+
     /* B1.1 (Oric 2): bind du cœur via vtable. cpu_kind est positionné par
      * le parsing CLI avant emulator_init (par défaut CPU_KIND_6502). */
     emu->cpu_vt   = cpu_core_vtable_for(emu->cpu_kind);
@@ -1205,12 +1218,13 @@ int main(int argc, char* argv[]) {
     const char* serial_arg = NULL;
     const char* acia_addr_arg = NULL;
     const char* cpu_arg = NULL;
+    const char* machine_arg = NULL;
     bool serial_v23 = false;
     int serial_buffer_size = 0;
     bool serial_irq_on_rdrf = false;
     const char* serial_trace_file = NULL;
     /* Long option codes for options without short equivalents */
-    enum { OPT_SCREENSHOT = 256, OPT_SCREENSHOT_AT, OPT_FRAME_DUMP, OPT_FRAME_DUMP_INTERVAL, OPT_TYPE_KEYS, OPT_DISK_ROM, OPT_DISK1, OPT_DISK2, OPT_DISK3, OPT_BREAKPOINT, OPT_DEBUG_BREAK, OPT_CAST_SERVER, OPT_CAST_DISCOVER, OPT_CAST_TO, OPT_SAVE_STATE, OPT_LOAD_STATE, OPT_MODEL, OPT_JOYSTICK, OPT_PRINTER, OPT_PRINTER_TYPE, OPT_SCALE, OPT_TRACE, OPT_TRACE_MAX, OPT_PROFILE, OPT_ROM_INFO, OPT_SERIAL, OPT_SERIAL_V23, OPT_ACIA_ADDR, OPT_SERIAL_BUFFER, OPT_SERIAL_IRQ_RDRF, OPT_SERIAL_TRACE, OPT_CPU };
+    enum { OPT_SCREENSHOT = 256, OPT_SCREENSHOT_AT, OPT_FRAME_DUMP, OPT_FRAME_DUMP_INTERVAL, OPT_TYPE_KEYS, OPT_DISK_ROM, OPT_DISK1, OPT_DISK2, OPT_DISK3, OPT_BREAKPOINT, OPT_DEBUG_BREAK, OPT_CAST_SERVER, OPT_CAST_DISCOVER, OPT_CAST_TO, OPT_SAVE_STATE, OPT_LOAD_STATE, OPT_MODEL, OPT_JOYSTICK, OPT_PRINTER, OPT_PRINTER_TYPE, OPT_SCALE, OPT_TRACE, OPT_TRACE_MAX, OPT_PROFILE, OPT_ROM_INFO, OPT_SERIAL, OPT_SERIAL_V23, OPT_ACIA_ADDR, OPT_SERIAL_BUFFER, OPT_SERIAL_IRQ_RDRF, OPT_SERIAL_TRACE, OPT_CPU, OPT_MACHINE };
 
     static struct option long_options[] = {
         {"tape",                required_argument, 0, 't'},
@@ -1255,6 +1269,7 @@ int main(int argc, char* argv[]) {
         {"serial-trace",        required_argument, 0, OPT_SERIAL_TRACE},
         {"acia-addr",           required_argument, 0, OPT_ACIA_ADDR},
         {"cpu",                 required_argument, 0, OPT_CPU},
+        {"machine",             required_argument, 0, OPT_MACHINE},
         {"help",                no_argument,       0, '?'},
         {0, 0, 0, 0}
     };
@@ -1335,6 +1350,9 @@ int main(int argc, char* argv[]) {
             case OPT_CPU:
                 cpu_arg = optarg;
                 break;
+            case OPT_MACHINE:
+                machine_arg = optarg;
+                break;
             case '?':
             default:
                 print_usage(argv[0]);
@@ -1360,6 +1378,20 @@ int main(int argc, char* argv[]) {
     /* Set headless and scale before init so renderer is configured correctly */
     emu.headless = headless;
     emu.scale_factor = scale_factor;
+
+    /* B2 (Oric 2) : sélection de la machine (oric1 défaut, oric2 alloue
+     * banks 1-3 en plus de bank 0). Bank 0 reste compat Oric 1 strict. */
+    emu.machine = ORIC_MACHINE_ORIC1;
+    if (machine_arg) {
+        if (strcmp(machine_arg, "oric1") == 0) {
+            emu.machine = ORIC_MACHINE_ORIC1;
+        } else if (strcmp(machine_arg, "oric2") == 0) {
+            emu.machine = ORIC_MACHINE_ORIC2;
+        } else {
+            fprintf(stderr, "Invalid --machine value: %s (expected: oric1 | oric2)\n", machine_arg);
+            return 1;
+        }
+    }
 
     /* B1.1 (Oric 2): sélection du cœur CPU. Défaut = 6502 ; 65c816 réservé
      * pour B1.2+. cpu_kind doit être positionné avant emulator_init qui

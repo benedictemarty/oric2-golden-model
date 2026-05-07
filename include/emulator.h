@@ -34,7 +34,7 @@
 #include "utils/profiler.h"
 #include "network/cast_server.h"
 
-#define EMU_VERSION "1.20.0-alpha"
+#define EMU_VERSION "1.21.0-alpha"
 
 /**
  * @brief ORIC machine model
@@ -43,6 +43,18 @@ typedef enum {
     ORIC_MODEL_ORIC1  = 0,  /**< ORIC-1 with BASIC 1.0 */
     ORIC_MODEL_ATMOS  = 1   /**< ORIC Atmos with BASIC 1.1 */
 } oric_model_t;
+
+/**
+ * @brief Famille de machine émulée (B2, projet Oric 2).
+ *
+ * `ORIC_MACHINE_ORIC1` = comportement Oric 1 strict (compat ADR-10).
+ * `ORIC_MACHINE_ORIC2` = machine chimère 65C816 (banks 0-3 alloués au boot,
+ * cf. docs/MEMORY_MAP.md). Bank 0 reste identique en mode oric2.
+ */
+typedef enum {
+    ORIC_MACHINE_ORIC1 = 0,
+    ORIC_MACHINE_ORIC2 = 1
+} oric_machine_t;
 
 /**
  * @brief ROM-version-specific tape patch addresses
@@ -79,6 +91,7 @@ typedef struct rom_patches_s {
 typedef struct emulator_s {
     /* Machine model */
     oric_model_t model;
+    oric_machine_t machine; /* B2 : ORIC_MACHINE_ORIC1 (défaut) ou ORIC_MACHINE_ORIC2 */
     const rom_patches_t* rom_patches;
 
     cpu6502_t cpu;

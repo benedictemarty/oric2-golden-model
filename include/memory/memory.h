@@ -109,6 +109,16 @@ uint8_t memory_read24(memory_t* mem, uint32_t addr24);
 void memory_write24(memory_t* mem, uint32_t addr24, uint8_t value);
 
 /**
+ * @brief Alloue explicitement un bank 1-255 (B2, mode Oric 2).
+ *
+ * Permet d'allouer un bank avant tout accès (utile pour le boot Oric 2
+ * où on veut s'assurer que banks 1-3 sont prêts). Bank 0 ne peut pas
+ * être (ré)alloué (il est statique). Idempotent : retourne true si le
+ * bank est alloué (déjà ou nouvellement). false si OOM.
+ */
+bool memory_alloc_bank(memory_t* mem, uint8_t bank);
+
+/**
  * @brief Load ROM file
  *
  * @param mem Pointer to memory structure

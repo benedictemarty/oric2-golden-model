@@ -96,7 +96,7 @@ BINDIR = $(PREFIX)/bin
 DATADIR = $(PREFIX)/share/phosphoric
 DOCDIR = $(PREFIX)/share/doc/phosphoric
 
-.PHONY: all clean tools tests test-cpu test-cpu-core test-cpu65c816 test-cpu65c816-e test-cpu65c816-n test-klaus test-boot-dual test-memory test-io test-storage test-system test-rom test-video test-audio test-debugger test-cast test-savestate test-atmos test-joystick test-printer test-mcp40 test-renderer test-trace test-profiler test-rominfo test-serial test-keyboard valgrind static-analysis coverage coverage-report install uninstall help
+.PHONY: all clean tools tests test-cpu test-cpu-core test-cpu65c816 test-cpu65c816-e test-cpu65c816-n test-klaus test-boot-dual test-memory test-oric2-memory test-io test-storage test-system test-rom test-video test-audio test-debugger test-cast test-savestate test-atmos test-joystick test-printer test-mcp40 test-renderer test-trace test-profiler test-rominfo test-serial test-keyboard valgrind static-analysis coverage coverage-report install uninstall help
 
 all: $(TARGET)
 
@@ -158,6 +158,9 @@ TEST_BOOT_DUAL_SRCS = tests/integration/test_oric_boot_dual.c \
 TEST_MEM_SRCS = tests/unit/test_memory.c src/memory/memory.c \
                 src/memory/banking.c src/utils/logging.c
 
+TEST_ORIC2_MEM_SRCS = tests/unit/test_oric2_memory.c src/memory/memory.c \
+                      src/memory/banking.c src/utils/logging.c
+
 TEST_IO_SRCS = tests/unit/test_io.c src/io/via6522.c src/utils/logging.c
 
 TEST_STORAGE_SRCS = tests/unit/test_storage.c src/storage/sedoric.c \
@@ -198,6 +201,10 @@ test-boot-dual: $(TEST_BOOT_DUAL_SRCS)
 test-memory: $(TEST_MEM_SRCS)
 	@$(CC) $(CFLAGS) $(TEST_MEM_SRCS) $(LDFLAGS) -o test_memory
 	@./test_memory
+
+test-oric2-memory: $(TEST_ORIC2_MEM_SRCS)
+	@$(CC) $(CFLAGS) $(TEST_ORIC2_MEM_SRCS) $(LDFLAGS) -o test_oric2_memory
+	@./test_oric2_memory
 
 test-io: $(TEST_IO_SRCS)
 	@$(CC) $(CFLAGS) $(TEST_IO_SRCS) $(LDFLAGS) -o test_io
@@ -343,7 +350,7 @@ test-coverage: $(TEST_COVERAGE_SRCS)
 	@$(CC) $(CFLAGS) $(TEST_COVERAGE_SRCS) $(LDFLAGS) -o test_coverage
 	@./test_coverage
 
-tests: test-cpu test-cpu-core test-cpu65c816 test-cpu65c816-e test-cpu65c816-n test-klaus test-boot-dual test-memory test-io test-storage test-system test-video test-audio test-debugger test-savestate test-atmos test-joystick test-printer test-mcp40 test-renderer test-trace test-profiler test-rominfo test-serial test-keyboard test-coverage
+tests: test-cpu test-cpu-core test-cpu65c816 test-cpu65c816-e test-cpu65c816-n test-klaus test-boot-dual test-memory test-oric2-memory test-io test-storage test-system test-video test-audio test-debugger test-savestate test-atmos test-joystick test-printer test-mcp40 test-renderer test-trace test-profiler test-rominfo test-serial test-keyboard test-coverage
 	@echo ""
 	@echo "═══════════════════════════════════════════════════════"
 	@echo "  All test suites completed!"

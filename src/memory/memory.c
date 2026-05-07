@@ -84,6 +84,13 @@ void memory_write24(memory_t* mem, uint32_t addr24, uint8_t value) {
     mem->extra_banks[bank][off] = value;
 }
 
+bool memory_alloc_bank(memory_t* mem, uint8_t bank) {
+    if (!mem || bank == 0) return false; /* bank 0 statique */
+    if (mem->extra_banks[bank]) return true;
+    mem->extra_banks[bank] = (uint8_t*)calloc(65536, 1);
+    return mem->extra_banks[bank] != NULL;
+}
+
 bool memory_load_rom(memory_t* mem, const char* filename, uint16_t offset) {
     FILE* fp = fopen(filename, "rb");
     if (!fp) return false;

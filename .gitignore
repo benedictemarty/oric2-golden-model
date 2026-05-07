@@ -131,3 +131,4 @@ roms/*.rom
 roms/*.ROM
 test_boot_dual
 test_cpu65c816_n
+test_oric2_memory

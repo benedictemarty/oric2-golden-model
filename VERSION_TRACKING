@@ -1,12 +1,17 @@
 VERSION_TRACKING - Phosphoric
 =====================================
 
-Current Version: 1.20.0-alpha
+Current Version: 1.21.0-alpha
 Release Date: 2026-05-08
-Status: Alpha (Oric 2 B1 CLÔTURÉ — long addressing + bus 24-bit, 472 tests pass)
+Status: Alpha (Oric 2 B2 — modèle mémoire bank-based 256K, 481 tests pass)
 
 Version History:
 ----------------
+- 1.21.0-alpha (2026-05-08): Oric 2 B2 — memory map 256K + machine mode (481 tests, +9)
+  * Add: docs/MEMORY_MAP.md (spec formelle banks 0-255)
+  * Add: oric_machine_t (ORIC1/ORIC2), CLI --machine
+  * Add: memory_alloc_bank (lazy/explicite), allocation banks 1-3 en mode oric2
+  * Tests: alloc/idempotence/isolation/cleanup
 - 1.20.0-alpha (2026-05-08): Oric 2 B1.8 — long addressing + bus 24-bit (472 tests, +12)
   * Add: extension memory_t (extra_banks 1-255 lazy alloc), memory_read24/write24
   * Add: long addressing modes pour LDA/STA/ADC/SBC/AND/ORA/EOR/CMP (32 opcodes)

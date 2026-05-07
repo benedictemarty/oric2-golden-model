@@ -482,7 +482,12 @@ Voir `/home/bmarty/oric2/CLAUDE.md` pour la vision Oric 2 (machine chimère
 
 ### 🏁 **B1 CLÔTURÉ** (2026-05-08) — golden model 65C816 cycle-exact, 472 tests passent.
 
-### B2 — Modèle mémoire bank-based 256K minimum (à venir)
+### B2 — Modèle mémoire bank-based 256K minimum ✅ (v1.21.0-alpha, 2026-05-08)
+- [x] Spec formelle docs/MEMORY_MAP.md (banks 0-255, régions, sémantique)
+- [x] oric_machine_t enum + CLI --machine oric1|oric2
+- [x] memory_alloc_bank (1-255), allocation banks 1-3 en mode oric2
+- [x] Tests : 9 cas (alloc, idempotence, bank 0 invariant, lazy, cleanup)
+- [x] Klaus B1.5 et boot dual B1.6 préservés (mode oric1 = no-op)
 ### B3 — Démonstrateur bascule mode + virtualisation guest (stub kernel) (à venir)
 ### B4 — Compositor logiciel + double ULA (à venir)
 
@@ -523,7 +528,7 @@ Voir `/home/bmarty/oric2/CLAUDE.md` pour la vision Oric 2 (machine chimère
 - [ ] <5% CPU overhead on modern hardware
 
 ### Quality
-- [x] 472 tests passing (make tests, dont 2 Klaus + 4 boot dual + 60 mode N)
+- [x] 481 tests passing (make tests, dont 2 Klaus + 4 boot dual + 60 mode N + 9 oric2 mem)
 - [x] Zero critical bugs in test suite
 - [x] API documentation complete
 - [x] Comprehensive user guide
@@ -531,5 +536,5 @@ Voir `/home/bmarty/oric2/CLAUDE.md` pour la vision Oric 2 (machine chimère
 ---
 
 **Last Updated**: 2026-05-08
-**Current Version**: 1.20.0-alpha
-**B1 CLÔTURÉ** — golden model 65C816 prêt. **Next Milestone** : B2 (modèle mémoire bank-based 256K minimum) — projet Oric 2.
+**Current Version**: 1.21.0-alpha
+**B1+B2 livrés**. **Next Milestone** : B3 (démonstrateur bascule mode + virtualisation guest) — projet Oric 2.

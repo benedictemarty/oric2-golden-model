@@ -5,6 +5,43 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.21.0-alpha] - 2026-05-08
+
+### Oric 2 — Jalon B2 : modèle mémoire bank-based 256 KiB minimum
+
+#### Added
+- **`docs/MEMORY_MAP.md`** (workspace racine, 230 lignes) : spécification
+  formelle de la memory map Oric 2, alignée DAT §4.1 et ADR-04. Détail
+  par bank :
+  - Bank 0 : compat Oric 1 stricte (ADR-10, inchangé).
+  - Bank 1 : kernel OricOS + ROM système.
+  - Bank 2 : code apps utilisateur (initial pool).
+  - Bank 3 : données apps utilisateur (initial pool).
+  - Banks 4-15 : pool kernel/apps additionnel (lazy).
+  - Banks 16-127 : pool apps étendu (lazy).
+  - Banks 128-191 : framebuffers et fenêtres OricOS (lazy).
+  - Banks 192-255 : réservé / extensions futures (lazy).
+- **`oric_machine_t`** enum dans `emulator.h` (`ORIC_MACHINE_ORIC1` /
+  `ORIC_MACHINE_ORIC2`). Champ `emulator_t::machine`.
+- **CLI `--machine oric1|oric2`** (défaut `oric1`). En mode `oric2`,
+  alloue banks 1-3 au boot via la nouvelle fonction `memory_alloc_bank`.
+- **`memory_alloc_bank(mem, bank)`** : allocation explicite d'un bank
+  1-255 (calloc 64 KiB). Bank 0 statique (refus). Idempotent.
+- **9 nouveaux tests `test_oric2_memory`** : refus alloc bank 0, init
+  zéro après alloc, idempotence, allocation banks 1-3 (192 KiB), bank 0
+  invariant après alloc oric2, isolation banks (no-leak), regions bank 1
+  writable, lazy alloc bank > 3, cleanup libère tout.
+
+#### Notes
+- B1 reste intact : Klaus B1.5 et boot dual B1.6 toujours verts.
+- Mode `oric1` (défaut) : aucune régression — `extra_banks` reste NULL
+  comme avant.
+- 481 tests passent (était 472, +9). Suite globale : 0 failure.
+- Spec MEMORY_MAP.md ratifiée v1.0 ; raffinements à venir (B3 vecteurs
+  routing bank 0 → bank 1, B4 compositor + framebuffers banks 128-191).
+- B2 livré ; prochain jalon B3 (démonstrateur bascule mode + virtualisation
+  guest avec stub kernel).
+
 ## [1.20.0-alpha] - 2026-05-08
 
 ### Oric 2 — Jalon B1.8 : long addressing + bus 24-bit (clôture B1)
