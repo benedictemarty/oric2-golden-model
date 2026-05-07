@@ -1,12 +1,18 @@
 VERSION_TRACKING - Phosphoric
 =====================================
 
-Current Version: 1.16.1-alpha
-Release Date: 2026-03-28
-Status: Alpha (HIRES bit 7 inversion fix + keyboard tests, 327 tests pass)
+Current Version: 1.17.0-alpha
+Release Date: 2026-05-07
+Status: Alpha (Oric 2 B1.1 — vtable cpu_core, cohabitation 6502/65C816, 337 tests pass)
 
 Version History:
 ----------------
+- 1.17.0-alpha (2026-05-07): Oric 2 B1.1 — vtable cpu_core (337 tests, +10)
+  * Add: include/cpu/cpu_core.h, src/cpu/cpu_core.c (vtable abstraction)
+  * Add: emulator_t.cpu_kind/cpu_vt/cpu_impl
+  * Add: CLI --cpu 6502|65c816 (65c816 réservé pour B1.2)
+  * Add: 10 tests d'équivalence vtable (test_cpu_core)
+  * Change: boucle d'émulation + callbacks IRQ dispatchent via vtable
 - 1.16.1-alpha (2026-03-28): HIRES bit 7 fix + 21 keyboard tests (Sprint 34b)
 - 1.16.0-alpha (2026-03-24): Serial hardening + bas2tap + AY fix + frame limiter (Sprint 34)
   * Fix: 50 Hz PAL frame limiter (was running at monitor refresh rate)

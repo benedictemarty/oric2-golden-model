@@ -5,6 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.17.0-alpha] - 2026-05-07
+
+### Oric 2 — Jalon B1.1 : abstraction cpu_core (cohabitation 6502 / 65C816)
+
+#### Added
+- **Vtable `cpu_core_vtable_t`** (`include/cpu/cpu_core.h`, `src/cpu/cpu_core.c`) :
+  table de dispatch (reset/step/execute_cycles/nmi/irq_set/irq_clear) permettant
+  de remplacer le cœur CPU sans modifier la boucle d'émulation. Une instance
+  `cpu_core_vtable_6502` adapte le cœur 6502 actuel sans le modifier.
+- **Champs `cpu_kind` / `cpu_vt` / `cpu_impl`** dans `emulator_t` (B1.1, projet
+  Oric 2). `cpu_impl` pointe sur `&emu->cpu` en B1.1.
+- **CLI `--cpu 6502|65c816`** : sélection du cœur. `6502` est le défaut.
+  `65c816` retourne actuellement « not yet implemented (jalon B1.2) ».
+- **10 tests `test_cpu_core`** (équivalence vtable ↔ appel direct sur reset,
+  step, execute_cycles, nmi, irq_set/clear ; parsing CLI et résolution kind→vtable).
+
+#### Changed
+- **Boucle d'émulation et callbacks IRQ** (VIA, Microdisc, ACIA) : invocation
+  via `emu->cpu_vt->...(emu->cpu_impl, ...)` au lieu d'appels directs aux
+  fonctions `cpu_*` du 6502. Pas de changement de comportement observable —
+  337 tests passent (327 existants + 10 nouveaux).
+- Les accès en **lecture** aux champs CPU (debugger, savestate, trace,
+  profiler) restent directs sur `emu->cpu` ; ils seront convertis en B1.2
+  quand le 65C816 introduira un second jeu de registres.
+
+#### Notes
+- Référence : projet Oric 2, ADR-01 (CPU 65C816). Voir `/home/bmarty/oric2/CLAUDE.md`.
+- ADR-11 ouverte (sémantique mode E vs NMOS 6502) : à trancher avant B1.4.
+
 ## [1.16.1-alpha] - 2026-03-28
 
 ### HIRES bit 7 inversion fix + keyboard tests (Sprint 34b)

@@ -458,6 +458,32 @@ including host filesystem sharing and conversion tools for legacy BASIC/machine 
 - [x] Docs: CLAUDE.md improvements (dynamic test counts, ACIA I/O routing, condensed CLI)
 - [x] 22 new tests, 327 total
 
+## Phase 6: Projet Oric 2 — Track B (Phosphoric → golden model) - IN PROGRESS
+
+Voir `/home/bmarty/oric2/CLAUDE.md` pour la vision Oric 2 (machine chimère
+65C816 + ULA double + compositor + OricOS, cible HDL ULX3S).
+
+### B1 — Cœur 65C816 dans Phosphoric (cohabitation 6502/65C816) - IN PROGRESS
+- [x] **B1.1** Abstraction vtable `cpu_core_t`, wrapper 6502, flag `--cpu` (v1.17.0-alpha, 2026-05-07)
+- [ ] **B1.2** Squelette 65C816 : registres, init/reset (E=1), pas d'opcodes
+- [ ] **B1.3** XCE + flag manipulation (CLC/SEC/CLI/SEI/CLD/SED/CLV)
+- [ ] **B1.4** Opcodes 6502-équivalents en mode E (passe les tests Oric 1 sous --cpu 65c816)
+- [ ] **B1.5** Klaus Dormann functional test intégré sur les deux cœurs
+- [ ] **B1.6** Boot ROM Oric 1 sous --cpu 65c816 validé
+- [ ] **B1.7** Mode natif : REP/SEP, registres 16 bits, bus 24 bits gated
+- [ ] **B1.8** Opcodes natifs 65C816 (MVN/MVP, JSL/RTL, long addressing, …)
+
+### B2 — Modèle mémoire bank-based 256K minimum (à venir)
+### B3 — Démonstrateur bascule mode + virtualisation guest (stub kernel) (à venir)
+### B4 — Compositor logiciel + double ULA (à venir)
+
+### ADR ouvertes (à trancher)
+- ADR-03 modèle de multitâche, ADR-04 isolation mémoire, ADR-05 langage OricOS,
+  ADR-06 modèle GUI, ADR-07 FS, ADR-08 packaging apps, ADR-09 audio
+- **ADR-11** sémantique mode E vs NMOS 6502 (à trancher avant B1.4)
+
+---
+
 ## Future Enhancements
 
 ### Advanced Features
@@ -488,13 +514,13 @@ including host filesystem sharing and conversion tools for legacy BASIC/machine 
 - [ ] <5% CPU overhead on modern hardware
 
 ### Quality
-- [x] 327 tests passing (make tests)
+- [x] 337 tests passing (make tests)
 - [x] Zero critical bugs in test suite
 - [x] API documentation complete
 - [x] Comprehensive user guide
 
 ---
 
-**Last Updated**: 2026-03-28
-**Current Version**: 1.16.1-alpha
-**Next Milestone**: 2.0.0 (Telestrat / stable release)
+**Last Updated**: 2026-05-07
+**Current Version**: 1.17.0-alpha
+**Next Milestone**: B1.2 (squelette 65C816) — projet Oric 2

@@ -432,32 +432,33 @@ static void io_write_callback(uint16_t address, uint8_t value, void* userdata) {
     }
 }
 
-/* VIA IRQ callback - level-triggered: set/clear VIA IRQ source bit */
+/* VIA IRQ callback - level-triggered: set/clear VIA IRQ source bit
+ * (B1.1: dispatch via cpu_vt pour cohabitation 6502/65C816) */
 static void irq_callback(bool state, void* userdata) {
     emulator_t* emu = (emulator_t*)userdata;
     if (state) {
-        cpu_irq_set(&emu->cpu, IRQF_VIA);
+        emu->cpu_vt->irq_set(emu->cpu_impl, IRQF_VIA);
     } else {
-        cpu_irq_clear(&emu->cpu, IRQF_VIA);
+        emu->cpu_vt->irq_clear(emu->cpu_impl, IRQF_VIA);
     }
 }
 
 /* Microdisc CPU IRQ callbacks - level-triggered: set/clear DISK IRQ source bit */
 static void microdisc_cpu_irq_set(emulator_t* emu) {
-    cpu_irq_set(&emu->cpu, IRQF_DISK);
+    emu->cpu_vt->irq_set(emu->cpu_impl, IRQF_DISK);
 }
 
 static void microdisc_cpu_irq_clr(emulator_t* emu) {
-    cpu_irq_clear(&emu->cpu, IRQF_DISK);
+    emu->cpu_vt->irq_clear(emu->cpu_impl, IRQF_DISK);
 }
 
 /* ACIA 6551 serial IRQ callbacks */
 static void acia_cpu_irq_set(emulator_t* emu) {
-    cpu_irq_set(&emu->cpu, IRQF_SERIAL);
+    emu->cpu_vt->irq_set(emu->cpu_impl, IRQF_SERIAL);
 }
 
 static void acia_cpu_irq_clr(emulator_t* emu) {
-    cpu_irq_clear(&emu->cpu, IRQF_SERIAL);
+    emu->cpu_vt->irq_clear(emu->cpu_impl, IRQF_SERIAL);
 }
 
 static bool emulator_init(emulator_t* emu) {
@@ -469,6 +470,16 @@ static bool emulator_init(emulator_t* emu) {
     }
 
     cpu_init(&emu->cpu, &emu->memory);
+
+    /* B1.1 (Oric 2): bind du cœur via vtable. cpu_kind est positionné par
+     * le parsing CLI avant emulator_init (par défaut CPU_KIND_6502). */
+    emu->cpu_vt   = cpu_core_vtable_for(emu->cpu_kind);
+    emu->cpu_impl = &emu->cpu;
+    if (!emu->cpu_vt) {
+        log_error("CPU kind %d not supported (yet)", (int)emu->cpu_kind);
+        return false;
+    }
+    log_info("CPU core: %s", emu->cpu_vt->name);
 
     via_init(&emu->via);
     via_reset(&emu->via);
@@ -773,7 +784,7 @@ do_patch:
 }
 
 static void emulator_run(emulator_t* emu) {
-    cpu_reset(&emu->cpu);
+    emu->cpu_vt->reset(emu->cpu_impl);
 
     log_info("Starting emulation at PC=$%04X", emu->cpu.PC);
 
@@ -814,7 +825,7 @@ static void emulator_run(emulator_t* emu) {
 
             tape_patches(emu);
 
-            int step = cpu_step(&emu->cpu);
+            int step = emu->cpu_vt->step(emu->cpu_impl);
             frame_cycles += step;
 
             /* Post-CLOAD BASIC rechain: the ORIC ROM does NOT rechain
@@ -1017,7 +1028,7 @@ static void emulator_run(emulator_t* emu) {
                         }
                         break;
                     case SDLK_F5:
-                        cpu_reset(&emu->cpu);
+                        emu->cpu_vt->reset(emu->cpu_impl);
                         break;
                     case SDLK_F7: {
                         /* Memory dump: save 64KB RAM to timestamped file */
@@ -1193,12 +1204,13 @@ int main(int argc, char* argv[]) {
     bool rom_info_enabled = false;
     const char* serial_arg = NULL;
     const char* acia_addr_arg = NULL;
+    const char* cpu_arg = NULL;
     bool serial_v23 = false;
     int serial_buffer_size = 0;
     bool serial_irq_on_rdrf = false;
     const char* serial_trace_file = NULL;
     /* Long option codes for options without short equivalents */
-    enum { OPT_SCREENSHOT = 256, OPT_SCREENSHOT_AT, OPT_FRAME_DUMP, OPT_FRAME_DUMP_INTERVAL, OPT_TYPE_KEYS, OPT_DISK_ROM, OPT_DISK1, OPT_DISK2, OPT_DISK3, OPT_BREAKPOINT, OPT_DEBUG_BREAK, OPT_CAST_SERVER, OPT_CAST_DISCOVER, OPT_CAST_TO, OPT_SAVE_STATE, OPT_LOAD_STATE, OPT_MODEL, OPT_JOYSTICK, OPT_PRINTER, OPT_PRINTER_TYPE, OPT_SCALE, OPT_TRACE, OPT_TRACE_MAX, OPT_PROFILE, OPT_ROM_INFO, OPT_SERIAL, OPT_SERIAL_V23, OPT_ACIA_ADDR, OPT_SERIAL_BUFFER, OPT_SERIAL_IRQ_RDRF, OPT_SERIAL_TRACE };
+    enum { OPT_SCREENSHOT = 256, OPT_SCREENSHOT_AT, OPT_FRAME_DUMP, OPT_FRAME_DUMP_INTERVAL, OPT_TYPE_KEYS, OPT_DISK_ROM, OPT_DISK1, OPT_DISK2, OPT_DISK3, OPT_BREAKPOINT, OPT_DEBUG_BREAK, OPT_CAST_SERVER, OPT_CAST_DISCOVER, OPT_CAST_TO, OPT_SAVE_STATE, OPT_LOAD_STATE, OPT_MODEL, OPT_JOYSTICK, OPT_PRINTER, OPT_PRINTER_TYPE, OPT_SCALE, OPT_TRACE, OPT_TRACE_MAX, OPT_PROFILE, OPT_ROM_INFO, OPT_SERIAL, OPT_SERIAL_V23, OPT_ACIA_ADDR, OPT_SERIAL_BUFFER, OPT_SERIAL_IRQ_RDRF, OPT_SERIAL_TRACE, OPT_CPU };
 
     static struct option long_options[] = {
         {"tape",                required_argument, 0, 't'},
@@ -1242,6 +1254,7 @@ int main(int argc, char* argv[]) {
         {"serial-irq-on-rdrf",  no_argument,       0, OPT_SERIAL_IRQ_RDRF},
         {"serial-trace",        required_argument, 0, OPT_SERIAL_TRACE},
         {"acia-addr",           required_argument, 0, OPT_ACIA_ADDR},
+        {"cpu",                 required_argument, 0, OPT_CPU},
         {"help",                no_argument,       0, '?'},
         {0, 0, 0, 0}
     };
@@ -1319,6 +1332,9 @@ int main(int argc, char* argv[]) {
             case OPT_ACIA_ADDR:
                 acia_addr_arg = optarg;
                 break;
+            case OPT_CPU:
+                cpu_arg = optarg;
+                break;
             case '?':
             default:
                 print_usage(argv[0]);
@@ -1344,6 +1360,23 @@ int main(int argc, char* argv[]) {
     /* Set headless and scale before init so renderer is configured correctly */
     emu.headless = headless;
     emu.scale_factor = scale_factor;
+
+    /* B1.1 (Oric 2): sélection du cœur CPU. Défaut = 6502 ; 65c816 réservé
+     * pour B1.2+. cpu_kind doit être positionné avant emulator_init qui
+     * résout la vtable. */
+    emu.cpu_kind = CPU_KIND_6502;
+    if (cpu_arg) {
+        cpu_kind_t k;
+        if (!cpu_core_kind_from_string(cpu_arg, &k)) {
+            fprintf(stderr, "Invalid --cpu value: %s (expected: 6502 | 65c816)\n", cpu_arg);
+            return 1;
+        }
+        if (k == CPU_KIND_65C816) {
+            fprintf(stderr, "--cpu 65c816: not yet implemented (jalon B1.2)\n");
+            return 1;
+        }
+        emu.cpu_kind = k;
+    }
 
     if (!emulator_init(&emu)) {
         log_error("Failed to initialize emulator");
