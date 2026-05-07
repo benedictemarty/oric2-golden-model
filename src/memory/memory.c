@@ -18,6 +18,7 @@
 #include "memory/memory.h"
 #include <string.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 bool memory_init(memory_t* mem) {
     memset(mem, 0, sizeof(memory_t));
@@ -52,7 +53,35 @@ bool memory_init(memory_t* mem) {
 }
 
 void memory_cleanup(memory_t* mem) {
-    (void)mem;
+    if (!mem) return;
+    /* B1.8 — libère les banks 24-bit alloués paresseusement. */
+    for (int i = 1; i < 256; i++) {
+        if (mem->extra_banks[i]) {
+            free(mem->extra_banks[i]);
+            mem->extra_banks[i] = NULL;
+        }
+    }
+}
+
+/* ─── B1.8 (Oric 2) — bus 24-bit pour 65C816 mode N ─────────────────── */
+
+uint8_t memory_read24(memory_t* mem, uint32_t addr24) {
+    uint8_t bank = (uint8_t)(addr24 >> 16);
+    uint16_t off = (uint16_t)(addr24 & 0xFFFF);
+    if (bank == 0) return memory_read(mem, off);
+    uint8_t* p = mem->extra_banks[bank];
+    return p ? p[off] : 0;
+}
+
+void memory_write24(memory_t* mem, uint32_t addr24, uint8_t value) {
+    uint8_t bank = (uint8_t)(addr24 >> 16);
+    uint16_t off = (uint16_t)(addr24 & 0xFFFF);
+    if (bank == 0) { memory_write(mem, off, value); return; }
+    if (!mem->extra_banks[bank]) {
+        mem->extra_banks[bank] = (uint8_t*)calloc(65536, 1);
+        if (!mem->extra_banks[bank]) return; /* OOM : write silencieusement perdue */
+    }
+    mem->extra_banks[bank][off] = value;
 }
 
 bool memory_load_rom(memory_t* mem, const char* filename, uint16_t offset) {

@@ -69,6 +69,12 @@ typedef struct memory_s {
     bool trace_enabled;
     void (*trace_callback)(uint16_t address, uint8_t value, mem_access_type_t type);
 
+    /* B1.8 (Oric 2) — extension bus 24-bit pour le 65C816 mode N.
+     * Bank 0 mappe sur ram/rom/upper_ram via memory_read/write (chemin Oric 1
+     * inchangé). Banks 1-255 sont alloués paresseusement à 64 KiB chacun
+     * lors d'un memory_write24. Un bank non-alloué retourne 0 en lecture. */
+    uint8_t* extra_banks[256]; /**< [0] inutilisé (bank 0 = ram/rom). [1..255] = lazy 64K. */
+
 } memory_t;
 
 /**
@@ -85,6 +91,22 @@ bool memory_init(memory_t* mem);
  * @param mem Pointer to memory structure
  */
 void memory_cleanup(memory_t* mem);
+
+/**
+ * @brief Lecture 24-bit (65C816 mode N).
+ *
+ * Bank 0 → memory_read (RAM/ROM Oric 1). Bank 1-255 → extra_banks[bank] si
+ * alloué, sinon 0. Cf. note bus 24-bit dans `memory_t`.
+ */
+uint8_t memory_read24(memory_t* mem, uint32_t addr24);
+
+/**
+ * @brief Écriture 24-bit (65C816 mode N).
+ *
+ * Bank 0 → memory_write. Bank 1-255 alloué paresseusement (64 KiB calloc à
+ * la première écriture).
+ */
+void memory_write24(memory_t* mem, uint32_t addr24, uint8_t value);
 
 /**
  * @brief Load ROM file

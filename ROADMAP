@@ -477,7 +477,10 @@ Voir `/home/bmarty/oric2/CLAUDE.md` pour la vision Oric 2 (machine chimère
        - [x] **B1.7a** REP/SEP + accumulator 16-bit (M flag) (v1.19.0-alpha)
        - [x] **B1.7b** Index 16-bit (X flag) + transfers natifs TCD/TDC/TCS/TSC/TXY/TYX, PHX/PHY/PLX/PLY (v1.19.1-alpha)
        - [x] **B1.7c** Stack natifs PHB/PLB/PHK/PHD/PLD/PEA/PEI/PER + BRA/BRL + COP/WDM/STZ (v1.19.2-alpha)
-- [ ] **B1.8** Opcodes natifs 65C816 (MVN/MVP, JSL/RTL, long addressing, …)
+- [x] **B1.8** Long addressing + bus 24-bit (v1.20.0-alpha, 2026-05-08)
+       LDA/STA/ALU long ($lll/$lll,X/[dp]/[dp],Y), JMP/JML/JSL/RTL, MVN/MVP, memory_t extended.
+
+### 🏁 **B1 CLÔTURÉ** (2026-05-08) — golden model 65C816 cycle-exact, 472 tests passent.
 
 ### B2 — Modèle mémoire bank-based 256K minimum (à venir)
 ### B3 — Démonstrateur bascule mode + virtualisation guest (stub kernel) (à venir)
@@ -520,7 +523,7 @@ Voir `/home/bmarty/oric2/CLAUDE.md` pour la vision Oric 2 (machine chimère
 - [ ] <5% CPU overhead on modern hardware
 
 ### Quality
-- [x] 460 tests passing (make tests, dont 2 Klaus + 4 boot dual + 48 mode N)
+- [x] 472 tests passing (make tests, dont 2 Klaus + 4 boot dual + 60 mode N)
 - [x] Zero critical bugs in test suite
 - [x] API documentation complete
 - [x] Comprehensive user guide
@@ -528,5 +531,5 @@ Voir `/home/bmarty/oric2/CLAUDE.md` pour la vision Oric 2 (machine chimère
 ---
 
 **Last Updated**: 2026-05-08
-**Current Version**: 1.19.2-alpha
-**Next Milestone**: B1.8 (bus 24-bit + opcodes long JSL/RTL/MVN/MVP) — clôture du jalon B1
+**Current Version**: 1.20.0-alpha
+**B1 CLÔTURÉ** — golden model 65C816 prêt. **Next Milestone** : B2 (modèle mémoire bank-based 256K minimum) — projet Oric 2.

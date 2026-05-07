@@ -28,6 +28,10 @@
 #include "cpu/cpu_internal.h"  /* opcode_table[] partagé avec le 6502 */
 #include "memory/memory.h"
 
+/* Forward declarations (some helpers reference each other across sections). */
+static inline bool M_is_8bit(const cpu65c816_t* c);
+static inline bool X_is_8bit(const cpu65c816_t* c);
+
 /* ─── Accès registres 8 bits en mode E ──────────────────────────────── */
 
 static inline uint8_t a8(const cpu65c816_t* c) { return (uint8_t)(c->C & 0xFF); }
@@ -50,7 +54,9 @@ void cpu816_mem_write(cpu65c816_t* cpu, uint16_t addr, uint8_t val) {
 }
 
 uint8_t cpu816_fetch_byte(cpu65c816_t* cpu) {
-    uint8_t v = cpu816_mem_read(cpu, cpu->PC);
+    /* B1.8 — fetch depuis PBR:PC. Bank 0 reste équivalent au comportement
+     * antérieur (memory_read24 route vers memory_read pour bank 0). */
+    uint8_t v = memory_read24(cpu->memory, ((uint32_t)cpu->PBR << 16) | cpu->PC);
     cpu->PC = (uint16_t)(cpu->PC + 1);
     return v;
 }
@@ -128,6 +134,55 @@ static uint16_t addr816_indirect_indexed(cpu65c816_t* cpu, bool* page_crossed) {
 static uint16_t addr816_relative(cpu65c816_t* cpu) {
     int8_t offset = (int8_t)cpu816_fetch_byte(cpu);
     return (uint16_t)(cpu->PC + offset);
+}
+
+/* ─── B1.8 — Modes d'adressage long 24-bit ──────────────────────────── */
+
+/* fetch_long : fetch 3 bytes au PC, retourne 24-bit address */
+static uint32_t fetch_long_pc(cpu65c816_t* cpu) {
+    uint8_t lo = cpu816_fetch_byte(cpu);
+    uint8_t hi = cpu816_fetch_byte(cpu);
+    uint8_t bank = cpu816_fetch_byte(cpu);
+    return ((uint32_t)bank << 16) | ((uint32_t)hi << 8) | lo;
+}
+
+/* Long absolute : $lllllll (24-bit address embedded in instruction) */
+static uint32_t addr816_long(cpu65c816_t* cpu) {
+    return fetch_long_pc(cpu);
+}
+
+/* Long absolute,X : $lllllll + X */
+static uint32_t addr816_long_x(cpu65c816_t* cpu) {
+    uint32_t base = fetch_long_pc(cpu);
+    return (base + cpu->X) & 0xFFFFFFu;
+}
+
+/* DP indirect long [dp] : lit 3 bytes en dp[$nn..$nn+2] (bank 0 forcé) */
+static uint32_t addr816_dp_indirect_long(cpu65c816_t* cpu) {
+    uint16_t zpg = (uint16_t)cpu816_fetch_byte(cpu);
+    uint16_t base = (uint16_t)(cpu->D + zpg);
+    uint8_t lo = memory_read24(cpu->memory, base);
+    uint8_t hi = memory_read24(cpu->memory, (uint16_t)(base + 1));
+    uint8_t bk = memory_read24(cpu->memory, (uint16_t)(base + 2));
+    return ((uint32_t)bk << 16) | ((uint32_t)hi << 8) | lo;
+}
+
+/* [dp],Y : indirect long indexed by Y */
+static uint32_t addr816_dp_indirect_long_y(cpu65c816_t* cpu) {
+    return (addr816_dp_indirect_long(cpu) + cpu->Y) & 0xFFFFFFu;
+}
+
+/* Helpers de lecture/écriture 24-bit M-aware (1 ou 2 bytes selon M) */
+static inline uint16_t read_M_24(cpu65c816_t* cpu, uint32_t addr24) {
+    if (M_is_8bit(cpu)) return memory_read24(cpu->memory, addr24);
+    uint8_t lo = memory_read24(cpu->memory, addr24);
+    uint8_t hi = memory_read24(cpu->memory, (addr24 + 1) & 0xFFFFFFu);
+    return (uint16_t)(lo | (hi << 8));
+}
+static inline void write_M_24(cpu65c816_t* cpu, uint32_t addr24, uint16_t val) {
+    memory_write24(cpu->memory, addr24, (uint8_t)val);
+    if (!M_is_8bit(cpu))
+        memory_write24(cpu->memory, (addr24 + 1) & 0xFFFFFFu, (uint8_t)(val >> 8));
 }
 
 /* ─── Stack (mode E : page 1 forcée) ────────────────────────────────── */
@@ -409,6 +464,85 @@ int cpu816_execute_opcode_e(cpu65c816_t* cpu, uint8_t opcode) {
     case 0xB9: addr = addr816_abs_y(cpu, &page_crossed); v16 = read_M(cpu, addr); a_set_M(cpu, v16); update_nz_M(cpu, v16); if(page_crossed) extra++; extra += M_extra_cycle(cpu); break;
     case 0xA1: v16 = read_M(cpu, addr816_indexed_indirect(cpu)); a_set_M(cpu, v16); update_nz_M(cpu, v16); extra += M_extra_cycle(cpu); break;
     case 0xB1: addr = addr816_indirect_indexed(cpu, &page_crossed); v16 = read_M(cpu, addr); a_set_M(cpu, v16); update_nz_M(cpu, v16); if(page_crossed) extra++; extra += M_extra_cycle(cpu); break;
+
+    /* ─── B1.8 — LDA long addressing modes (NOP en mode E, ADR-11(c)) ─── */
+    case 0xAF: if (cpu->E) { (void)fetch_long_pc(cpu); break; }                           /* LDA $lll */
+        v16 = read_M_24(cpu, addr816_long(cpu)); a_set_M(cpu, v16); update_nz_M(cpu, v16);
+        extra += M_extra_cycle(cpu); break;
+    case 0xBF: if (cpu->E) { (void)fetch_long_pc(cpu); break; }                           /* LDA $lll,X */
+        v16 = read_M_24(cpu, addr816_long_x(cpu)); a_set_M(cpu, v16); update_nz_M(cpu, v16);
+        extra += M_extra_cycle(cpu); break;
+    case 0xA7: if (cpu->E) { (void)cpu816_fetch_byte(cpu); break; }                       /* LDA [dp] */
+        v16 = read_M_24(cpu, addr816_dp_indirect_long(cpu)); a_set_M(cpu, v16); update_nz_M(cpu, v16);
+        extra += M_extra_cycle(cpu); break;
+    case 0xB7: if (cpu->E) { (void)cpu816_fetch_byte(cpu); break; }                       /* LDA [dp],Y */
+        v16 = read_M_24(cpu, addr816_dp_indirect_long_y(cpu)); a_set_M(cpu, v16); update_nz_M(cpu, v16);
+        extra += M_extra_cycle(cpu); break;
+
+    /* ─── B1.8 — STA long addressing modes ─── */
+    case 0x8F: if (cpu->E) { (void)fetch_long_pc(cpu); break; }                           /* STA $lll */
+        write_M_24(cpu, addr816_long(cpu), a_get_M(cpu)); extra += M_extra_cycle(cpu); break;
+    case 0x9F: if (cpu->E) { (void)fetch_long_pc(cpu); break; }                           /* STA $lll,X */
+        write_M_24(cpu, addr816_long_x(cpu), a_get_M(cpu)); extra += M_extra_cycle(cpu); break;
+    case 0x87: if (cpu->E) { (void)cpu816_fetch_byte(cpu); break; }                       /* STA [dp] */
+        write_M_24(cpu, addr816_dp_indirect_long(cpu), a_get_M(cpu)); extra += M_extra_cycle(cpu); break;
+    case 0x97: if (cpu->E) { (void)cpu816_fetch_byte(cpu); break; }                       /* STA [dp],Y */
+        write_M_24(cpu, addr816_dp_indirect_long_y(cpu), a_get_M(cpu)); extra += M_extra_cycle(cpu); break;
+
+    /* ─── B1.8 — ALU long addressing (ADC/SBC/AND/ORA/EOR/CMP) ─── */
+    case 0x6F: if (cpu->E) { (void)fetch_long_pc(cpu); break; }                           /* ADC $lll */
+        op_adc_M(cpu, read_M_24(cpu, addr816_long(cpu))); extra += M_extra_cycle(cpu); break;
+    case 0x7F: if (cpu->E) { (void)fetch_long_pc(cpu); break; }                           /* ADC $lll,X */
+        op_adc_M(cpu, read_M_24(cpu, addr816_long_x(cpu))); extra += M_extra_cycle(cpu); break;
+    case 0x67: if (cpu->E) { (void)cpu816_fetch_byte(cpu); break; }                       /* ADC [dp] */
+        op_adc_M(cpu, read_M_24(cpu, addr816_dp_indirect_long(cpu))); extra += M_extra_cycle(cpu); break;
+    case 0x77: if (cpu->E) { (void)cpu816_fetch_byte(cpu); break; }                       /* ADC [dp],Y */
+        op_adc_M(cpu, read_M_24(cpu, addr816_dp_indirect_long_y(cpu))); extra += M_extra_cycle(cpu); break;
+
+    case 0xEF: if (cpu->E) { (void)fetch_long_pc(cpu); break; }                           /* SBC $lll */
+        op_sbc_M(cpu, read_M_24(cpu, addr816_long(cpu))); extra += M_extra_cycle(cpu); break;
+    case 0xFF: if (cpu->E) { (void)fetch_long_pc(cpu); break; }                           /* SBC $lll,X */
+        op_sbc_M(cpu, read_M_24(cpu, addr816_long_x(cpu))); extra += M_extra_cycle(cpu); break;
+    case 0xE7: if (cpu->E) { (void)cpu816_fetch_byte(cpu); break; }                       /* SBC [dp] */
+        op_sbc_M(cpu, read_M_24(cpu, addr816_dp_indirect_long(cpu))); extra += M_extra_cycle(cpu); break;
+    case 0xF7: if (cpu->E) { (void)cpu816_fetch_byte(cpu); break; }                       /* SBC [dp],Y */
+        op_sbc_M(cpu, read_M_24(cpu, addr816_dp_indirect_long_y(cpu))); extra += M_extra_cycle(cpu); break;
+
+    case 0x2F: if (cpu->E) { (void)fetch_long_pc(cpu); break; }                           /* AND $lll */
+        v16 = a_get_M(cpu) & read_M_24(cpu, addr816_long(cpu)); a_set_M(cpu, v16); update_nz_M(cpu, v16); extra += M_extra_cycle(cpu); break;
+    case 0x3F: if (cpu->E) { (void)fetch_long_pc(cpu); break; }                           /* AND $lll,X */
+        v16 = a_get_M(cpu) & read_M_24(cpu, addr816_long_x(cpu)); a_set_M(cpu, v16); update_nz_M(cpu, v16); extra += M_extra_cycle(cpu); break;
+    case 0x27: if (cpu->E) { (void)cpu816_fetch_byte(cpu); break; }                       /* AND [dp] */
+        v16 = a_get_M(cpu) & read_M_24(cpu, addr816_dp_indirect_long(cpu)); a_set_M(cpu, v16); update_nz_M(cpu, v16); extra += M_extra_cycle(cpu); break;
+    case 0x37: if (cpu->E) { (void)cpu816_fetch_byte(cpu); break; }                       /* AND [dp],Y */
+        v16 = a_get_M(cpu) & read_M_24(cpu, addr816_dp_indirect_long_y(cpu)); a_set_M(cpu, v16); update_nz_M(cpu, v16); extra += M_extra_cycle(cpu); break;
+
+    case 0x0F: if (cpu->E) { (void)fetch_long_pc(cpu); break; }                           /* ORA $lll */
+        v16 = a_get_M(cpu) | read_M_24(cpu, addr816_long(cpu)); a_set_M(cpu, v16); update_nz_M(cpu, v16); extra += M_extra_cycle(cpu); break;
+    case 0x1F: if (cpu->E) { (void)fetch_long_pc(cpu); break; }                           /* ORA $lll,X */
+        v16 = a_get_M(cpu) | read_M_24(cpu, addr816_long_x(cpu)); a_set_M(cpu, v16); update_nz_M(cpu, v16); extra += M_extra_cycle(cpu); break;
+    case 0x07: if (cpu->E) { (void)cpu816_fetch_byte(cpu); break; }                       /* ORA [dp] */
+        v16 = a_get_M(cpu) | read_M_24(cpu, addr816_dp_indirect_long(cpu)); a_set_M(cpu, v16); update_nz_M(cpu, v16); extra += M_extra_cycle(cpu); break;
+    case 0x17: if (cpu->E) { (void)cpu816_fetch_byte(cpu); break; }                       /* ORA [dp],Y */
+        v16 = a_get_M(cpu) | read_M_24(cpu, addr816_dp_indirect_long_y(cpu)); a_set_M(cpu, v16); update_nz_M(cpu, v16); extra += M_extra_cycle(cpu); break;
+
+    case 0x4F: if (cpu->E) { (void)fetch_long_pc(cpu); break; }                           /* EOR $lll */
+        v16 = a_get_M(cpu) ^ read_M_24(cpu, addr816_long(cpu)); a_set_M(cpu, v16); update_nz_M(cpu, v16); extra += M_extra_cycle(cpu); break;
+    case 0x5F: if (cpu->E) { (void)fetch_long_pc(cpu); break; }                           /* EOR $lll,X */
+        v16 = a_get_M(cpu) ^ read_M_24(cpu, addr816_long_x(cpu)); a_set_M(cpu, v16); update_nz_M(cpu, v16); extra += M_extra_cycle(cpu); break;
+    case 0x47: if (cpu->E) { (void)cpu816_fetch_byte(cpu); break; }                       /* EOR [dp] */
+        v16 = a_get_M(cpu) ^ read_M_24(cpu, addr816_dp_indirect_long(cpu)); a_set_M(cpu, v16); update_nz_M(cpu, v16); extra += M_extra_cycle(cpu); break;
+    case 0x57: if (cpu->E) { (void)cpu816_fetch_byte(cpu); break; }                       /* EOR [dp],Y */
+        v16 = a_get_M(cpu) ^ read_M_24(cpu, addr816_dp_indirect_long_y(cpu)); a_set_M(cpu, v16); update_nz_M(cpu, v16); extra += M_extra_cycle(cpu); break;
+
+    case 0xCF: if (cpu->E) { (void)fetch_long_pc(cpu); break; }                           /* CMP $lll */
+        op_cmp_M(cpu, a_get_M(cpu), read_M_24(cpu, addr816_long(cpu))); extra += M_extra_cycle(cpu); break;
+    case 0xDF: if (cpu->E) { (void)fetch_long_pc(cpu); break; }                           /* CMP $lll,X */
+        op_cmp_M(cpu, a_get_M(cpu), read_M_24(cpu, addr816_long_x(cpu))); extra += M_extra_cycle(cpu); break;
+    case 0xC7: if (cpu->E) { (void)cpu816_fetch_byte(cpu); break; }                       /* CMP [dp] */
+        op_cmp_M(cpu, a_get_M(cpu), read_M_24(cpu, addr816_dp_indirect_long(cpu))); extra += M_extra_cycle(cpu); break;
+    case 0xD7: if (cpu->E) { (void)cpu816_fetch_byte(cpu); break; }                       /* CMP [dp],Y */
+        op_cmp_M(cpu, a_get_M(cpu), read_M_24(cpu, addr816_dp_indirect_long_y(cpu))); extra += M_extra_cycle(cpu); break;
 
     /* ─── LDX (X-aware) ─── */
     case 0xA2: v16 = fetch_imm_X(cpu); x_set_X(cpu, v16); update_nz_X(cpu, v16); extra += X_extra_cycle(cpu); break;
@@ -778,6 +912,83 @@ int cpu816_execute_opcode_e(cpu65c816_t* cpu, uint8_t opcode) {
     /* ─── JMP ─── */
     case 0x4C: cpu->PC = addr816_abs(cpu); break;
     case 0x6C: cpu->PC = addr816_indirect(cpu); break;
+
+    /* ─── B1.8 — JMP long et JML (mode N seulement, NOP en mode E) ─── */
+    case 0x5C: if (cpu->E) { (void)fetch_long_pc(cpu); break; }                           /* JMP $lllllll */
+    {
+        uint32_t target = addr816_long(cpu);
+        cpu->PBR = (uint8_t)(target >> 16);
+        cpu->PC = (uint16_t)(target & 0xFFFF);
+        break;
+    }
+    case 0xDC: if (cpu->E) { (void)cpu816_fetch_word_pc(cpu); break; }                    /* JML [a] : indirect long via abs ptr */
+    {
+        uint16_t ptr = cpu816_fetch_word_pc(cpu);
+        uint8_t lo = memory_read24(cpu->memory, ptr);
+        uint8_t hi = memory_read24(cpu->memory, (uint16_t)(ptr + 1));
+        uint8_t bk = memory_read24(cpu->memory, (uint16_t)(ptr + 2));
+        cpu->PBR = bk;
+        cpu->PC = (uint16_t)(lo | (hi << 8));
+        break;
+    }
+
+    /* ─── B1.8 — JSL : jump to subroutine long ($22) ───
+     *     Push PBR puis PC-1 (haut, bas), charge nouveau PBR:PC. */
+    case 0x22: if (cpu->E) { (void)fetch_long_pc(cpu); break; }
+    {
+        uint32_t target = fetch_long_pc(cpu);
+        /* PC pointe maintenant sur l'instr suivante. Push PC-1 + PBR. */
+        cpu816_push(cpu, cpu->PBR);
+        cpu816_push_word(cpu, (uint16_t)(cpu->PC - 1));
+        cpu->PBR = (uint8_t)(target >> 16);
+        cpu->PC = (uint16_t)(target & 0xFFFF);
+        break;
+    }
+
+    /* ─── B1.8 — RTL : return from long subroutine ($6B) ───
+     *     Pull PC+1 puis PBR. */
+    case 0x6B: if (cpu->E) break;
+        cpu->PC = (uint16_t)(cpu816_pull_word(cpu) + 1);
+        cpu->PBR = cpu816_pull(cpu);
+        break;
+
+    /* ─── B1.8 — MVN/MVP : block move ($54 / $44) ─── */
+    case 0x54: if (cpu->E) { (void)cpu816_fetch_byte(cpu); (void)cpu816_fetch_byte(cpu); break; }   /* MVN dst,src */
+    /* fall through to shared MVN/MVP body */
+    /* FALLTHROUGH */
+    case 0x44: if (cpu->E) { (void)cpu816_fetch_byte(cpu); (void)cpu816_fetch_byte(cpu); break; }   /* MVP dst,src */
+    {
+        /* Note : opcode déjà fetched. dest_bank et src_bank suivent.
+         * Ces opcodes copient C+1 octets entre src_bank:X et dst_bank:Y.
+         * Direction : MVN incrémente X et Y, MVP les décrémente. À la fin,
+         * X et Y pointent sur un cran après le dernier octet copié, et C = $FFFF.
+         * DBR est mis à dest_bank.
+         * Implementation : fait toute la boucle en un seul step (simple,
+         * pas cycle-exact ; un vrai 65C816 fait 7 cycles/byte). */
+        uint8_t dst_bank = cpu816_fetch_byte(cpu);
+        uint8_t src_bank = cpu816_fetch_byte(cpu);
+        cpu->DBR = dst_bank;
+        bool ascending = (opcode == 0x54);
+        /* Mode E : indices/A 8-bit : trait C comme A 8-bit + B 8-bit = 16-bit ?
+         * En mode N M=0, C = full 16-bit count. C+1 octets copiés. */
+        uint32_t count = (uint32_t)cpu->C + 1u;
+        for (uint32_t i = 0; i < count; i++) {
+            uint32_t src_addr = ((uint32_t)src_bank << 16) | cpu->X;
+            uint32_t dst_addr = ((uint32_t)dst_bank << 16) | cpu->Y;
+            uint8_t b = memory_read24(cpu->memory, src_addr);
+            memory_write24(cpu->memory, dst_addr, b);
+            if (ascending) {
+                cpu->X = (uint16_t)(cpu->X + 1);
+                cpu->Y = (uint16_t)(cpu->Y + 1);
+            } else {
+                cpu->X = (uint16_t)(cpu->X - 1);
+                cpu->Y = (uint16_t)(cpu->Y - 1);
+            }
+        }
+        cpu->C = 0xFFFF;
+        cycles = 7 * (int)count;
+        break;
+    }
 
     /* ─── JSR ─── */
     case 0x20:

@@ -509,13 +509,16 @@ TEST(test_phk_pushes_pbr) {
     cpu65c816_t cpu; memory_t mem; boot(&cpu, &mem);
     const uint8_t go[] = { 0x18, 0xFB }; load(&mem, 0x0200, go, 2);
     cpu816_step(&cpu); cpu816_step(&cpu);
-    cpu.PBR = 0x33;
+    /* B1.8 : avec PBR-aware fetch, on doit placer l'opcode dans le bon
+     * bank. PHK ne change pas PBR ; place le code en bank 3. */
+    memory_write24(&mem, 0x030200, 0x4B);
+    cpu.PBR = 0x03;
+    cpu.PC = 0x0200;
     uint16_t sp_before = cpu.S;
-    const uint8_t prog[] = { 0x4B }; load(&mem, 0x0202, prog, 1);
     cpu816_step(&cpu);
-    /* SP a décrémenté de 1 ; valeur poussée à $01..(sp_before) */
     ASSERT_EQ((int)cpu.S, (int)(sp_before - 1));
-    ASSERT_EQ((int)memory_read(&mem, sp_before), 0x33);
+    ASSERT_EQ((int)memory_read(&mem, sp_before), 0x03);
+    memory_cleanup(&mem);
 }
 
 TEST(test_phd_pld_16_bit) {
@@ -658,6 +661,189 @@ TEST(test_stz_zp_in_native) {
     ASSERT_EQ((int)memory_read(&mem, 0x0050), 0x00);
 }
 
+/* ─── B1.8 — Long addressing modes (24-bit bus, banks 1+) ────────────── */
+
+TEST(test_lda_long_reads_bank_2) {
+    cpu65c816_t cpu; memory_t mem; boot(&cpu, &mem);
+    enter_native_M0(&cpu, &mem);
+    /* Place une valeur en bank $02 :$3000 via memory_write24. */
+    memory_write24(&mem, 0x023000, 0x55);
+    memory_write24(&mem, 0x023001, 0xAA);
+    /* LDA $023000 : 4 bytes (op + 3 byte addr). M=0 → 16-bit. */
+    const uint8_t prog[] = { 0xAF, 0x00, 0x30, 0x02 }; load(&mem, cpu.PC, prog, 4);
+    cpu816_step(&cpu);
+    ASSERT_EQ((int)cpu.C, 0xAA55);
+    /* Cleanup pour éviter les leaks */
+    memory_cleanup(&mem);
+}
+
+TEST(test_sta_long_writes_bank_3) {
+    cpu65c816_t cpu; memory_t mem; boot(&cpu, &mem);
+    enter_native_M0(&cpu, &mem);
+    cpu.C = 0x1234;
+    /* STA $034000 */
+    const uint8_t prog[] = { 0x8F, 0x00, 0x40, 0x03 }; load(&mem, cpu.PC, prog, 4);
+    cpu816_step(&cpu);
+    ASSERT_EQ((int)memory_read24(&mem, 0x034000), 0x34);
+    ASSERT_EQ((int)memory_read24(&mem, 0x034001), 0x12);
+    memory_cleanup(&mem);
+}
+
+TEST(test_lda_long_x_indexed) {
+    cpu65c816_t cpu; memory_t mem; boot(&cpu, &mem);
+    enter_native_M0_X0(&cpu, &mem);
+    cpu.X = 0x0010;
+    memory_write24(&mem, 0x025010, 0x99);
+    /* LDA $025000,X — M=1 ici (par défaut après enter_native_M0_X0) */
+    /* Re-test avec M=1 pour 8-bit */
+    cpu.P |= FLAG816_M_MEM; /* force M=1 */
+    const uint8_t prog[] = { 0xBF, 0x00, 0x50, 0x02 }; load(&mem, cpu.PC, prog, 4);
+    cpu816_step(&cpu);
+    ASSERT_EQ((int)(cpu.C & 0xFF), 0x99);
+    memory_cleanup(&mem);
+}
+
+TEST(test_lda_dp_indirect_long) {
+    cpu65c816_t cpu; memory_t mem; boot(&cpu, &mem);
+    const uint8_t go[] = { 0x18, 0xFB }; load(&mem, 0x0200, go, 2);
+    cpu816_step(&cpu); cpu816_step(&cpu);
+    /* En mode N (M=1, X=1), [dp] : pointeur 24-bit en zp. */
+    cpu.D = 0x0000;
+    /* ZP $50 : pointeur vers $024000. Stocke low/hi/bank. */
+    memory_write24(&mem, 0x0050, 0x00);
+    memory_write24(&mem, 0x0051, 0x40);
+    memory_write24(&mem, 0x0052, 0x02);
+    memory_write24(&mem, 0x024000, 0x77);
+    /* LDA [$50] */
+    const uint8_t prog[] = { 0xA7, 0x50 }; load(&mem, 0x0202, prog, 2);
+    cpu816_step(&cpu);
+    ASSERT_EQ((int)(cpu.C & 0xFF), 0x77);
+    memory_cleanup(&mem);
+}
+
+TEST(test_lda_dp_indirect_long_y) {
+    cpu65c816_t cpu; memory_t mem; boot(&cpu, &mem);
+    const uint8_t go[] = { 0x18, 0xFB }; load(&mem, 0x0200, go, 2);
+    cpu816_step(&cpu); cpu816_step(&cpu);
+    cpu.D = 0x0000;
+    cpu.Y = 0x10;
+    memory_write24(&mem, 0x0080, 0x00);
+    memory_write24(&mem, 0x0081, 0x60);
+    memory_write24(&mem, 0x0082, 0x05);
+    memory_write24(&mem, 0x056010, 0xC3);
+    /* LDA [$80],Y → $056000 + $10 = $056010 */
+    const uint8_t prog[] = { 0xB7, 0x80 }; load(&mem, 0x0202, prog, 2);
+    cpu816_step(&cpu);
+    ASSERT_EQ((int)(cpu.C & 0xFF), 0xC3);
+    memory_cleanup(&mem);
+}
+
+/* ─── B1.8 — JMP long, JML, JSL, RTL ─────────────────────────────────── */
+
+TEST(test_jmp_long_jumps_to_bank) {
+    cpu65c816_t cpu; memory_t mem; boot(&cpu, &mem);
+    const uint8_t go[] = { 0x18, 0xFB }; load(&mem, 0x0200, go, 2);
+    cpu816_step(&cpu); cpu816_step(&cpu);
+    /* JMP $025678 : PBR ← $02, PC ← $5678 */
+    const uint8_t prog[] = { 0x5C, 0x78, 0x56, 0x02 }; load(&mem, 0x0202, prog, 4);
+    cpu816_step(&cpu);
+    ASSERT_EQ((int)cpu.PBR, 0x02);
+    ASSERT_EQ((int)cpu.PC, 0x5678);
+    memory_cleanup(&mem);
+}
+
+TEST(test_jsl_rtl_round_trip) {
+    cpu65c816_t cpu; memory_t mem; boot(&cpu, &mem);
+    const uint8_t go[] = { 0x18, 0xFB }; load(&mem, 0x0200, go, 2);
+    cpu816_step(&cpu); cpu816_step(&cpu);
+    /* JSL $030010 ; sub @ $030010 = LDA #$AA (avec M=1) ; RTL.
+     * (M=1 par défaut après XCE, donc LDA #$AA prend 1 byte d'opérande.) */
+    const uint8_t main_prog[] = { 0x22, 0x10, 0x00, 0x03, 0xEA }; load(&mem, 0x0202, main_prog, 5);
+    /* sub en bank 3 : LDA #$AA ; RTL */
+    memory_write24(&mem, 0x030010, 0xA9);
+    memory_write24(&mem, 0x030011, 0xAA);
+    memory_write24(&mem, 0x030012, 0x6B);
+    cpu816_step(&cpu); /* JSL */
+    ASSERT_EQ((int)cpu.PBR, 0x03);
+    ASSERT_EQ((int)cpu.PC, 0x0010);
+    cpu816_step(&cpu); /* LDA #$AA */
+    ASSERT_EQ((int)(cpu.C & 0xFF), 0xAA);
+    cpu816_step(&cpu); /* RTL */
+    ASSERT_EQ((int)cpu.PBR, 0x00);
+    ASSERT_EQ((int)cpu.PC, 0x0206); /* après JSL @ $0202 + 4 bytes */
+    memory_cleanup(&mem);
+}
+
+/* ─── B1.8 — MVN block move ──────────────────────────────────────────── */
+
+TEST(test_mvn_copies_block_ascending) {
+    cpu65c816_t cpu; memory_t mem; boot(&cpu, &mem);
+    const uint8_t go[] = { 0x18, 0xFB, 0xC2, 0x30 }; load(&mem, 0x0200, go, 4); /* mode N M=0 X=0 */
+    for (int i = 0; i < 3; i++) cpu816_step(&cpu);
+    /* Source bank $01:$2000-$2009 (10 octets), destination bank $02:$3000.
+     * MVN dst=$02, src=$01. C = count-1 = 9. X = source offset, Y = dest offset. */
+    for (int i = 0; i < 10; i++) memory_write24(&mem, 0x012000 + i, (uint8_t)(0xA0 + i));
+    cpu.X = 0x2000;
+    cpu.Y = 0x3000;
+    cpu.C = 9;  /* 10 octets */
+    /* MVN $02, $01 (note : opcode encoding is dest_bank, src_bank). */
+    const uint8_t prog[] = { 0x54, 0x02, 0x01 }; load(&mem, cpu.PC, prog, 3);
+    cpu816_step(&cpu);
+    /* Vérifie destination */
+    for (int i = 0; i < 10; i++) {
+        if (memory_read24(&mem, 0x023000 + i) != (uint8_t)(0xA0 + i)) {
+            printf("FAIL at offset %d\n", i); tests_failed++; memory_cleanup(&mem); return;
+        }
+    }
+    ASSERT_EQ((int)cpu.X, 0x200A);
+    ASSERT_EQ((int)cpu.Y, 0x300A);
+    ASSERT_EQ((int)cpu.C, 0xFFFF);
+    ASSERT_EQ((int)cpu.DBR, 0x02);
+    memory_cleanup(&mem);
+}
+
+TEST(test_long_opcodes_in_emulation_consume_size) {
+    cpu65c816_t cpu; memory_t mem; boot(&cpu, &mem);
+    /* LDA $lll en mode E doit être NOP de taille 4. */
+    const uint8_t prog[] = { 0xAF, 0x99, 0x88, 0x77, 0xA9, 0x42 }; load(&mem, 0x0200, prog, 6);
+    cpu816_step(&cpu); /* LDA $778899 → NOP, PC avance de 4 */
+    ASSERT_EQ((int)cpu.PC, 0x0204);
+    cpu816_step(&cpu); /* LDA #$42 */
+    ASSERT_EQ((int)(cpu.C & 0xFF), 0x42);
+    memory_cleanup(&mem);
+}
+
+/* ─── B1.8 — Memory 24-bit bus extension lazy alloc ─────────────────── */
+
+TEST(test_memory_read24_uninitialized_returns_zero) {
+    memory_t mem;
+    memory_init(&mem);
+    ASSERT_EQ((int)memory_read24(&mem, 0x100000), 0);
+    memory_cleanup(&mem);
+}
+
+TEST(test_memory_write24_then_read_round_trip) {
+    memory_t mem;
+    memory_init(&mem);
+    memory_write24(&mem, 0x420000, 0x55);
+    memory_write24(&mem, 0x42FFFF, 0xAA);
+    ASSERT_EQ((int)memory_read24(&mem, 0x420000), 0x55);
+    ASSERT_EQ((int)memory_read24(&mem, 0x42FFFF), 0xAA);
+    /* Bank non touché reste à 0 */
+    ASSERT_EQ((int)memory_read24(&mem, 0x430000), 0);
+    memory_cleanup(&mem);
+}
+
+TEST(test_memory_24_bank_0_routes_to_ram) {
+    memory_t mem;
+    memory_init(&mem);
+    memory_write24(&mem, 0x0050, 0xCC);
+    /* memory_read (bank 0) doit voir la même valeur. */
+    ASSERT_EQ((int)memory_read(&mem, 0x0050), 0xCC);
+    ASSERT_EQ((int)mem.ram[0x0050], 0xCC);
+    memory_cleanup(&mem);
+}
+
 TEST(test_xce_back_to_e_preserves_b_register) {
     cpu65c816_t cpu; memory_t mem; boot(&cpu, &mem);
     enter_native_M0(&cpu, &mem);
@@ -728,6 +914,20 @@ int main(void) {
     RUN(test_stz_abs_in_native_writes_two_zeros);
     RUN(test_stz_abs_in_emulation_is_nop);
     RUN(test_stz_zp_in_native);
+
+    /* B1.8 — long addressing, JSL/RTL/JMP long, MVN, bus 24-bit */
+    RUN(test_lda_long_reads_bank_2);
+    RUN(test_sta_long_writes_bank_3);
+    RUN(test_lda_long_x_indexed);
+    RUN(test_lda_dp_indirect_long);
+    RUN(test_lda_dp_indirect_long_y);
+    RUN(test_jmp_long_jumps_to_bank);
+    RUN(test_jsl_rtl_round_trip);
+    RUN(test_mvn_copies_block_ascending);
+    RUN(test_long_opcodes_in_emulation_consume_size);
+    RUN(test_memory_read24_uninitialized_returns_zero);
+    RUN(test_memory_write24_then_read_round_trip);
+    RUN(test_memory_24_bank_0_routes_to_ram);
 
     printf("\n═══════════════════════════════════════════════════════\n");
     printf("  Results: %d passed, %d failed\n", tests_passed, tests_failed);

@@ -119,7 +119,8 @@ int cpu816_step(cpu65c816_t* cpu) {
      *     mode-agnostiques et restent corrects ;
      *   - tout autre opcode est susceptible d'être faux côté largeur
      *     registres / banking. La sémantique mode N propre arrive en B1.7. */
-    uint8_t opcode = cpu816_mem_read(cpu, cpu->PC);
+    /* B1.8 — fetch opcode depuis PBR:PC (24-bit). */
+    uint8_t opcode = memory_read24(cpu->memory, ((uint32_t)cpu->PBR << 16) | cpu->PC);
     cpu->PC = (uint16_t)(cpu->PC + 1);
     int cyc = cpu816_execute_opcode_e(cpu, opcode);
     if (cyc < 0) return -1;

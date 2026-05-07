@@ -1,12 +1,19 @@
 VERSION_TRACKING - Phosphoric
 =====================================
 
-Current Version: 1.19.2-alpha
+Current Version: 1.20.0-alpha
 Release Date: 2026-05-08
-Status: Alpha (Oric 2 B1.7 complet — mode natif 65C816, 460 tests pass)
+Status: Alpha (Oric 2 B1 CLÔTURÉ — long addressing + bus 24-bit, 472 tests pass)
 
 Version History:
 ----------------
+- 1.20.0-alpha (2026-05-08): Oric 2 B1.8 — long addressing + bus 24-bit (472 tests, +12)
+  * Add: extension memory_t (extra_banks 1-255 lazy alloc), memory_read24/write24
+  * Add: long addressing modes pour LDA/STA/ADC/SBC/AND/ORA/EOR/CMP (32 opcodes)
+  * Add: JMP $5C long, JML $DC indirect long, JSL $22, RTL $6B
+  * Add: MVN $54 / MVP $44 (block move avec DBR mis à jour)
+  * Update: cpu816_step et fetch_byte utilisent PBR:PC via memory_read24
+  * B1 entièrement clôturé : 6502 + 65C816 mode E + mode N + long addressing
 - 1.19.2-alpha (2026-05-08): Oric 2 B1.7c — stack natifs + BRA/BRL/COP/WDM/STZ (460 tests, +14)
   * Add: PHB/PLB/PHK/PHD/PLD/PEA/PEI/PER (stack natifs)
   * Add: BRA $80, BRL $82 (branches inconditionnelles)

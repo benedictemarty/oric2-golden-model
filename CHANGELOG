@@ -5,6 +5,61 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.20.0-alpha] - 2026-05-08
+
+### Oric 2 — Jalon B1.8 : long addressing + bus 24-bit (clôture B1)
+
+#### Added
+- **Extension `memory_t` bus 24-bit** : champ `extra_banks[256]` (bank 0
+  reste sur ram/rom existant ; banks 1-255 alloués paresseusement à
+  64 KiB chacun à la première écriture). Nouvelles fonctions
+  `memory_read24(addr24)` / `memory_write24(addr24, val)`. `memory_cleanup`
+  libère les banks alloués.
+- **Helpers cpu65c816 24-bit** : `read_M_24`, `write_M_24`, `fetch_long_pc`,
+  `addr816_long`, `addr816_long_x`, `addr816_dp_indirect_long`,
+  `addr816_dp_indirect_long_y`.
+- **Long addressing modes pour LDA/STA/ADC/SBC/AND/ORA/EOR/CMP** (4 modes
+  chacun = 32 nouveaux opcodes) :
+  - `$AF/$BF/$A7/$B7` etc. : abs long, abs long X, [dp], [dp],Y
+- **Sauts long 65C816** :
+  - **JMP `$5C`** : jump absolute long (charge PBR + PC).
+  - **JML `$DC`** : jump indirect long via pointeur 24-bit en zp.
+  - **JSL `$22`** : jump to subroutine long (push PBR puis PC-1).
+  - **RTL `$6B`** : return from subroutine long (pull PC+1 puis PBR).
+- **Block move** :
+  - **MVN `$54`** : block move ascending (X et Y incrémentent).
+  - **MVP `$44`** : block move descending (X et Y décrémentent).
+  - C+1 octets copiés ; DBR ← dst_bank ; X et Y avancent ; C ← $FFFF.
+- **Fetch opcode et fetch_byte M-aware → PBR-aware** : `cpu816_step()` et
+  `cpu816_fetch_byte()` utilisent maintenant `memory_read24(PBR:PC)`. Bank 0
+  reste équivalent au comportement antérieur (memory_read24 route vers
+  memory_read pour bank 0). JSL et JMP long fonctionnent intégralement.
+- **12 nouveaux tests `test_cpu65c816_native`** : LDA long bank 2, STA
+  long bank 3, LDA long,X, LDA [dp], LDA [dp],Y, JMP long, JSL/RTL
+  round-trip cross-bank, MVN bloc 10 octets bank 1 → bank 2, opcodes
+  long en mode E NOP avec consommation de la taille, memory_read24
+  bank vide, memory_read24/write24 round-trip, bank 0 routé vers ram.
+
+#### Changed
+- Test `test_phk_pushes_pbr` adapté : place le code en bank 3 et
+  positionne PBR=$03 cohérent avec le fetch PBR-aware.
+- Modes E sur opcodes long (LDA/STA/ALU/JMP/JSL/RTL/MVN/MVP) : NOP avec
+  consommation correcte de la taille opérande (3 ou 4 bytes selon le mode).
+  Aligné ADR-11(c) : opcodes inconnus du NMOS = NOP.
+
+#### Notes
+- B1 **CLÔTURÉ** : 6502, 65C816 mode E (Klaus + boot ROM dual), 65C816
+  mode N (REP/SEP, M/X width-aware, transfers, stack natifs, branches,
+  COP, STZ), long addressing (LDA/STA/ALU long, [dp]/[dp],Y), JMP/JSL/RTL
+  long, MVN/MVP, bus 24-bit. Différé : addressing stack-relative (dp,S)
+  et (dp,S),Y, BIT immediate ($89), JSR (a,X) — usage rare, ajout B2 si
+  besoin.
+- Klaus B1.5, boot dual B1.6, B1.4 mode E, B1.7a/b/c mode N : aucune
+  régression. 472 tests passent (était 460, +12).
+- L'extension bus 24-bit est non-invasive pour le 6502 Phosphoric existant
+  (bank 0 = chemin inchangé). 6502 et 65C816 mode E partagent toujours la
+  même mémoire et restent strictement équivalents.
+
 ## [1.19.2-alpha] - 2026-05-08
 
 ### Oric 2 — Jalon B1.7c : stack natifs + BRA/BRL + COP/WDM/STZ

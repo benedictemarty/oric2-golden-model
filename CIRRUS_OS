@@ -2,8 +2,8 @@ CIRRUS_OS - Phosphoric Build & Development Status
 ======================================================
 
 Project: Phosphoric — ORIC-1/Atmos Cycle-Accurate Emulator
-Version: 1.19.2-alpha
-Build Status: ALPHA (Oric 2 B1.7 complet — mode natif 65C816)
+Version: 1.20.0-alpha
+Build Status: ALPHA (Oric 2 B1 CLÔTURÉ — golden model 65C816 complet, prêt B2)
 Last Updated: 2026-05-08
 
 ================================================================
@@ -27,7 +27,8 @@ BUILD STATUS
 [V] CPU Core 65C816 N (a) - B1.7a (Oric 2): REP/SEP + 16-bit accumulator (M flag)
 [V] CPU Core 65C816 N (b) - B1.7b (Oric 2): 16-bit index (X flag) + transfers natifs
 [V] CPU Core 65C816 N (c) - B1.7c (Oric 2): stack natifs + BRA/BRL + COP/WDM/STZ
-[ ] CPU Core 65C816 long  - B1.8 (Oric 2): bus 24-bit + opcodes long (JSL/RTL/MVN/MVP) (à faire)
+[V] CPU Core 65C816 long  - B1.8 (Oric 2): bus 24-bit + long addressing + JSL/RTL/MVN/MVP
+[V] B1 CLÔTURÉ            - golden model 65C816 cycle-exact, prêt pour B2 (modèle mémoire 256K)
 [V] Memory System         - Complete (64KB, ROM/RAM banking, I/O routing)
 [V] I/O System (VIA 6522) - Complete (timers, interrupts, ports)
 [V] Video System          - Complete (text + HIRES modes)
