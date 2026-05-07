@@ -159,7 +159,7 @@ uint16_t cpu816_pull_word(cpu65c816_t* cpu) {
     return (uint16_t)((hi << 8) | lo);
 }
 
-/* ─── Helpers ALU ───────────────────────────────────────────────────── */
+/* ─── Helpers ALU et width-awareness M/X (B1.7) ──────────────────────── */
 
 static inline void update_nz(cpu65c816_t* cpu, uint8_t v) {
     if (v == 0)  cpu->P |=  FLAG_ZERO;     else cpu->P &= (uint8_t)~FLAG_ZERO;
@@ -169,6 +169,72 @@ static inline void update_nz(cpu65c816_t* cpu, uint8_t v) {
 static inline bool flag(const cpu65c816_t* cpu, uint8_t f) { return (cpu->P & f) != 0; }
 static inline void setf(cpu65c816_t* cpu, uint8_t f, bool v) {
     if (v) cpu->P |= f; else cpu->P &= (uint8_t)~f;
+}
+
+/* B1.7 — width-awareness mode N
+ * En mode E ou avec FLAG816_M_MEM=1, l'accumulateur est 8 bits.
+ * En mode E ou avec FLAG816_X_INDEX=1, X et Y sont 8 bits.
+ */
+static inline bool M_is_8bit(const cpu65c816_t* c) {
+    return c->E || (c->P & FLAG816_M_MEM);
+}
+static inline bool X_is_8bit(const cpu65c816_t* c) {
+    return c->E || (c->P & FLAG816_X_INDEX);
+}
+
+/* Accumulateur (low byte ou full 16 bits selon M) */
+static inline uint16_t a_get_M(const cpu65c816_t* c) {
+    return M_is_8bit(c) ? (c->C & 0xFF) : c->C;
+}
+static inline void a_set_M(cpu65c816_t* c, uint16_t v) {
+    if (M_is_8bit(c)) c->C = (uint16_t)((c->C & 0xFF00) | (v & 0xFF));
+    else              c->C = v;
+}
+
+/* update N et Z selon la largeur courante de l'accumulateur. */
+static inline void update_nz_M(cpu65c816_t* cpu, uint16_t v) {
+    if (M_is_8bit(cpu)) { update_nz(cpu, (uint8_t)v); return; }
+    cpu->P &= (uint8_t)~(FLAG_ZERO | FLAG_NEGATIVE);
+    if (v == 0)        cpu->P |= FLAG_ZERO;
+    if (v & 0x8000)    cpu->P |= FLAG_NEGATIVE;
+}
+
+/* Lecture/écriture mémoire 8 ou 16 bits selon M.
+ * Les addr+1 wrap à 16 bits dans le bank courant (pas de propagation
+ * vers DBR — strict bus 16-bit en B1.7, l'extension 24-bit est B1.8). */
+static inline uint16_t read_M(cpu65c816_t* cpu, uint16_t addr) {
+    if (M_is_8bit(cpu)) return cpu816_mem_read(cpu, addr);
+    uint8_t lo = cpu816_mem_read(cpu, addr);
+    uint8_t hi = cpu816_mem_read(cpu, (uint16_t)(addr + 1));
+    return (uint16_t)(lo | (hi << 8));
+}
+static inline void write_M(cpu65c816_t* cpu, uint16_t addr, uint16_t val) {
+    cpu816_mem_write(cpu, addr, (uint8_t)val);
+    if (!M_is_8bit(cpu))
+        cpu816_mem_write(cpu, (uint16_t)(addr + 1), (uint8_t)(val >> 8));
+}
+
+/* fetch immédiat selon largeur courante M (1 ou 2 bytes consommés au PC). */
+static inline uint16_t fetch_imm_M(cpu65c816_t* cpu) {
+    if (M_is_8bit(cpu)) return cpu816_fetch_byte(cpu);
+    return cpu816_fetch_word_pc(cpu);
+}
+
+/* Penalty cycle ajouté quand M=0 sur un opcode read/write 16-bit. */
+static inline int M_extra_cycle(const cpu65c816_t* cpu) {
+    return M_is_8bit(cpu) ? 0 : 1;
+}
+
+/* Stack push/pull width-aware (M ou X selon contexte d'appel) */
+static inline void push_M(cpu65c816_t* cpu, uint16_t val) {
+    if (!M_is_8bit(cpu)) cpu816_push(cpu, (uint8_t)(val >> 8));
+    cpu816_push(cpu, (uint8_t)val);
+}
+static inline uint16_t pull_M(cpu65c816_t* cpu) {
+    uint8_t lo = cpu816_pull(cpu);
+    if (M_is_8bit(cpu)) return lo;
+    uint8_t hi = cpu816_pull(cpu);
+    return (uint16_t)(lo | (hi << 8));
 }
 
 /* ADC / SBC / CMP — port direct du 6502 Phosphoric */
@@ -222,6 +288,41 @@ static void op_cmp(cpu65c816_t* cpu, uint8_t reg, uint8_t val) {
     update_nz(cpu, r);
 }
 
+/* B1.7 — Versions width-aware (M flag) pour ALU accumulator ────────── */
+
+static void op_adc_M(cpu65c816_t* cpu, uint16_t val) {
+    if (M_is_8bit(cpu)) { op_adc(cpu, (uint8_t)val); return; }
+    /* 16-bit binaire (BCD 16b non implémenté en B1.7 — rare ; tombe en
+     * 8 bits si D=1 pour rester conservateur). */
+    if (flag(cpu, FLAG_DECIMAL)) { op_adc(cpu, (uint8_t)val); return; }
+    uint16_t A = cpu->C;
+    uint32_t sum = (uint32_t)A + (uint32_t)val + (flag(cpu, FLAG_CARRY) ? 1u : 0u);
+    setf(cpu, FLAG_CARRY, sum > 0xFFFF);
+    uint16_t res = (uint16_t)sum;
+    setf(cpu, FLAG_OVERFLOW, ((A ^ res) & (val ^ res) & 0x8000) != 0);
+    cpu->C = res;
+    update_nz_M(cpu, res);
+}
+
+static void op_sbc_M(cpu65c816_t* cpu, uint16_t val) {
+    if (M_is_8bit(cpu)) { op_sbc(cpu, (uint8_t)val); return; }
+    if (flag(cpu, FLAG_DECIMAL)) { op_sbc(cpu, (uint8_t)val); return; }
+    uint16_t A = cpu->C;
+    uint32_t diff = (uint32_t)A - (uint32_t)val - (flag(cpu, FLAG_CARRY) ? 0u : 1u);
+    setf(cpu, FLAG_CARRY, diff < 0x10000);
+    uint16_t res = (uint16_t)diff;
+    setf(cpu, FLAG_OVERFLOW, ((A ^ val) & (A ^ res) & 0x8000) != 0);
+    cpu->C = res;
+    update_nz_M(cpu, res);
+}
+
+static void op_cmp_M(cpu65c816_t* cpu, uint16_t reg, uint16_t val) {
+    if (M_is_8bit(cpu)) { op_cmp(cpu, (uint8_t)reg, (uint8_t)val); return; }
+    uint16_t r = (uint16_t)(reg - val);
+    setf(cpu, FLAG_CARRY, reg >= val);
+    update_nz_M(cpu, r);
+}
+
 /* ─── Branches (page-cross penalty) ─────────────────────────────────── */
 
 static int do_branch(cpu65c816_t* cpu, bool condition) {
@@ -244,17 +345,18 @@ int cpu816_execute_opcode_e(cpu65c816_t* cpu, uint8_t opcode) {
     bool page_crossed = false;
     uint16_t addr;
     uint8_t val, result;
+    uint16_t v16;
 
     switch (opcode) {
-    /* ─── LDA ─── */
-    case 0xA9: val = cpu816_mem_read(cpu, addr816_immediate(cpu)); set_a8(cpu, val); update_nz(cpu, val); break;
-    case 0xA5: val = cpu816_mem_read(cpu, addr816_zp(cpu)); set_a8(cpu, val); update_nz(cpu, val); break;
-    case 0xB5: val = cpu816_mem_read(cpu, addr816_zp_x(cpu)); set_a8(cpu, val); update_nz(cpu, val); break;
-    case 0xAD: val = cpu816_mem_read(cpu, addr816_abs(cpu)); set_a8(cpu, val); update_nz(cpu, val); break;
-    case 0xBD: addr = addr816_abs_x(cpu, &page_crossed); val = cpu816_mem_read(cpu, addr); set_a8(cpu, val); update_nz(cpu, val); if(page_crossed) extra=1; break;
-    case 0xB9: addr = addr816_abs_y(cpu, &page_crossed); val = cpu816_mem_read(cpu, addr); set_a8(cpu, val); update_nz(cpu, val); if(page_crossed) extra=1; break;
-    case 0xA1: val = cpu816_mem_read(cpu, addr816_indexed_indirect(cpu)); set_a8(cpu, val); update_nz(cpu, val); break;
-    case 0xB1: addr = addr816_indirect_indexed(cpu, &page_crossed); val = cpu816_mem_read(cpu, addr); set_a8(cpu, val); update_nz(cpu, val); if(page_crossed) extra=1; break;
+    /* ─── LDA (M-aware) ─── */
+    case 0xA9: v16 = fetch_imm_M(cpu); a_set_M(cpu, v16); update_nz_M(cpu, v16); extra += M_extra_cycle(cpu); break;
+    case 0xA5: v16 = read_M(cpu, addr816_zp(cpu)); a_set_M(cpu, v16); update_nz_M(cpu, v16); extra += M_extra_cycle(cpu); break;
+    case 0xB5: v16 = read_M(cpu, addr816_zp_x(cpu)); a_set_M(cpu, v16); update_nz_M(cpu, v16); extra += M_extra_cycle(cpu); break;
+    case 0xAD: v16 = read_M(cpu, addr816_abs(cpu)); a_set_M(cpu, v16); update_nz_M(cpu, v16); extra += M_extra_cycle(cpu); break;
+    case 0xBD: addr = addr816_abs_x(cpu, &page_crossed); v16 = read_M(cpu, addr); a_set_M(cpu, v16); update_nz_M(cpu, v16); if(page_crossed) extra++; extra += M_extra_cycle(cpu); break;
+    case 0xB9: addr = addr816_abs_y(cpu, &page_crossed); v16 = read_M(cpu, addr); a_set_M(cpu, v16); update_nz_M(cpu, v16); if(page_crossed) extra++; extra += M_extra_cycle(cpu); break;
+    case 0xA1: v16 = read_M(cpu, addr816_indexed_indirect(cpu)); a_set_M(cpu, v16); update_nz_M(cpu, v16); extra += M_extra_cycle(cpu); break;
+    case 0xB1: addr = addr816_indirect_indexed(cpu, &page_crossed); v16 = read_M(cpu, addr); a_set_M(cpu, v16); update_nz_M(cpu, v16); if(page_crossed) extra++; extra += M_extra_cycle(cpu); break;
 
     /* ─── LDX ─── */
     case 0xA2: val = cpu816_mem_read(cpu, addr816_immediate(cpu)); set_x8(cpu, val); update_nz(cpu, val); break;
@@ -270,14 +372,14 @@ int cpu816_execute_opcode_e(cpu65c816_t* cpu, uint8_t opcode) {
     case 0xAC: val = cpu816_mem_read(cpu, addr816_abs(cpu)); set_y8(cpu, val); update_nz(cpu, val); break;
     case 0xBC: addr = addr816_abs_x(cpu, &page_crossed); val = cpu816_mem_read(cpu, addr); set_y8(cpu, val); update_nz(cpu, val); if(page_crossed) extra=1; break;
 
-    /* ─── STA ─── */
-    case 0x85: cpu816_mem_write(cpu, addr816_zp(cpu), a8(cpu)); break;
-    case 0x95: cpu816_mem_write(cpu, addr816_zp_x(cpu), a8(cpu)); break;
-    case 0x8D: cpu816_mem_write(cpu, addr816_abs(cpu), a8(cpu)); break;
-    case 0x9D: addr = addr816_abs_x(cpu, NULL); cpu816_mem_write(cpu, addr, a8(cpu)); break;
-    case 0x99: addr = addr816_abs_y(cpu, NULL); cpu816_mem_write(cpu, addr, a8(cpu)); break;
-    case 0x81: cpu816_mem_write(cpu, addr816_indexed_indirect(cpu), a8(cpu)); break;
-    case 0x91: addr = addr816_indirect_indexed(cpu, NULL); cpu816_mem_write(cpu, addr, a8(cpu)); break;
+    /* ─── STA (M-aware) ─── */
+    case 0x85: write_M(cpu, addr816_zp(cpu), a_get_M(cpu)); extra += M_extra_cycle(cpu); break;
+    case 0x95: write_M(cpu, addr816_zp_x(cpu), a_get_M(cpu)); extra += M_extra_cycle(cpu); break;
+    case 0x8D: write_M(cpu, addr816_abs(cpu), a_get_M(cpu)); extra += M_extra_cycle(cpu); break;
+    case 0x9D: addr = addr816_abs_x(cpu, NULL); write_M(cpu, addr, a_get_M(cpu)); extra += M_extra_cycle(cpu); break;
+    case 0x99: addr = addr816_abs_y(cpu, NULL); write_M(cpu, addr, a_get_M(cpu)); extra += M_extra_cycle(cpu); break;
+    case 0x81: write_M(cpu, addr816_indexed_indirect(cpu), a_get_M(cpu)); extra += M_extra_cycle(cpu); break;
+    case 0x91: addr = addr816_indirect_indexed(cpu, NULL); write_M(cpu, addr, a_get_M(cpu)); extra += M_extra_cycle(cpu); break;
 
     /* ─── STX ─── */
     case 0x86: cpu816_mem_write(cpu, addr816_zp(cpu), x8(cpu)); break;
@@ -289,66 +391,74 @@ int cpu816_execute_opcode_e(cpu65c816_t* cpu, uint8_t opcode) {
     case 0x94: cpu816_mem_write(cpu, addr816_zp_x(cpu), y8(cpu)); break;
     case 0x8C: cpu816_mem_write(cpu, addr816_abs(cpu), y8(cpu)); break;
 
-    /* ─── ADC ─── */
-    case 0x69: op_adc(cpu, cpu816_mem_read(cpu, addr816_immediate(cpu))); break;
-    case 0x65: op_adc(cpu, cpu816_mem_read(cpu, addr816_zp(cpu))); break;
-    case 0x75: op_adc(cpu, cpu816_mem_read(cpu, addr816_zp_x(cpu))); break;
-    case 0x6D: op_adc(cpu, cpu816_mem_read(cpu, addr816_abs(cpu))); break;
-    case 0x7D: addr = addr816_abs_x(cpu, &page_crossed); op_adc(cpu, cpu816_mem_read(cpu, addr)); if(page_crossed) extra=1; break;
-    case 0x79: addr = addr816_abs_y(cpu, &page_crossed); op_adc(cpu, cpu816_mem_read(cpu, addr)); if(page_crossed) extra=1; break;
-    case 0x61: op_adc(cpu, cpu816_mem_read(cpu, addr816_indexed_indirect(cpu))); break;
-    case 0x71: addr = addr816_indirect_indexed(cpu, &page_crossed); op_adc(cpu, cpu816_mem_read(cpu, addr)); if(page_crossed) extra=1; break;
+    /* ─── ADC (M-aware) ─── */
+    case 0x69: op_adc_M(cpu, fetch_imm_M(cpu)); extra += M_extra_cycle(cpu); break;
+    case 0x65: op_adc_M(cpu, read_M(cpu, addr816_zp(cpu))); extra += M_extra_cycle(cpu); break;
+    case 0x75: op_adc_M(cpu, read_M(cpu, addr816_zp_x(cpu))); extra += M_extra_cycle(cpu); break;
+    case 0x6D: op_adc_M(cpu, read_M(cpu, addr816_abs(cpu))); extra += M_extra_cycle(cpu); break;
+    case 0x7D: addr = addr816_abs_x(cpu, &page_crossed); op_adc_M(cpu, read_M(cpu, addr)); if(page_crossed) extra++; extra += M_extra_cycle(cpu); break;
+    case 0x79: addr = addr816_abs_y(cpu, &page_crossed); op_adc_M(cpu, read_M(cpu, addr)); if(page_crossed) extra++; extra += M_extra_cycle(cpu); break;
+    case 0x61: op_adc_M(cpu, read_M(cpu, addr816_indexed_indirect(cpu))); extra += M_extra_cycle(cpu); break;
+    case 0x71: addr = addr816_indirect_indexed(cpu, &page_crossed); op_adc_M(cpu, read_M(cpu, addr)); if(page_crossed) extra++; extra += M_extra_cycle(cpu); break;
 
-    /* ─── SBC ─── */
-    case 0xE9: op_sbc(cpu, cpu816_mem_read(cpu, addr816_immediate(cpu))); break;
-    case 0xEB: op_sbc(cpu, cpu816_mem_read(cpu, addr816_immediate(cpu))); break; /* alias officieux */
-    case 0xE5: op_sbc(cpu, cpu816_mem_read(cpu, addr816_zp(cpu))); break;
-    case 0xF5: op_sbc(cpu, cpu816_mem_read(cpu, addr816_zp_x(cpu))); break;
-    case 0xED: op_sbc(cpu, cpu816_mem_read(cpu, addr816_abs(cpu))); break;
-    case 0xFD: addr = addr816_abs_x(cpu, &page_crossed); op_sbc(cpu, cpu816_mem_read(cpu, addr)); if(page_crossed) extra=1; break;
-    case 0xF9: addr = addr816_abs_y(cpu, &page_crossed); op_sbc(cpu, cpu816_mem_read(cpu, addr)); if(page_crossed) extra=1; break;
-    case 0xE1: op_sbc(cpu, cpu816_mem_read(cpu, addr816_indexed_indirect(cpu))); break;
-    case 0xF1: addr = addr816_indirect_indexed(cpu, &page_crossed); op_sbc(cpu, cpu816_mem_read(cpu, addr)); if(page_crossed) extra=1; break;
+    /* ─── SBC (M-aware) ─── */
+    case 0xE9: op_sbc_M(cpu, fetch_imm_M(cpu)); extra += M_extra_cycle(cpu); break;
+    case 0xEB: /* En mode E : alias officieux SBC immediate (NMOS).
+                * En mode N : XBA (échange high/low byte de C, 3 cycles).
+                * cf. WDC W65C816S — opcode polymorphique. */
+        if (cpu->E) { op_sbc_M(cpu, fetch_imm_M(cpu)); }
+        else { uint8_t lo = (uint8_t)(cpu->C & 0xFF); uint8_t hi = (uint8_t)(cpu->C >> 8);
+               cpu->C = (uint16_t)((lo << 8) | hi);
+               /* N et Z reflètent le nouveau low byte (= ancien high). */
+               update_nz(cpu, hi); cycles = 3; }
+        break;
+    case 0xE5: op_sbc_M(cpu, read_M(cpu, addr816_zp(cpu))); extra += M_extra_cycle(cpu); break;
+    case 0xF5: op_sbc_M(cpu, read_M(cpu, addr816_zp_x(cpu))); extra += M_extra_cycle(cpu); break;
+    case 0xED: op_sbc_M(cpu, read_M(cpu, addr816_abs(cpu))); extra += M_extra_cycle(cpu); break;
+    case 0xFD: addr = addr816_abs_x(cpu, &page_crossed); op_sbc_M(cpu, read_M(cpu, addr)); if(page_crossed) extra++; extra += M_extra_cycle(cpu); break;
+    case 0xF9: addr = addr816_abs_y(cpu, &page_crossed); op_sbc_M(cpu, read_M(cpu, addr)); if(page_crossed) extra++; extra += M_extra_cycle(cpu); break;
+    case 0xE1: op_sbc_M(cpu, read_M(cpu, addr816_indexed_indirect(cpu))); extra += M_extra_cycle(cpu); break;
+    case 0xF1: addr = addr816_indirect_indexed(cpu, &page_crossed); op_sbc_M(cpu, read_M(cpu, addr)); if(page_crossed) extra++; extra += M_extra_cycle(cpu); break;
 
-    /* ─── AND ─── */
-    case 0x29: set_a8(cpu, a8(cpu) & cpu816_mem_read(cpu, addr816_immediate(cpu))); update_nz(cpu, a8(cpu)); break;
-    case 0x25: set_a8(cpu, a8(cpu) & cpu816_mem_read(cpu, addr816_zp(cpu))); update_nz(cpu, a8(cpu)); break;
-    case 0x35: set_a8(cpu, a8(cpu) & cpu816_mem_read(cpu, addr816_zp_x(cpu))); update_nz(cpu, a8(cpu)); break;
-    case 0x2D: set_a8(cpu, a8(cpu) & cpu816_mem_read(cpu, addr816_abs(cpu))); update_nz(cpu, a8(cpu)); break;
-    case 0x3D: addr = addr816_abs_x(cpu, &page_crossed); set_a8(cpu, a8(cpu) & cpu816_mem_read(cpu, addr)); update_nz(cpu, a8(cpu)); if(page_crossed) extra=1; break;
-    case 0x39: addr = addr816_abs_y(cpu, &page_crossed); set_a8(cpu, a8(cpu) & cpu816_mem_read(cpu, addr)); update_nz(cpu, a8(cpu)); if(page_crossed) extra=1; break;
-    case 0x21: set_a8(cpu, a8(cpu) & cpu816_mem_read(cpu, addr816_indexed_indirect(cpu))); update_nz(cpu, a8(cpu)); break;
-    case 0x31: addr = addr816_indirect_indexed(cpu, &page_crossed); set_a8(cpu, a8(cpu) & cpu816_mem_read(cpu, addr)); update_nz(cpu, a8(cpu)); if(page_crossed) extra=1; break;
+    /* ─── AND (M-aware) ─── */
+    case 0x29: v16 = a_get_M(cpu) & fetch_imm_M(cpu); a_set_M(cpu, v16); update_nz_M(cpu, v16); extra += M_extra_cycle(cpu); break;
+    case 0x25: v16 = a_get_M(cpu) & read_M(cpu, addr816_zp(cpu)); a_set_M(cpu, v16); update_nz_M(cpu, v16); extra += M_extra_cycle(cpu); break;
+    case 0x35: v16 = a_get_M(cpu) & read_M(cpu, addr816_zp_x(cpu)); a_set_M(cpu, v16); update_nz_M(cpu, v16); extra += M_extra_cycle(cpu); break;
+    case 0x2D: v16 = a_get_M(cpu) & read_M(cpu, addr816_abs(cpu)); a_set_M(cpu, v16); update_nz_M(cpu, v16); extra += M_extra_cycle(cpu); break;
+    case 0x3D: addr = addr816_abs_x(cpu, &page_crossed); v16 = a_get_M(cpu) & read_M(cpu, addr); a_set_M(cpu, v16); update_nz_M(cpu, v16); if(page_crossed) extra++; extra += M_extra_cycle(cpu); break;
+    case 0x39: addr = addr816_abs_y(cpu, &page_crossed); v16 = a_get_M(cpu) & read_M(cpu, addr); a_set_M(cpu, v16); update_nz_M(cpu, v16); if(page_crossed) extra++; extra += M_extra_cycle(cpu); break;
+    case 0x21: v16 = a_get_M(cpu) & read_M(cpu, addr816_indexed_indirect(cpu)); a_set_M(cpu, v16); update_nz_M(cpu, v16); extra += M_extra_cycle(cpu); break;
+    case 0x31: addr = addr816_indirect_indexed(cpu, &page_crossed); v16 = a_get_M(cpu) & read_M(cpu, addr); a_set_M(cpu, v16); update_nz_M(cpu, v16); if(page_crossed) extra++; extra += M_extra_cycle(cpu); break;
 
-    /* ─── ORA ─── */
-    case 0x09: set_a8(cpu, a8(cpu) | cpu816_mem_read(cpu, addr816_immediate(cpu))); update_nz(cpu, a8(cpu)); break;
-    case 0x05: set_a8(cpu, a8(cpu) | cpu816_mem_read(cpu, addr816_zp(cpu))); update_nz(cpu, a8(cpu)); break;
-    case 0x15: set_a8(cpu, a8(cpu) | cpu816_mem_read(cpu, addr816_zp_x(cpu))); update_nz(cpu, a8(cpu)); break;
-    case 0x0D: set_a8(cpu, a8(cpu) | cpu816_mem_read(cpu, addr816_abs(cpu))); update_nz(cpu, a8(cpu)); break;
-    case 0x1D: addr = addr816_abs_x(cpu, &page_crossed); set_a8(cpu, a8(cpu) | cpu816_mem_read(cpu, addr)); update_nz(cpu, a8(cpu)); if(page_crossed) extra=1; break;
-    case 0x19: addr = addr816_abs_y(cpu, &page_crossed); set_a8(cpu, a8(cpu) | cpu816_mem_read(cpu, addr)); update_nz(cpu, a8(cpu)); if(page_crossed) extra=1; break;
-    case 0x01: set_a8(cpu, a8(cpu) | cpu816_mem_read(cpu, addr816_indexed_indirect(cpu))); update_nz(cpu, a8(cpu)); break;
-    case 0x11: addr = addr816_indirect_indexed(cpu, &page_crossed); set_a8(cpu, a8(cpu) | cpu816_mem_read(cpu, addr)); update_nz(cpu, a8(cpu)); if(page_crossed) extra=1; break;
+    /* ─── ORA (M-aware) ─── */
+    case 0x09: v16 = a_get_M(cpu) | fetch_imm_M(cpu); a_set_M(cpu, v16); update_nz_M(cpu, v16); extra += M_extra_cycle(cpu); break;
+    case 0x05: v16 = a_get_M(cpu) | read_M(cpu, addr816_zp(cpu)); a_set_M(cpu, v16); update_nz_M(cpu, v16); extra += M_extra_cycle(cpu); break;
+    case 0x15: v16 = a_get_M(cpu) | read_M(cpu, addr816_zp_x(cpu)); a_set_M(cpu, v16); update_nz_M(cpu, v16); extra += M_extra_cycle(cpu); break;
+    case 0x0D: v16 = a_get_M(cpu) | read_M(cpu, addr816_abs(cpu)); a_set_M(cpu, v16); update_nz_M(cpu, v16); extra += M_extra_cycle(cpu); break;
+    case 0x1D: addr = addr816_abs_x(cpu, &page_crossed); v16 = a_get_M(cpu) | read_M(cpu, addr); a_set_M(cpu, v16); update_nz_M(cpu, v16); if(page_crossed) extra++; extra += M_extra_cycle(cpu); break;
+    case 0x19: addr = addr816_abs_y(cpu, &page_crossed); v16 = a_get_M(cpu) | read_M(cpu, addr); a_set_M(cpu, v16); update_nz_M(cpu, v16); if(page_crossed) extra++; extra += M_extra_cycle(cpu); break;
+    case 0x01: v16 = a_get_M(cpu) | read_M(cpu, addr816_indexed_indirect(cpu)); a_set_M(cpu, v16); update_nz_M(cpu, v16); extra += M_extra_cycle(cpu); break;
+    case 0x11: addr = addr816_indirect_indexed(cpu, &page_crossed); v16 = a_get_M(cpu) | read_M(cpu, addr); a_set_M(cpu, v16); update_nz_M(cpu, v16); if(page_crossed) extra++; extra += M_extra_cycle(cpu); break;
 
-    /* ─── EOR ─── */
-    case 0x49: set_a8(cpu, a8(cpu) ^ cpu816_mem_read(cpu, addr816_immediate(cpu))); update_nz(cpu, a8(cpu)); break;
-    case 0x45: set_a8(cpu, a8(cpu) ^ cpu816_mem_read(cpu, addr816_zp(cpu))); update_nz(cpu, a8(cpu)); break;
-    case 0x55: set_a8(cpu, a8(cpu) ^ cpu816_mem_read(cpu, addr816_zp_x(cpu))); update_nz(cpu, a8(cpu)); break;
-    case 0x4D: set_a8(cpu, a8(cpu) ^ cpu816_mem_read(cpu, addr816_abs(cpu))); update_nz(cpu, a8(cpu)); break;
-    case 0x5D: addr = addr816_abs_x(cpu, &page_crossed); set_a8(cpu, a8(cpu) ^ cpu816_mem_read(cpu, addr)); update_nz(cpu, a8(cpu)); if(page_crossed) extra=1; break;
-    case 0x59: addr = addr816_abs_y(cpu, &page_crossed); set_a8(cpu, a8(cpu) ^ cpu816_mem_read(cpu, addr)); update_nz(cpu, a8(cpu)); if(page_crossed) extra=1; break;
-    case 0x41: set_a8(cpu, a8(cpu) ^ cpu816_mem_read(cpu, addr816_indexed_indirect(cpu))); update_nz(cpu, a8(cpu)); break;
-    case 0x51: addr = addr816_indirect_indexed(cpu, &page_crossed); set_a8(cpu, a8(cpu) ^ cpu816_mem_read(cpu, addr)); update_nz(cpu, a8(cpu)); if(page_crossed) extra=1; break;
+    /* ─── EOR (M-aware) ─── */
+    case 0x49: v16 = a_get_M(cpu) ^ fetch_imm_M(cpu); a_set_M(cpu, v16); update_nz_M(cpu, v16); extra += M_extra_cycle(cpu); break;
+    case 0x45: v16 = a_get_M(cpu) ^ read_M(cpu, addr816_zp(cpu)); a_set_M(cpu, v16); update_nz_M(cpu, v16); extra += M_extra_cycle(cpu); break;
+    case 0x55: v16 = a_get_M(cpu) ^ read_M(cpu, addr816_zp_x(cpu)); a_set_M(cpu, v16); update_nz_M(cpu, v16); extra += M_extra_cycle(cpu); break;
+    case 0x4D: v16 = a_get_M(cpu) ^ read_M(cpu, addr816_abs(cpu)); a_set_M(cpu, v16); update_nz_M(cpu, v16); extra += M_extra_cycle(cpu); break;
+    case 0x5D: addr = addr816_abs_x(cpu, &page_crossed); v16 = a_get_M(cpu) ^ read_M(cpu, addr); a_set_M(cpu, v16); update_nz_M(cpu, v16); if(page_crossed) extra++; extra += M_extra_cycle(cpu); break;
+    case 0x59: addr = addr816_abs_y(cpu, &page_crossed); v16 = a_get_M(cpu) ^ read_M(cpu, addr); a_set_M(cpu, v16); update_nz_M(cpu, v16); if(page_crossed) extra++; extra += M_extra_cycle(cpu); break;
+    case 0x41: v16 = a_get_M(cpu) ^ read_M(cpu, addr816_indexed_indirect(cpu)); a_set_M(cpu, v16); update_nz_M(cpu, v16); extra += M_extra_cycle(cpu); break;
+    case 0x51: addr = addr816_indirect_indexed(cpu, &page_crossed); v16 = a_get_M(cpu) ^ read_M(cpu, addr); a_set_M(cpu, v16); update_nz_M(cpu, v16); if(page_crossed) extra++; extra += M_extra_cycle(cpu); break;
 
-    /* ─── CMP ─── */
-    case 0xC9: op_cmp(cpu, a8(cpu), cpu816_mem_read(cpu, addr816_immediate(cpu))); break;
-    case 0xC5: op_cmp(cpu, a8(cpu), cpu816_mem_read(cpu, addr816_zp(cpu))); break;
-    case 0xD5: op_cmp(cpu, a8(cpu), cpu816_mem_read(cpu, addr816_zp_x(cpu))); break;
-    case 0xCD: op_cmp(cpu, a8(cpu), cpu816_mem_read(cpu, addr816_abs(cpu))); break;
-    case 0xDD: addr = addr816_abs_x(cpu, &page_crossed); op_cmp(cpu, a8(cpu), cpu816_mem_read(cpu, addr)); if(page_crossed) extra=1; break;
-    case 0xD9: addr = addr816_abs_y(cpu, &page_crossed); op_cmp(cpu, a8(cpu), cpu816_mem_read(cpu, addr)); if(page_crossed) extra=1; break;
-    case 0xC1: op_cmp(cpu, a8(cpu), cpu816_mem_read(cpu, addr816_indexed_indirect(cpu))); break;
-    case 0xD1: addr = addr816_indirect_indexed(cpu, &page_crossed); op_cmp(cpu, a8(cpu), cpu816_mem_read(cpu, addr)); if(page_crossed) extra=1; break;
+    /* ─── CMP (M-aware) ─── */
+    case 0xC9: op_cmp_M(cpu, a_get_M(cpu), fetch_imm_M(cpu)); extra += M_extra_cycle(cpu); break;
+    case 0xC5: op_cmp_M(cpu, a_get_M(cpu), read_M(cpu, addr816_zp(cpu))); extra += M_extra_cycle(cpu); break;
+    case 0xD5: op_cmp_M(cpu, a_get_M(cpu), read_M(cpu, addr816_zp_x(cpu))); extra += M_extra_cycle(cpu); break;
+    case 0xCD: op_cmp_M(cpu, a_get_M(cpu), read_M(cpu, addr816_abs(cpu))); extra += M_extra_cycle(cpu); break;
+    case 0xDD: addr = addr816_abs_x(cpu, &page_crossed); op_cmp_M(cpu, a_get_M(cpu), read_M(cpu, addr)); if(page_crossed) extra++; extra += M_extra_cycle(cpu); break;
+    case 0xD9: addr = addr816_abs_y(cpu, &page_crossed); op_cmp_M(cpu, a_get_M(cpu), read_M(cpu, addr)); if(page_crossed) extra++; extra += M_extra_cycle(cpu); break;
+    case 0xC1: op_cmp_M(cpu, a_get_M(cpu), read_M(cpu, addr816_indexed_indirect(cpu))); extra += M_extra_cycle(cpu); break;
+    case 0xD1: addr = addr816_indirect_indexed(cpu, &page_crossed); op_cmp_M(cpu, a_get_M(cpu), read_M(cpu, addr)); if(page_crossed) extra++; extra += M_extra_cycle(cpu); break;
 
     /* ─── CPX ─── */
     case 0xE0: op_cmp(cpu, x8(cpu), cpu816_mem_read(cpu, addr816_immediate(cpu))); break;
@@ -360,16 +470,28 @@ int cpu816_execute_opcode_e(cpu65c816_t* cpu, uint8_t opcode) {
     case 0xC4: op_cmp(cpu, y8(cpu), cpu816_mem_read(cpu, addr816_zp(cpu))); break;
     case 0xCC: op_cmp(cpu, y8(cpu), cpu816_mem_read(cpu, addr816_abs(cpu))); break;
 
-    /* ─── BIT ─── */
-    case 0x24: val = cpu816_mem_read(cpu, addr816_zp(cpu));
-        setf(cpu, FLAG_ZERO, (a8(cpu) & val) == 0);
-        setf(cpu, FLAG_OVERFLOW, (val & 0x40) != 0);
-        setf(cpu, FLAG_NEGATIVE, (val & 0x80) != 0);
+    /* ─── BIT (M-aware) ─── */
+    case 0x24: v16 = read_M(cpu, addr816_zp(cpu));
+        setf(cpu, FLAG_ZERO, (a_get_M(cpu) & v16) == 0);
+        if (M_is_8bit(cpu)) {
+            setf(cpu, FLAG_OVERFLOW, (v16 & 0x40) != 0);
+            setf(cpu, FLAG_NEGATIVE, (v16 & 0x80) != 0);
+        } else {
+            setf(cpu, FLAG_OVERFLOW, (v16 & 0x4000) != 0);
+            setf(cpu, FLAG_NEGATIVE, (v16 & 0x8000) != 0);
+            extra++;
+        }
         break;
-    case 0x2C: val = cpu816_mem_read(cpu, addr816_abs(cpu));
-        setf(cpu, FLAG_ZERO, (a8(cpu) & val) == 0);
-        setf(cpu, FLAG_OVERFLOW, (val & 0x40) != 0);
-        setf(cpu, FLAG_NEGATIVE, (val & 0x80) != 0);
+    case 0x2C: v16 = read_M(cpu, addr816_abs(cpu));
+        setf(cpu, FLAG_ZERO, (a_get_M(cpu) & v16) == 0);
+        if (M_is_8bit(cpu)) {
+            setf(cpu, FLAG_OVERFLOW, (v16 & 0x40) != 0);
+            setf(cpu, FLAG_NEGATIVE, (v16 & 0x80) != 0);
+        } else {
+            setf(cpu, FLAG_OVERFLOW, (v16 & 0x4000) != 0);
+            setf(cpu, FLAG_NEGATIVE, (v16 & 0x8000) != 0);
+            extra++;
+        }
         break;
 
     /* ─── ASL ─── */
@@ -488,6 +610,14 @@ int cpu816_execute_opcode_e(cpu65c816_t* cpu, uint8_t opcode) {
     case 0xCE: addr = addr816_abs(cpu); result = (uint8_t)(cpu816_mem_read(cpu, addr) - 1); cpu816_mem_write(cpu, addr, result); update_nz(cpu, result); break;
     case 0xDE: addr = addr816_abs_x(cpu, NULL); result = (uint8_t)(cpu816_mem_read(cpu, addr) - 1); cpu816_mem_write(cpu, addr, result); update_nz(cpu, result); break;
 
+    /* ─── INC A / DEC A — 65C816-only ($1A, $3A) M-aware
+     *     En mode E : NOP (ADR-11(c) hybride, aligné 6502 Phosphoric).
+     *     En mode N : opération sur l'accumulateur largeur M. ─── */
+    case 0x1A: if (cpu->E) break;
+               v16 = (uint16_t)(a_get_M(cpu) + 1); a_set_M(cpu, v16); update_nz_M(cpu, v16); break;
+    case 0x3A: if (cpu->E) break;
+               v16 = (uint16_t)(a_get_M(cpu) - 1); a_set_M(cpu, v16); update_nz_M(cpu, v16); break;
+
     /* ─── INX/INY/DEX/DEY ─── */
     case 0xE8: set_x8(cpu, (uint8_t)(x8(cpu) + 1)); update_nz(cpu, x8(cpu)); break;
     case 0xC8: set_y8(cpu, (uint8_t)(y8(cpu) + 1)); update_nz(cpu, y8(cpu)); break;
@@ -502,11 +632,19 @@ int cpu816_execute_opcode_e(cpu65c816_t* cpu, uint8_t opcode) {
     case 0xBA: set_x8(cpu, sp8(cpu)); update_nz(cpu, x8(cpu)); break; /* TSX */
     case 0x9A: set_sp8(cpu, x8(cpu)); break;                          /* TXS */
 
-    /* ─── Stack ─── */
-    case 0x48: cpu816_push(cpu, a8(cpu)); break;                                                /* PHA */
-    case 0x68: set_a8(cpu, cpu816_pull(cpu)); update_nz(cpu, a8(cpu)); break;                   /* PLA */
+    /* ─── Stack (PHA/PLA M-aware ; PHP/PLP toujours 8b — P fait 8 bits) ─── */
+    case 0x48: push_M(cpu, a_get_M(cpu)); extra += M_extra_cycle(cpu); break;                   /* PHA */
+    case 0x68: v16 = pull_M(cpu); a_set_M(cpu, v16); update_nz_M(cpu, v16); extra += M_extra_cycle(cpu); break; /* PLA */
     case 0x08: cpu816_push(cpu, (uint8_t)(cpu->P | FLAG_BREAK | FLAG_UNUSED)); break;           /* PHP */
-    case 0x28: cpu->P = (uint8_t)((cpu816_pull(cpu) & ~FLAG_BREAK) | FLAG_UNUSED); break;       /* PLP */
+    case 0x28: cpu->P = (uint8_t)((cpu816_pull(cpu) & ~FLAG_BREAK) | FLAG_UNUSED);
+               /* En mode E, les bits 4-5 sont interprétés comme B et UNUSED
+                * (pas comme M/X) — la sémantique 6502 est respectée par le
+                * masquage ci-dessus. M_is_8bit/X_is_8bit court-circuitent
+                * sur cpu->E donc forcer M/X est inutile.
+                * En mode N, PLP peut effectivement changer M et X ; le
+                * tronquage des high bytes de X/Y est appliqué de manière
+                * paresseuse à l'usage suivant. */
+               break; /* PLP */
 
     /* ─── Branches ─── */
     case 0x10: extra = do_branch(cpu, !flag(cpu, FLAG_NEGATIVE)); break; /* BPL */
@@ -557,6 +695,30 @@ int cpu816_execute_opcode_e(cpu65c816_t* cpu, uint8_t opcode) {
     case 0xD8: setf(cpu, FLAG_DECIMAL, false);   break; /* CLD */
     case 0xF8: setf(cpu, FLAG_DECIMAL, true);    break; /* SED */
     case 0xB8: setf(cpu, FLAG_OVERFLOW, false);  break; /* CLV */
+
+    /* ─── REP / SEP — P bits manipulation 65C816 (B1.7) ─── */
+    case 0xC2: { /* REP #imm — clear bits in P selected by mask */
+        uint8_t mask = cpu816_fetch_byte(cpu);
+        cpu->P = (uint8_t)(cpu->P & ~mask);
+        /* En mode E, UNUSED reste à 1 (sémantique 6502 sur bit 5).
+         * M_is_8bit/X_is_8bit court-circuitent sur cpu->E, donc la
+         * largeur effective est garantie par E=1 indépendamment de P. */
+        if (cpu->E) cpu->P |= FLAG_UNUSED;
+        cycles = 3;
+        break;
+    }
+    case 0xE2: { /* SEP #imm — set bits in P selected by mask */
+        uint8_t mask = cpu816_fetch_byte(cpu);
+        cpu->P |= mask;
+        /* Quand X passe à 1 (8-bit indices), les high bytes de X et Y
+         * sont tronqués. */
+        if (mask & FLAG816_X_INDEX) {
+            cpu->X &= 0x00FF;
+            cpu->Y &= 0x00FF;
+        }
+        cycles = 3;
+        break;
+    }
 
     /* ─── XCE (déjà testé en B1.3, géré par cpu65c816.c::step pour la
      *     transition mode N→E ; ici on duplique l'effet pour cohérence). ─── */

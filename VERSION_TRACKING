@@ -1,12 +1,19 @@
 VERSION_TRACKING - Phosphoric
 =====================================
 
-Current Version: 1.18.2-alpha
+Current Version: 1.19.0-alpha
 Release Date: 2026-05-07
-Status: Alpha (Oric 2 B1.6 — équivalence boot ROM Oric 1 6502↔65C816, 412 tests pass)
+Status: Alpha (Oric 2 B1.7a — REP/SEP + 16-bit accumulator mode N, 429 tests pass)
 
 Version History:
 ----------------
+- 1.19.0-alpha (2026-05-07): Oric 2 B1.7a — REP/SEP + accumulator 16b (429 tests, +17)
+  * Add: REP $C2, SEP $E2 (P bit manipulation, X tronque X/Y)
+  * Add: helpers width-aware (M_is_8bit, a_get_M, read_M, write_M, fetch_imm_M, ...)
+  * Add: opcodes M-aware LDA/STA/ADC/SBC/AND/ORA/EOR/CMP/BIT/PHA/PLA
+  * Add: INC A $1A / DEC A $3A (NOP en mode E ADR-11(c), op M-aware en mode N)
+  * Add: $EB polymorphique (SBC imm en E, XBA en N)
+  * Test: 17 tests test_cpu65c816_native (mode N partiel)
 - 1.18.2-alpha (2026-05-07): Oric 2 B1.6 — équivalence boot ROM Oric 1 (412 tests, +4)
   * Add: tests/integration/test_oric_boot_dual.c (équivalence bit-à-bit)
   * Fix: cpu816_reset n'aligne plus le bit B (FLAG_BREAK) à 1, conformément 6502

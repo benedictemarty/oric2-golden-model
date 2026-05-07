@@ -5,6 +5,53 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.19.0-alpha] - 2026-05-07
+
+### Oric 2 — Jalon B1.7a : REP/SEP + 16-bit accumulator (mode N)
+
+#### Added
+- **REP `$C2`** : reset bits in P selected by immediate mask. En mode E,
+  préserve UNUSED=1 (sémantique 6502 sur bit 5).
+- **SEP `$E2`** : set bits in P selected by mask. Quand X passe à 1
+  (8-bit indices), tronque automatiquement les high bytes de X et Y.
+- **Helpers width-aware** dans `cpu65c816_opcodes.c` :
+  `M_is_8bit`, `X_is_8bit`, `a_get_M`, `a_set_M`, `read_M`, `write_M`,
+  `fetch_imm_M`, `update_nz_M`, `push_M`, `pull_M`, `M_extra_cycle`.
+  En mode E, `cpu->E` court-circuite la lecture des bits M/X de P,
+  garantissant la largeur 8-bit indépendamment du contenu de P.
+- **Opcodes M-aware** (mode N M=0 → 16-bit accumulator) :
+  - LDA/STA tous modes (8 cases chacun)
+  - ADC/SBC tous modes (port 16-bit binaire ; BCD 16b déféré)
+  - AND/ORA/EOR tous modes
+  - CMP tous modes
+  - BIT (zp et abs) avec N depuis bit 15 et V depuis bit 14 si M=0
+  - PHA/PLA (push/pull 1 ou 2 bytes)
+  - **INC A `$1A`** et **DEC A `$3A`** (65C816-only). En mode E : NOP
+    (ADR-11(c) hybride, aligné 6502 Phosphoric). En mode N : op M-aware.
+- **`$EB` polymorphique** :
+  - En mode E : alias officieux SBC immediate (NMOS, B1.4 conservé).
+  - En mode N : **XBA** (échange high/low byte de C, 3 cycles, N/Z
+    depuis le nouveau low byte).
+- **17 tests `test_cpu65c816_native`** : REP/SEP, transitions M, LDA
+  16-bit (immediate, abs), STA 16-bit, ADC 16-bit (carry, overflow),
+  AND/ORA/EOR 16-bit, CMP 16-bit, INC A / DEC A (mode N et E), PHA/PLA
+  16-bit, $EB polymorphique, préservation B sur retour mode E.
+
+#### Changed
+- **PLP `$28`** : ne force plus M/X en mode E (les bits 4-5 sont B et
+  UNUSED en mode E ; M_is_8bit court-circuite sur cpu->E). Test
+  `test_php_plp_b_and_unused_handling` corrigé en conséquence.
+- **`cpu816_step::step`** : message d'erreur mode N retiré (mode N
+  désormais partiellement exécutable, opcodes accumulator OK).
+
+#### Notes
+- Bus 24-bit non encore implémenté (PBR/DBR ignorés, bank 0 forcé).
+  Différé à B1.8 (opcodes natifs avec long addressing).
+- Index 16-bit (X flag) différé à B1.7b.
+- Boot ROM Oric 1 reste équivalent strict 6502 ↔ 65C816 mode E (B1.6
+  toujours vert), Klaus B1.5 toujours vert.
+- 429 tests passent (était 412, +17).
+
 ## [1.18.2-alpha] - 2026-05-07
 
 ### Oric 2 — Jalon B1.6 : équivalence boot ROM Oric 1 entre les deux cœurs
