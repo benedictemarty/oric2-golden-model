@@ -75,6 +75,14 @@ static void enter_native_M0(cpu65c816_t* cpu, memory_t* mem) {
     for (int i = 0; i < 3; i++) cpu816_step(cpu);
 }
 
+/* Bascule en mode natif M=0 et X=0 (full 16-bit). */
+static void enter_native_M0_X0(cpu65c816_t* cpu, memory_t* mem) {
+    const uint8_t prog[] = { 0x18, 0xFB,    /* CLC ; XCE → mode N */
+                              0xC2, 0x30 }; /* REP #$30 → M=0, X=0 */
+    load(mem, cpu->PC, prog, 4);
+    for (int i = 0; i < 3; i++) cpu816_step(cpu);
+}
+
 /* ─── REP / SEP ─────────────────────────────────────────────────────── */
 
 TEST(test_sep_set_m_in_native_mode) {
@@ -274,6 +282,209 @@ TEST(test_eb_is_xba_in_native_mode) {
 
 /* ─── Bascule M : préservation B sur retour mode E ──────────────────── */
 
+/* ─── B1.7b — Index 16-bit (X flag) ─────────────────────────────────── */
+
+TEST(test_ldx_immediate_16_bit) {
+    cpu65c816_t cpu; memory_t mem; boot(&cpu, &mem);
+    enter_native_M0_X0(&cpu, &mem);
+    /* LDX #$1234 (3 bytes) */
+    const uint8_t prog[] = { 0xA2, 0x34, 0x12 }; load(&mem, cpu.PC, prog, 3);
+    cpu816_step(&cpu);
+    ASSERT_EQ((int)cpu.X, 0x1234);
+    ASSERT_FALSE(cpu.P & FLAG_NEGATIVE);
+}
+
+TEST(test_ldy_abs_16_bit) {
+    cpu65c816_t cpu; memory_t mem; boot(&cpu, &mem);
+    enter_native_M0_X0(&cpu, &mem);
+    memory_write(&mem, 0x3000, 0x55);
+    memory_write(&mem, 0x3001, 0xAA);
+    const uint8_t prog[] = { 0xAC, 0x00, 0x30 }; load(&mem, cpu.PC, prog, 3);
+    cpu816_step(&cpu);
+    ASSERT_EQ((int)cpu.Y, 0xAA55);
+    ASSERT_TRUE(cpu.P & FLAG_NEGATIVE);
+}
+
+TEST(test_stx_abs_writes_two_bytes) {
+    cpu65c816_t cpu; memory_t mem; boot(&cpu, &mem);
+    enter_native_M0_X0(&cpu, &mem);
+    cpu.X = 0x4321;
+    const uint8_t prog[] = { 0x8E, 0x00, 0x40 }; load(&mem, cpu.PC, prog, 3);
+    cpu816_step(&cpu);
+    ASSERT_EQ((int)memory_read(&mem, 0x4000), 0x21);
+    ASSERT_EQ((int)memory_read(&mem, 0x4001), 0x43);
+}
+
+TEST(test_inx_dex_16_bit_wrap) {
+    cpu65c816_t cpu; memory_t mem; boot(&cpu, &mem);
+    enter_native_M0_X0(&cpu, &mem);
+    cpu.X = 0xFFFF;
+    const uint8_t prog[] = { 0xE8, 0xCA }; load(&mem, cpu.PC, prog, 2);
+    cpu816_step(&cpu); /* INX */
+    ASSERT_EQ((int)cpu.X, 0x0000);
+    ASSERT_TRUE(cpu.P & FLAG_ZERO);
+    cpu816_step(&cpu); /* DEX */
+    ASSERT_EQ((int)cpu.X, 0xFFFF);
+    ASSERT_TRUE(cpu.P & FLAG_NEGATIVE);
+}
+
+TEST(test_iny_16_bit) {
+    cpu65c816_t cpu; memory_t mem; boot(&cpu, &mem);
+    enter_native_M0_X0(&cpu, &mem);
+    cpu.Y = 0x00FF;
+    const uint8_t prog[] = { 0xC8 }; load(&mem, cpu.PC, prog, 1);
+    cpu816_step(&cpu);
+    ASSERT_EQ((int)cpu.Y, 0x0100); /* pas de wrap au byte */
+}
+
+TEST(test_cpx_16_bit) {
+    cpu65c816_t cpu; memory_t mem; boot(&cpu, &mem);
+    enter_native_M0_X0(&cpu, &mem);
+    cpu.X = 0x1234;
+    const uint8_t prog[] = { 0xE0, 0x00, 0x10 }; load(&mem, cpu.PC, prog, 3); /* CPX #$1000 */
+    cpu816_step(&cpu);
+    ASSERT_TRUE(cpu.P & FLAG_CARRY);  /* $1234 >= $1000 */
+    ASSERT_FALSE(cpu.P & FLAG_ZERO);
+}
+
+/* ─── B1.7b — Transfers natifs 65C816 ───────────────────────────────── */
+
+TEST(test_tcd_16_bit_with_n_z_flags) {
+    cpu65c816_t cpu; memory_t mem; boot(&cpu, &mem);
+    /* Bascule en mode N, M=1 X=1 (par défaut). */
+    const uint8_t go[] = { 0x18, 0xFB }; load(&mem, 0x0200, go, 2);
+    cpu816_step(&cpu); cpu816_step(&cpu);
+    cpu.C = 0x8042;
+    /* TCD : D ← C, N/Z 16-bit */
+    const uint8_t prog[] = { 0x5B }; load(&mem, 0x0202, prog, 1);
+    cpu816_step(&cpu);
+    ASSERT_EQ((int)cpu.D, 0x8042);
+    ASSERT_TRUE(cpu.P & FLAG_NEGATIVE); /* bit 15 */
+}
+
+TEST(test_tdc_copies_d_to_c) {
+    cpu65c816_t cpu; memory_t mem; boot(&cpu, &mem);
+    const uint8_t go[] = { 0x18, 0xFB }; load(&mem, 0x0200, go, 2);
+    cpu816_step(&cpu); cpu816_step(&cpu);
+    cpu.D = 0x1234;
+    cpu.C = 0;
+    const uint8_t prog[] = { 0x7B }; load(&mem, 0x0202, prog, 1);
+    cpu816_step(&cpu);
+    ASSERT_EQ((int)cpu.C, 0x1234);
+}
+
+TEST(test_tcs_in_emulation_forces_high_byte_01) {
+    cpu65c816_t cpu; memory_t mem; boot(&cpu, &mem);
+    cpu.C = 0xCAFE;
+    const uint8_t prog[] = { 0x1B }; load(&mem, 0x0200, prog, 1);
+    cpu816_step(&cpu);
+    /* TCS : S = C ; en mode E, S high forcé à $01 */
+    ASSERT_EQ((int)(cpu.S >> 8), 0x01);
+    ASSERT_EQ((int)(cpu.S & 0xFF), 0xFE);
+}
+
+TEST(test_tcs_in_native_full_16_bit) {
+    cpu65c816_t cpu; memory_t mem; boot(&cpu, &mem);
+    const uint8_t go[] = { 0x18, 0xFB }; load(&mem, 0x0200, go, 2);
+    cpu816_step(&cpu); cpu816_step(&cpu);
+    cpu.C = 0x1FFF;
+    const uint8_t prog[] = { 0x1B }; load(&mem, 0x0202, prog, 1);
+    cpu816_step(&cpu);
+    ASSERT_EQ((int)cpu.S, 0x1FFF); /* S 16-bit complet */
+}
+
+TEST(test_tsc_copies_s_to_c) {
+    cpu65c816_t cpu; memory_t mem; boot(&cpu, &mem);
+    const uint8_t go[] = { 0x18, 0xFB }; load(&mem, 0x0200, go, 2);
+    cpu816_step(&cpu); cpu816_step(&cpu);
+    cpu.S = 0xABCD;
+    cpu.C = 0;
+    const uint8_t prog[] = { 0x3B }; load(&mem, 0x0202, prog, 1);
+    cpu816_step(&cpu);
+    ASSERT_EQ((int)cpu.C, 0xABCD);
+}
+
+TEST(test_txy_tyx_16_bit) {
+    cpu65c816_t cpu; memory_t mem; boot(&cpu, &mem);
+    enter_native_M0_X0(&cpu, &mem);
+    cpu.X = 0x1111; cpu.Y = 0x2222;
+    const uint8_t prog[] = { 0x9B, 0xBB }; load(&mem, cpu.PC, prog, 2);
+    cpu816_step(&cpu); /* TXY : Y = X */
+    ASSERT_EQ((int)cpu.Y, 0x1111);
+    cpu.X = 0xCAFE;
+    cpu816_step(&cpu); /* TYX : X = Y */
+    ASSERT_EQ((int)cpu.X, 0x1111);
+}
+
+/* ─── B1.7b — TAX/TAY/TXA/TYA width-aware ────────────────────────────── */
+
+TEST(test_tax_16_bit_in_native) {
+    cpu65c816_t cpu; memory_t mem; boot(&cpu, &mem);
+    enter_native_M0_X0(&cpu, &mem);
+    cpu.C = 0xBEEF;
+    const uint8_t prog[] = { 0xAA }; load(&mem, cpu.PC, prog, 1);
+    cpu816_step(&cpu);
+    ASSERT_EQ((int)cpu.X, 0xBEEF);
+}
+
+TEST(test_tax_truncates_when_x_8bit) {
+    cpu65c816_t cpu; memory_t mem; boot(&cpu, &mem);
+    /* Mode N M=0 X=1 : A 16-bit, X 8-bit. TAX prend low byte de A.
+     * Au reset, P=0x24 → X-bit=0 par défaut en mode N. Il faut SEP #$10
+     * pour forcer X=1 (8-bit). */
+    const uint8_t go[] = { 0x18, 0xFB,    /* CLC, XCE → mode N */
+                            0xC2, 0x20,   /* REP #$20 → M=0 */
+                            0xE2, 0x10 }; /* SEP #$10 → X=1 */
+    load(&mem, 0x0200, go, 6);
+    for (int i = 0; i < 4; i++) cpu816_step(&cpu);
+    ASSERT_TRUE(cpu.P & FLAG816_X_INDEX);
+    cpu.C = 0xBEEF;
+    cpu.X = 0xCAFE; /* sera tronqué par SEP — vérifions, au cas où. */
+    /* SEP #$10 a tronqué X.high déjà ; on remet manuellement pour test. */
+    cpu.X = 0xCAFE;
+    const uint8_t prog[] = { 0xAA }; load(&mem, cpu.PC, prog, 1);
+    cpu816_step(&cpu);
+    ASSERT_EQ((int)cpu.X, 0x00EF); /* truncated, high byte cleared */
+}
+
+TEST(test_tya_16_bit_in_native) {
+    cpu65c816_t cpu; memory_t mem; boot(&cpu, &mem);
+    enter_native_M0_X0(&cpu, &mem);
+    cpu.Y = 0xCAFE;
+    const uint8_t prog[] = { 0x98 }; load(&mem, cpu.PC, prog, 1);
+    cpu816_step(&cpu);
+    ASSERT_EQ((int)cpu.C, 0xCAFE);
+}
+
+/* ─── B1.7b — PHX/PHY/PLX/PLY ────────────────────────────────────────── */
+
+TEST(test_phx_plx_16_bit_in_native) {
+    cpu65c816_t cpu; memory_t mem; boot(&cpu, &mem);
+    enter_native_M0_X0(&cpu, &mem);
+    cpu.X = 0xDEAD;
+    const uint8_t prog[] = {
+        0xDA,                /* PHX */
+        0xA2, 0x00, 0x00,    /* LDX #$0000 */
+        0xFA,                /* PLX */
+    };
+    load(&mem, cpu.PC, prog, sizeof(prog));
+    cpu816_step(&cpu); /* PHX */
+    cpu816_step(&cpu); /* LDX #$0000 */
+    ASSERT_EQ((int)cpu.X, 0x0000);
+    cpu816_step(&cpu); /* PLX */
+    ASSERT_EQ((int)cpu.X, 0xDEAD);
+}
+
+TEST(test_phx_in_emulation_is_nop) {
+    cpu65c816_t cpu; memory_t mem; boot(&cpu, &mem);
+    cpu.X = 0x42;
+    /* En mode E, PHX ($DA) doit être NOP (illégal NMOS, ADR-11(c)). */
+    uint16_t sp_before = cpu.S;
+    const uint8_t prog[] = { 0xDA }; load(&mem, 0x0200, prog, 1);
+    cpu816_step(&cpu);
+    ASSERT_EQ((int)cpu.S, (int)sp_before); /* SP inchangé */
+}
+
 TEST(test_xce_back_to_e_preserves_b_register) {
     cpu65c816_t cpu; memory_t mem; boot(&cpu, &mem);
     enter_native_M0(&cpu, &mem);
@@ -309,6 +520,25 @@ int main(void) {
     RUN(test_eb_is_sbc_immediate_in_emulation);
     RUN(test_eb_is_xba_in_native_mode);
     RUN(test_xce_back_to_e_preserves_b_register);
+
+    /* B1.7b */
+    RUN(test_ldx_immediate_16_bit);
+    RUN(test_ldy_abs_16_bit);
+    RUN(test_stx_abs_writes_two_bytes);
+    RUN(test_inx_dex_16_bit_wrap);
+    RUN(test_iny_16_bit);
+    RUN(test_cpx_16_bit);
+    RUN(test_tcd_16_bit_with_n_z_flags);
+    RUN(test_tdc_copies_d_to_c);
+    RUN(test_tcs_in_emulation_forces_high_byte_01);
+    RUN(test_tcs_in_native_full_16_bit);
+    RUN(test_tsc_copies_s_to_c);
+    RUN(test_txy_tyx_16_bit);
+    RUN(test_tax_16_bit_in_native);
+    RUN(test_tax_truncates_when_x_8bit);
+    RUN(test_tya_16_bit_in_native);
+    RUN(test_phx_plx_16_bit_in_native);
+    RUN(test_phx_in_emulation_is_nop);
 
     printf("\n═══════════════════════════════════════════════════════\n");
     printf("  Results: %d passed, %d failed\n", tests_passed, tests_failed);

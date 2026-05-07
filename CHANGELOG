@@ -5,6 +5,43 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.19.1-alpha] - 2026-05-08
+
+### Oric 2 — Jalon B1.7b : index 16-bit + transfers natifs
+
+#### Added
+- **Helpers X-aware** : `x_get_X`, `x_set_X`, `y_get_X`, `y_set_X`,
+  `update_nz_X`, `read_X`, `write_X`, `fetch_imm_X`, `X_extra_cycle`,
+  `push_X`, `pull_X`, `op_cmp_X`.
+- **Opcodes X-aware** : LDX/LDY/STX/STY tous modes, INX/INY/DEX/DEY
+  16-bit avec wrap, CPX/CPY 16-bit immediate/zp/abs.
+- **Transfers natifs 65C816** :
+  - **TCD `$5B`** : C → D. N/Z toujours 16-bit (D est 16-bit).
+  - **TDC `$7B`** : D → C. N/Z toujours 16-bit.
+  - **TCS `$1B`** : C → S. En mode E, S high forcé à $01. Pas de N/Z.
+  - **TSC `$3B`** : S → C. N/Z 16-bit.
+  - **TXY `$9B`** : X → Y, X-aware (8 ou 16-bit selon flag X).
+  - **TYX `$BB`** : Y → X, X-aware.
+- **PHX `$DA` / PHY `$5A` / PLX `$FA` / PLY `$7A`** : push/pull X et Y,
+  X-aware (push 1 ou 2 bytes). En mode E : NOP (ADR-11(c)).
+- **TAX/TAY/TXA/TYA width-aware** : la largeur effective dépend du
+  registre cible (X-flag pour TAX/TAY, M-flag pour TXA/TYA). Source
+  prise en 16-bit raw, truncated par x_set_X / a_set_M selon flag cible.
+  Comportement WDC datasheet (mode N M=1 X=0 → TAX transfère 16 bits B<<8|A).
+- **17 nouveaux tests `test_cpu65c816_native`** (en plus des 17 existants):
+  LDX 16b imm, LDY 16b abs, STX 16b abs, INX/DEX wrap 16b, INY 16b,
+  CPX 16b, TCD/TDC/TCS/TSC mode E et N, TXY/TYX, TAX 16b et tronqué,
+  TYA 16b, PHX/PLX 16b, PHX NOP en mode E.
+
+#### Removed
+- Helper inutilisé `addr816_immediate` (remplacé par `fetch_imm_M`/_X).
+
+#### Notes
+- Klaus B1.5, boot dual B1.6, B1.4 mode E, B1.7a M-aware : aucune régression.
+- 446 tests passent (était 429, +17 net).
+- Reste B1.7c (stack opcodes natifs PHB/PLB/PHK/PHD/PLD/PEA/PEI/PER,
+  BRA/BRL, COP/WDM, STZ).
+
 ## [1.19.0-alpha] - 2026-05-07
 
 ### Oric 2 — Jalon B1.7a : REP/SEP + 16-bit accumulator (mode N)

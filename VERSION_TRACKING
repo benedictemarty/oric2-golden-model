@@ -1,12 +1,18 @@
 VERSION_TRACKING - Phosphoric
 =====================================
 
-Current Version: 1.19.0-alpha
-Release Date: 2026-05-07
-Status: Alpha (Oric 2 B1.7a — REP/SEP + 16-bit accumulator mode N, 429 tests pass)
+Current Version: 1.19.1-alpha
+Release Date: 2026-05-08
+Status: Alpha (Oric 2 B1.7b — index 16-bit + transfers natifs, 446 tests pass)
 
 Version History:
 ----------------
+- 1.19.1-alpha (2026-05-08): Oric 2 B1.7b — index 16b + transfers natifs (446 tests, +17)
+  * Add: helpers X-aware (x_get_X, read_X, write_X, fetch_imm_X, ...)
+  * Add: LDX/LDY/STX/STY/INX/DEX/INY/DEY/CPX/CPY X-aware
+  * Add: TCD/TDC/TCS/TSC/TXY/TYX (transfers natifs 65C816)
+  * Add: PHX/PHY/PLX/PLY (X-aware, NOP en mode E)
+  * Update: TAX/TAY/TXA/TYA width-aware (cible X-flag ou M-flag)
 - 1.19.0-alpha (2026-05-07): Oric 2 B1.7a — REP/SEP + accumulator 16b (429 tests, +17)
   * Add: REP $C2, SEP $E2 (P bit manipulation, X tronque X/Y)
   * Add: helpers width-aware (M_is_8bit, a_get_M, read_M, write_M, fetch_imm_M, ...)

@@ -475,7 +475,7 @@ Voir `/home/bmarty/oric2/CLAUDE.md` pour la vision Oric 2 (machine chimère
        100K et 1M cycles de boot, registres + RAM identiques. Fix B flag au reset.
 - [/] **B1.7** Mode natif : REP/SEP, registres 16 bits, bus 24 bits gated
        - [x] **B1.7a** REP/SEP + accumulator 16-bit (M flag) (v1.19.0-alpha, 2026-05-07)
-       - [ ] **B1.7b** Index 16-bit (X flag) + transfers natifs
+       - [x] **B1.7b** Index 16-bit (X flag) + transfers natifs TCD/TDC/TCS/TSC/TXY/TYX, PHX/PHY/PLX/PLY (v1.19.1-alpha, 2026-05-08)
        - [ ] **B1.7c** Stack opcodes natifs (PHB/PLB/PHK/PHD/PLD/PEA/PEI/PER) + BRA/COP/WDM
 - [ ] **B1.8** Opcodes natifs 65C816 (MVN/MVP, JSL/RTL, long addressing, …)
 
@@ -520,13 +520,13 @@ Voir `/home/bmarty/oric2/CLAUDE.md` pour la vision Oric 2 (machine chimère
 - [ ] <5% CPU overhead on modern hardware
 
 ### Quality
-- [x] 429 tests passing (make tests, dont 2 Klaus + 4 boot dual + 17 mode N)
+- [x] 446 tests passing (make tests, dont 2 Klaus + 4 boot dual + 34 mode N)
 - [x] Zero critical bugs in test suite
 - [x] API documentation complete
 - [x] Comprehensive user guide
 
 ---
 
-**Last Updated**: 2026-05-07
-**Current Version**: 1.19.0-alpha
-**Next Milestone**: B1.7b (index 16-bit X flag + transfers natifs)
+**Last Updated**: 2026-05-08
+**Current Version**: 1.19.1-alpha
+**Next Milestone**: B1.7c (stack natifs + BRA/BRL + COP/WDM/STZ)
