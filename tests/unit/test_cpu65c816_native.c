@@ -485,6 +485,179 @@ TEST(test_phx_in_emulation_is_nop) {
     ASSERT_EQ((int)cpu.S, (int)sp_before); /* SP inchangé */
 }
 
+/* ─── B1.7c — Stack natifs (PHB/PLB/PHK/PHD/PLD/PEA/PEI/PER) ─────────── */
+
+TEST(test_phb_plb) {
+    cpu65c816_t cpu; memory_t mem; boot(&cpu, &mem);
+    const uint8_t go[] = { 0x18, 0xFB }; load(&mem, 0x0200, go, 2);
+    cpu816_step(&cpu); cpu816_step(&cpu);
+    cpu.DBR = 0x42;
+    const uint8_t prog[] = {
+        0x8B,        /* PHB */
+        0xA9, 0x00,  /* LDA #$00 */
+        0xAB,        /* PLB */
+    };
+    load(&mem, 0x0202, prog, sizeof(prog));
+    cpu816_step(&cpu); /* PHB */
+    cpu.DBR = 0x99; /* salit pour vérifier PLB */
+    cpu816_step(&cpu); /* LDA */
+    cpu816_step(&cpu); /* PLB */
+    ASSERT_EQ((int)cpu.DBR, 0x42);
+}
+
+TEST(test_phk_pushes_pbr) {
+    cpu65c816_t cpu; memory_t mem; boot(&cpu, &mem);
+    const uint8_t go[] = { 0x18, 0xFB }; load(&mem, 0x0200, go, 2);
+    cpu816_step(&cpu); cpu816_step(&cpu);
+    cpu.PBR = 0x33;
+    uint16_t sp_before = cpu.S;
+    const uint8_t prog[] = { 0x4B }; load(&mem, 0x0202, prog, 1);
+    cpu816_step(&cpu);
+    /* SP a décrémenté de 1 ; valeur poussée à $01..(sp_before) */
+    ASSERT_EQ((int)cpu.S, (int)(sp_before - 1));
+    ASSERT_EQ((int)memory_read(&mem, sp_before), 0x33);
+}
+
+TEST(test_phd_pld_16_bit) {
+    cpu65c816_t cpu; memory_t mem; boot(&cpu, &mem);
+    const uint8_t go[] = { 0x18, 0xFB }; load(&mem, 0x0200, go, 2);
+    cpu816_step(&cpu); cpu816_step(&cpu);
+    cpu.D = 0x1234;
+    const uint8_t prog[] = { 0x0B, 0x2B }; load(&mem, 0x0202, prog, 2);
+    cpu816_step(&cpu); /* PHD */
+    cpu.D = 0;
+    cpu816_step(&cpu); /* PLD */
+    ASSERT_EQ((int)cpu.D, 0x1234);
+}
+
+TEST(test_pea_pushes_immediate_word) {
+    cpu65c816_t cpu; memory_t mem; boot(&cpu, &mem);
+    const uint8_t go[] = { 0x18, 0xFB }; load(&mem, 0x0200, go, 2);
+    cpu816_step(&cpu); cpu816_step(&cpu);
+    /* PEA #$5678 */
+    const uint8_t prog[] = { 0xF4, 0x78, 0x56 }; load(&mem, 0x0202, prog, 3);
+    uint16_t sp_before = cpu.S;
+    cpu816_step(&cpu);
+    /* push 16-bit (high d'abord puis low). SP décrémenté de 2. */
+    ASSERT_EQ((int)cpu.S, (int)(sp_before - 2));
+    /* pull pour vérifier */
+    uint16_t pulled = (uint16_t)(memory_read(&mem, (uint16_t)(cpu.S + 1))
+                                 | (memory_read(&mem, (uint16_t)(cpu.S + 2)) << 8));
+    ASSERT_EQ((int)pulled, 0x5678);
+}
+
+TEST(test_per_pushes_pc_plus_offset) {
+    cpu65c816_t cpu; memory_t mem; boot(&cpu, &mem);
+    const uint8_t go[] = { 0x18, 0xFB }; load(&mem, 0x0200, go, 2);
+    cpu816_step(&cpu); cpu816_step(&cpu);
+    /* PER +$100 : à PC=$0202 (avant), après fetch 3 bytes PC=$0205, target = $0305. */
+    const uint8_t prog[] = { 0x62, 0x00, 0x01 }; load(&mem, 0x0202, prog, 3);
+    cpu816_step(&cpu);
+    uint16_t pulled = (uint16_t)(memory_read(&mem, (uint16_t)(cpu.S + 1))
+                                 | (memory_read(&mem, (uint16_t)(cpu.S + 2)) << 8));
+    ASSERT_EQ((int)pulled, 0x0305);
+}
+
+TEST(test_phb_in_emulation_is_nop) {
+    cpu65c816_t cpu; memory_t mem; boot(&cpu, &mem);
+    cpu.DBR = 0x42;
+    uint16_t sp_before = cpu.S;
+    const uint8_t prog[] = { 0x8B }; load(&mem, 0x0200, prog, 1);
+    cpu816_step(&cpu);
+    ASSERT_EQ((int)cpu.S, (int)sp_before);
+}
+
+/* ─── B1.7c — BRA / BRL ──────────────────────────────────────────────── */
+
+TEST(test_bra_always_taken) {
+    cpu65c816_t cpu; memory_t mem; boot(&cpu, &mem);
+    /* Test en mode E (BRA est aussi disponible en E par 65C02/65C816). */
+    cpu.P |= FLAG_INTERRUPT; /* irrelevant — BRA ignore tout */
+    /* BRA +5 (offset $05) */
+    const uint8_t prog[] = { 0x80, 0x05 }; load(&mem, 0x0200, prog, 2);
+    int c = cpu816_step(&cpu);
+    ASSERT_EQ((int)cpu.PC, 0x0207);
+    ASSERT_TRUE(c >= 3); /* base 2 + 1 taken */
+}
+
+TEST(test_brl_long_branch_signed) {
+    cpu65c816_t cpu; memory_t mem; boot(&cpu, &mem);
+    /* BRL -$200 (offset $FE00 signé) : PC après fetch = $0203, target = $0003. */
+    const uint8_t prog[] = { 0x82, 0x00, 0xFE }; load(&mem, 0x0200, prog, 3);
+    cpu816_step(&cpu);
+    ASSERT_EQ((int)cpu.PC, 0x0003);
+}
+
+/* ─── B1.7c — COP / WDM ─────────────────────────────────────────────── */
+
+TEST(test_cop_in_emulation_uses_emul_vector) {
+    cpu65c816_t cpu; memory_t mem; boot(&cpu, &mem);
+    /* Vecteur COP en mode E = $00FFF4. Place handler à $5000. */
+    mem.rom[0x3FF4] = 0x00; mem.rom[0x3FF5] = 0x50;
+    const uint8_t prog[] = { 0x02, 0xAA }; load(&mem, 0x0200, prog, 2);
+    cpu816_step(&cpu);
+    ASSERT_EQ((int)cpu.PC, 0x5000);
+    ASSERT_TRUE(cpu.P & FLAG_INTERRUPT);
+}
+
+TEST(test_cop_in_native_uses_native_vector) {
+    cpu65c816_t cpu; memory_t mem; boot(&cpu, &mem);
+    const uint8_t go[] = { 0x18, 0xFB }; load(&mem, 0x0200, go, 2);
+    cpu816_step(&cpu); cpu816_step(&cpu);
+    /* Vecteur COP en mode N = $00FFE4. Place handler à $6000. */
+    mem.rom[0x3FE4] = 0x00; mem.rom[0x3FE5] = 0x60;
+    const uint8_t prog[] = { 0x02, 0xAA }; load(&mem, 0x0202, prog, 2);
+    cpu816_step(&cpu);
+    ASSERT_EQ((int)cpu.PC, 0x6000);
+    ASSERT_TRUE(cpu.P & FLAG_INTERRUPT);
+    ASSERT_FALSE(cpu.P & FLAG_DECIMAL); /* D forcé à 0 sur interrupt mode N */
+}
+
+TEST(test_wdm_consumes_one_byte) {
+    cpu65c816_t cpu; memory_t mem; boot(&cpu, &mem);
+    const uint8_t prog[] = { 0x42, 0x99, 0xA9, 0x42 }; load(&mem, 0x0200, prog, 4);
+    cpu816_step(&cpu); /* WDM consomme 2 bytes (opcode + signature) */
+    ASSERT_EQ((int)cpu.PC, 0x0202);
+    cpu816_step(&cpu); /* LDA #$42 */
+    ASSERT_EQ((int)(cpu.C & 0xFF), 0x42);
+}
+
+/* ─── B1.7c — STZ ────────────────────────────────────────────────────── */
+
+TEST(test_stz_abs_in_native_writes_two_zeros) {
+    cpu65c816_t cpu; memory_t mem; boot(&cpu, &mem);
+    enter_native_M0(&cpu, &mem);
+    /* prépare quelque chose en mémoire pour vérifier qu'on écrase. */
+    memory_write(&mem, 0x4000, 0xAA);
+    memory_write(&mem, 0x4001, 0xBB);
+    /* STZ $4000 (en mode N M=0) : écrit 2 bytes 0. */
+    const uint8_t prog[] = { 0x9C, 0x00, 0x40 }; load(&mem, cpu.PC, prog, 3);
+    cpu816_step(&cpu);
+    ASSERT_EQ((int)memory_read(&mem, 0x4000), 0x00);
+    ASSERT_EQ((int)memory_read(&mem, 0x4001), 0x00);
+}
+
+TEST(test_stz_abs_in_emulation_is_nop) {
+    cpu65c816_t cpu; memory_t mem; boot(&cpu, &mem);
+    /* En mode E, $9C est illégal NMOS — ADR-11(c) NOP (consomme 3 bytes). */
+    memory_write(&mem, 0x3000, 0xCC);
+    const uint8_t prog[] = { 0x9C, 0x00, 0x30 }; load(&mem, 0x0200, prog, 3);
+    cpu816_step(&cpu);
+    ASSERT_EQ((int)cpu.PC, 0x0203); /* PC avancé de 3 bytes */
+    ASSERT_EQ((int)memory_read(&mem, 0x3000), 0xCC); /* mémoire intacte */
+}
+
+TEST(test_stz_zp_in_native) {
+    cpu65c816_t cpu; memory_t mem; boot(&cpu, &mem);
+    /* Mode N M=1 : STZ écrit 1 byte. */
+    const uint8_t go[] = { 0x18, 0xFB }; load(&mem, 0x0200, go, 2);
+    cpu816_step(&cpu); cpu816_step(&cpu);
+    memory_write(&mem, 0x0050, 0xFF);
+    const uint8_t prog[] = { 0x64, 0x50 }; load(&mem, 0x0202, prog, 2);
+    cpu816_step(&cpu);
+    ASSERT_EQ((int)memory_read(&mem, 0x0050), 0x00);
+}
+
 TEST(test_xce_back_to_e_preserves_b_register) {
     cpu65c816_t cpu; memory_t mem; boot(&cpu, &mem);
     enter_native_M0(&cpu, &mem);
@@ -539,6 +712,22 @@ int main(void) {
     RUN(test_tya_16_bit_in_native);
     RUN(test_phx_plx_16_bit_in_native);
     RUN(test_phx_in_emulation_is_nop);
+
+    /* B1.7c */
+    RUN(test_phb_plb);
+    RUN(test_phk_pushes_pbr);
+    RUN(test_phd_pld_16_bit);
+    RUN(test_pea_pushes_immediate_word);
+    RUN(test_per_pushes_pc_plus_offset);
+    RUN(test_phb_in_emulation_is_nop);
+    RUN(test_bra_always_taken);
+    RUN(test_brl_long_branch_signed);
+    RUN(test_cop_in_emulation_uses_emul_vector);
+    RUN(test_cop_in_native_uses_native_vector);
+    RUN(test_wdm_consumes_one_byte);
+    RUN(test_stz_abs_in_native_writes_two_zeros);
+    RUN(test_stz_abs_in_emulation_is_nop);
+    RUN(test_stz_zp_in_native);
 
     printf("\n═══════════════════════════════════════════════════════\n");
     printf("  Results: %d passed, %d failed\n", tests_passed, tests_failed);

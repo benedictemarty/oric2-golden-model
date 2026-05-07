@@ -733,6 +733,38 @@ int cpu816_execute_opcode_e(cpu65c816_t* cpu, uint8_t opcode) {
                 * paresseuse à l'usage suivant. */
                break; /* PLP */
 
+    /* ─── B1.7c — Stack opcodes 65C816 (NOP en mode E par ADR-11(c)) ─── */
+    case 0x8B: if (cpu->E) break; cpu816_push(cpu, cpu->DBR); cycles = 3; break;       /* PHB */
+    case 0xAB: if (cpu->E) break; cpu->DBR = cpu816_pull(cpu); update_nz(cpu, cpu->DBR); cycles = 4; break; /* PLB */
+    case 0x4B: if (cpu->E) break; cpu816_push(cpu, cpu->PBR); cycles = 3; break;       /* PHK */
+    case 0x0B: if (cpu->E) break; cpu816_push_word(cpu, cpu->D); cycles = 4; break;    /* PHD */
+    case 0x2B: if (cpu->E) break; cpu->D = cpu816_pull_word(cpu);                       /* PLD */
+        cpu->P &= (uint8_t)~(FLAG_ZERO | FLAG_NEGATIVE);
+        if (cpu->D == 0)        cpu->P |= FLAG_ZERO;
+        if (cpu->D & 0x8000)    cpu->P |= FLAG_NEGATIVE;
+        cycles = 5; break;
+    /* PEA #$nnnn : push absolute (the immediate value as data, not an addr) */
+    case 0xF4: if (cpu->E) break;
+        v16 = cpu816_fetch_word_pc(cpu);
+        cpu816_push_word(cpu, v16);
+        cycles = 5; break;
+    /* PEI ($nn) : push effective indirect (read 16-bit pointer at zp, push it) */
+    case 0xD4: if (cpu->E) break; {
+        uint8_t zpg = cpu816_fetch_byte(cpu);
+        uint8_t lo = cpu816_mem_read(cpu, zpg);
+        uint8_t hi = cpu816_mem_read(cpu, (uint8_t)((zpg + 1) & 0xFF));
+        cpu816_push_word(cpu, (uint16_t)((hi << 8) | lo));
+        cycles = 6;
+        break;
+    }
+    /* PER label : push effective relative (PC after operand + 16-bit signed offset) */
+    case 0x62: if (cpu->E) break; {
+        int16_t offset = (int16_t)cpu816_fetch_word_pc(cpu);
+        cpu816_push_word(cpu, (uint16_t)((int)cpu->PC + offset));
+        cycles = 6;
+        break;
+    }
+
     /* ─── Branches ─── */
     case 0x10: extra = do_branch(cpu, !flag(cpu, FLAG_NEGATIVE)); break; /* BPL */
     case 0x30: extra = do_branch(cpu,  flag(cpu, FLAG_NEGATIVE)); break; /* BMI */
@@ -764,6 +796,48 @@ int cpu816_execute_opcode_e(cpu65c816_t* cpu, uint8_t opcode) {
         cpu->P = (uint8_t)((cpu816_pull(cpu) & ~FLAG_BREAK) | FLAG_UNUSED);
         cpu->PC = cpu816_pull_word(cpu);
         break;
+
+    /* ─── B1.7c — BRA / BRL : branches inconditionnelles 65C816 ─── */
+    case 0x80: { /* BRA — branch always relative 8-bit */
+        uint16_t target = addr816_relative(cpu);
+        int penalty = ((cpu->PC & 0xFF00) != (target & 0xFF00)) ? 2 : 1;
+        cpu->PC = target;
+        cycles = 2 + penalty; /* base 2 + 1 taken (+ 1 if cross-page mode E) */
+        break;
+    }
+    case 0x82: { /* BRL — branch relative long (signed 16-bit, always 4 cycles) */
+        int16_t offset = (int16_t)cpu816_fetch_word_pc(cpu);
+        cpu->PC = (uint16_t)((int)cpu->PC + offset);
+        cycles = 4;
+        break;
+    }
+
+    /* ─── B1.7c — COP : software interrupt (BRK-like, vecteur dédié) ─── */
+    case 0x02: {
+        cpu->PC = (uint16_t)(cpu->PC + 1); /* COP suivi d'un signature byte */
+        cpu816_push_word(cpu, cpu->PC);
+        cpu816_push(cpu, (uint8_t)((cpu->P & ~FLAG_BREAK) | FLAG_UNUSED));
+        setf(cpu, FLAG_INTERRUPT, true);
+        setf(cpu, FLAG_DECIMAL, false); /* mode N : D forcé à 0 par interrupt */
+        uint16_t vec = cpu->E ? 0xFFF4 : 0xFFE4;
+        cpu->PC = (uint16_t)(cpu816_mem_read(cpu, vec) | (cpu816_mem_read(cpu, (uint16_t)(vec + 1)) << 8));
+        cycles = cpu->E ? 7 : 8;
+        break;
+    }
+
+    /* ─── B1.7c — WDM : reserved 2-byte NOP ($42) ─── */
+    case 0x42: (void)cpu816_fetch_byte(cpu); cycles = 2; break;
+
+    /* ─── B1.7c — STZ : store zero (M-aware) — 65C02/65C816 ───
+     *     En mode E (ADR-11(c)) : NOP (consomme la taille opérande). */
+    case 0x9C: if (cpu->E) { (void)cpu816_fetch_word_pc(cpu); break; }
+               write_M(cpu, addr816_abs(cpu), 0); extra += M_extra_cycle(cpu); break;
+    case 0x9E: if (cpu->E) { (void)cpu816_fetch_word_pc(cpu); break; }
+               addr = addr816_abs_x(cpu, NULL); write_M(cpu, addr, 0); extra += M_extra_cycle(cpu); break;
+    case 0x64: if (cpu->E) { (void)cpu816_fetch_byte(cpu); break; }
+               write_M(cpu, addr816_zp(cpu), 0); extra += M_extra_cycle(cpu); break;
+    case 0x74: if (cpu->E) { (void)cpu816_fetch_byte(cpu); break; }
+               write_M(cpu, addr816_zp_x(cpu), 0); extra += M_extra_cycle(cpu); break;
 
     /* ─── BRK ─── */
     case 0x00:

@@ -1,12 +1,18 @@
 VERSION_TRACKING - Phosphoric
 =====================================
 
-Current Version: 1.19.1-alpha
+Current Version: 1.19.2-alpha
 Release Date: 2026-05-08
-Status: Alpha (Oric 2 B1.7b — index 16-bit + transfers natifs, 446 tests pass)
+Status: Alpha (Oric 2 B1.7 complet — mode natif 65C816, 460 tests pass)
 
 Version History:
 ----------------
+- 1.19.2-alpha (2026-05-08): Oric 2 B1.7c — stack natifs + BRA/BRL/COP/WDM/STZ (460 tests, +14)
+  * Add: PHB/PLB/PHK/PHD/PLD/PEA/PEI/PER (stack natifs)
+  * Add: BRA $80, BRL $82 (branches inconditionnelles)
+  * Add: COP $02 (software int, vecteurs E/N), WDM $42 (NOP 2-byte)
+  * Add: STZ $9C/$9E/$64/$74 (M-aware, NOP en mode E)
+  * B1.7 complet : mode natif 65C816 fonctionnel (sauf bus 24-bit, B1.8)
 - 1.19.1-alpha (2026-05-08): Oric 2 B1.7b — index 16b + transfers natifs (446 tests, +17)
   * Add: helpers X-aware (x_get_X, read_X, write_X, fetch_imm_X, ...)
   * Add: LDX/LDY/STX/STY/INX/DEX/INY/DEY/CPX/CPY X-aware

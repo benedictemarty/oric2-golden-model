@@ -5,6 +5,45 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.19.2-alpha] - 2026-05-08
+
+### Oric 2 — Jalon B1.7c : stack natifs + BRA/BRL + COP/WDM/STZ
+
+#### Added
+- **Stack natifs 65C816** (NOP en mode E, ADR-11(c)) :
+  - **PHB `$8B`** : push DBR (1 byte, 3 cycles).
+  - **PLB `$AB`** : pull DBR avec N/Z 8-bit (4 cycles).
+  - **PHK `$4B`** : push PBR (1 byte, 3 cycles).
+  - **PHD `$0B`** : push D (16-bit toujours, 4 cycles).
+  - **PLD `$2B`** : pull D avec N/Z 16-bit (5 cycles).
+  - **PEA `$F4`** : push effective absolute (fetch immédiat 16b et push, 5 cycles).
+  - **PEI `$D4`** : push effective indirect (read 16b à zp, push, 6 cycles).
+  - **PER `$62`** : push effective relative (PC + signed 16b offset, 6 cycles).
+- **Branches inconditionnelles** :
+  - **BRA `$80`** : branch always relatif 8-bit (3 cycles + page-cross).
+  - **BRL `$82`** : branch relative long signé 16-bit (4 cycles, sans pénalité).
+- **COP `$02`** : software interrupt (BRK-like). Vecteur $00FFF4 mode E
+  (7 cycles), $00FFE4 mode N (8 cycles, D forcé à 0).
+- **WDM `$42`** : reserved 2-byte NOP (consume signature byte, 2 cycles).
+- **STZ — store zero** (M-aware, 65C02/65C816) :
+  - **`$9C`** abs, **`$9E`** abs,X, **`$64`** zp, **`$74`** zp,X.
+  - En mode E : NOP avec consommation de la taille opérande (illégal NMOS).
+- **14 nouveaux tests `test_cpu65c816_native`** : PHB/PLB/PHK/PHD/PLD,
+  PEA/PER, PHB NOP en E, BRA, BRL signé négatif, COP mode E vs N,
+  WDM, STZ abs/zp en N, STZ NOP en E.
+
+#### Notes
+- B1.7 (mode natif 65C816) **complet** : flags M et X, REP/SEP, opcodes
+  width-aware (LDA/STA/LDX/STX/LDY/STY/ADC/SBC/AND/ORA/EOR/CMP/BIT/INC
+  A/DEC A/INX/INY/DEX/DEY/CPX/CPY), transfers natifs (TCD/TDC/TCS/TSC/
+  TXY/TYX/TAX/TAY/TXA/TYA), stack natifs (PHB/PLB/PHK/PHD/PLD/PEA/PEI/
+  PER/PHX/PHY/PLX/PLY), branches (BRA/BRL), interruptions (COP), nouveaux
+  data (STZ), réservés (WDM), $EB polymorphique (SBC en E, XBA en N).
+- Différé à B1.8 : addressing modes long ($lll, [dp], [dp],Y), JSL/RTL,
+  JMP long, MVN/MVP block move, bus 24-bit effectif (PBR/DBR utilisés).
+- 460 tests passent (était 446, +14).
+- Klaus B1.5 et boot dual B1.6 toujours verts (aucune régression).
+
 ## [1.19.1-alpha] - 2026-05-08
 
 ### Oric 2 — Jalon B1.7b : index 16-bit + transfers natifs
