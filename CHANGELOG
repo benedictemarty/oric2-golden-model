@@ -5,6 +5,37 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.17.1-alpha] - 2026-05-07
+
+### Oric 2 — Jalon B1.2 : squelette 65C816 (init + reset)
+
+#### Added
+- **`include/cpu/cpu65c816.h` + `src/cpu/cpu65c816.c`** : structure complète
+  du cœur 65C816 (registres C/X/Y/S/D 16 bits, DBR, PBR, PC, P, flag E,
+  états WAI/STP) ; `cpu816_init()` et `cpu816_reset()` opérationnels.
+  Reset force E=1, charge PC depuis le vecteur RESET en bank 0 ($00FFFC),
+  pose S=$01FF (page stack mode E), DBR=PBR=D=0, P=0x34 (I=1, B=1, U=1,
+  D=0) — conforme à la datasheet WDC W65C816S §6 et aligné sur le 6502
+  Phosphoric pour la compatibilité Oric 1 (ADR-10).
+- **Vtable `cpu_core_vtable_65c816`** : sélection par `--cpu 65c816`
+  désormais résolue (mais le CLI continue de rejeter avec un message
+  explicite tant qu'aucun opcode n'est décodé — viendra en B1.3+).
+- **11 tests `test_cpu65c816`** : init zéro, reset (PC depuis vecteur,
+  E forcé, S en page 1, banks/D effacés, P correct, IRQ/NMI clear),
+  IRQ/NMI level-triggered, WAI réveillé par IRQ, step retourne erreur
+  en l'absence d'opcodes.
+
+#### Changed
+- `cpu_core_vtable_for(CPU_KIND_65C816)` retourne maintenant la vtable
+  au lieu de NULL ; `test_cpu_core::test_vtable_for_65c816_returns_table`
+  remplace le test « not yet supported ».
+
+#### Notes
+- `cpu816_step()` et `cpu816_execute_cycles()` retournent -1 et émettent
+  `log_error` : invocation = bug appelant tant que B1.3 n'a pas livré XCE.
+- ADR-11 (sémantique mode E vs NMOS) toujours ouverte ; n'affecte pas B1.2.
+- 348 tests passent (337 + 11), aucune régression.
+
 ## [1.17.0-alpha] - 2026-05-07
 
 ### Oric 2 — Jalon B1.1 : abstraction cpu_core (cohabitation 6502 / 65C816)

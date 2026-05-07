@@ -2,8 +2,8 @@ CIRRUS_OS - Phosphoric Build & Development Status
 ======================================================
 
 Project: Phosphoric — ORIC-1/Atmos Cycle-Accurate Emulator
-Version: 1.17.0-alpha
-Build Status: ALPHA (Oric 2 B1.1 — vtable cpu_core, cohabitation 6502/65C816)
+Version: 1.17.1-alpha
+Build Status: ALPHA (Oric 2 B1.2 — squelette 65C816 init/reset)
 Last Updated: 2026-05-07
 
 ================================================================
@@ -19,7 +19,9 @@ BUILD STATUS
 ------------
 [V] CPU Core              - Complete (151 opcodes, 13 addressing modes)
 [V] CPU Core Vtable       - B1.1 (Oric 2): cohabitation 6502/65C816, dispatch via cpu_core_vtable_t
-[ ] CPU Core 65C816       - B1.2 (Oric 2): squelette + reset + flag E (à faire)
+[V] CPU Core 65C816 init  - B1.2 (Oric 2): squelette init/reset + flag E + vtable
+[ ] CPU Core 65C816 XCE   - B1.3 (Oric 2): bascule E↔N + flag instructions (à faire)
+[ ] CPU Core 65C816 ops   - B1.4 (Oric 2): opcodes 6502-équivalents en mode E (à faire)
 [V] Memory System         - Complete (64KB, ROM/RAM banking, I/O routing)
 [V] I/O System (VIA 6522) - Complete (timers, interrupts, ports)
 [V] Video System          - Complete (text + HIRES modes)

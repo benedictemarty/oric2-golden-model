@@ -1,12 +1,18 @@
 VERSION_TRACKING - Phosphoric
 =====================================
 
-Current Version: 1.17.0-alpha
+Current Version: 1.17.1-alpha
 Release Date: 2026-05-07
-Status: Alpha (Oric 2 B1.1 — vtable cpu_core, cohabitation 6502/65C816, 337 tests pass)
+Status: Alpha (Oric 2 B1.2 — squelette 65C816 init/reset, 348 tests pass)
 
 Version History:
 ----------------
+- 1.17.1-alpha (2026-05-07): Oric 2 B1.2 — squelette 65C816 (348 tests, +11)
+  * Add: include/cpu/cpu65c816.h, src/cpu/cpu65c816.c (registres complets, init, reset)
+  * Add: vtable cpu_core_vtable_65c816 (résolue par --cpu 65c816)
+  * Add: 11 tests test_cpu65c816 (init/reset/IRQ/NMI/WAI/step skeleton)
+  * Reset 65C816 conforme WDC §6 : E=1, PC depuis $FFFC, S=$01FF, P=0x34
+  * step()/execute_cycles() retournent -1 (B1.3 livrera XCE et opcodes)
 - 1.17.0-alpha (2026-05-07): Oric 2 B1.1 — vtable cpu_core (337 tests, +10)
   * Add: include/cpu/cpu_core.h, src/cpu/cpu_core.c (vtable abstraction)
   * Add: emulator_t.cpu_kind/cpu_vt/cpu_impl

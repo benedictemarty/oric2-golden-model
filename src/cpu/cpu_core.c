@@ -10,6 +10,7 @@
 
 #include "cpu/cpu_core.h"
 #include "cpu/cpu6502.h"
+#include "cpu/cpu65c816.h"
 
 /* ─── Adaptateurs 6502 ──────────────────────────────────────────────── */
 
@@ -47,12 +48,48 @@ const cpu_core_vtable_t cpu_core_vtable_6502 = {
     .irq_clear      = v6502_irq_clear,
 };
 
+/* ─── Adaptateurs 65C816 (B1.2 : squelette, pas d'opcodes) ──────────── */
+
+static void v816_reset(void* impl) {
+    cpu816_reset((cpu65c816_t*)impl);
+}
+
+static int v816_step(void* impl) {
+    return cpu816_step((cpu65c816_t*)impl);
+}
+
+static int v816_execute_cycles(void* impl, int cycles) {
+    return cpu816_execute_cycles((cpu65c816_t*)impl, cycles);
+}
+
+static void v816_nmi(void* impl) {
+    cpu816_nmi((cpu65c816_t*)impl);
+}
+
+static void v816_irq_set(void* impl, cpu_irq_source_t src) {
+    cpu816_irq_set((cpu65c816_t*)impl, src);
+}
+
+static void v816_irq_clear(void* impl, cpu_irq_source_t src) {
+    cpu816_irq_clear((cpu65c816_t*)impl, src);
+}
+
+const cpu_core_vtable_t cpu_core_vtable_65c816 = {
+    .name           = "65C816",
+    .reset          = v816_reset,
+    .step           = v816_step,
+    .execute_cycles = v816_execute_cycles,
+    .nmi            = v816_nmi,
+    .irq_set        = v816_irq_set,
+    .irq_clear      = v816_irq_clear,
+};
+
 /* ─── Sélecteurs ────────────────────────────────────────────────────── */
 
 const cpu_core_vtable_t* cpu_core_vtable_for(cpu_kind_t kind) {
     switch (kind) {
         case CPU_KIND_6502:   return &cpu_core_vtable_6502;
-        case CPU_KIND_65C816: return NULL; /* B1.2 */
+        case CPU_KIND_65C816: return &cpu_core_vtable_65c816;
     }
     return NULL;
 }

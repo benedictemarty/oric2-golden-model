@@ -1372,7 +1372,9 @@ int main(int argc, char* argv[]) {
             return 1;
         }
         if (k == CPU_KIND_65C816) {
-            fprintf(stderr, "--cpu 65c816: not yet implemented (jalon B1.2)\n");
+            /* B1.2 : squelette init/reset uniquement, aucun opcode décodé.
+             * L'exécution réelle viendra avec XCE et les opcodes en B1.3+. */
+            fprintf(stderr, "--cpu 65c816: skeleton only (B1.2), no opcodes yet — use --cpu 6502.\n");
             return 1;
         }
         emu.cpu_kind = k;

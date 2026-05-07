@@ -65,10 +65,12 @@ TEST(test_vtable_for_6502_returns_table) {
     ASSERT_TRUE(strcmp(vt->name, "6502") == 0);
 }
 
-TEST(test_vtable_for_65c816_not_yet_supported) {
-    /* B1.2 le rendra non-NULL. */
+TEST(test_vtable_for_65c816_returns_table) {
+    /* B1.2 : la vtable existe (squelette) ; les opcodes arrivent en B1.3+. */
     const cpu_core_vtable_t* vt = cpu_core_vtable_for(CPU_KIND_65C816);
-    ASSERT_TRUE(vt == NULL);
+    ASSERT_TRUE(vt != NULL);
+    ASSERT_TRUE(vt == &cpu_core_vtable_65c816);
+    ASSERT_TRUE(strcmp(vt->name, "65C816") == 0);
 }
 
 TEST(test_kind_from_string_6502) {
@@ -179,7 +181,7 @@ int main(void) {
     printf("═══════════════════════════════════════════════════════\n\n");
 
     RUN(test_vtable_for_6502_returns_table);
-    RUN(test_vtable_for_65c816_not_yet_supported);
+    RUN(test_vtable_for_65c816_returns_table);
     RUN(test_kind_from_string_6502);
     RUN(test_kind_from_string_65c816_lower_and_upper);
     RUN(test_kind_from_string_invalid);

@@ -42,6 +42,9 @@ typedef struct cpu_core_vtable_s {
 /** Vtable du cœur 6502 actuel. */
 extern const cpu_core_vtable_t cpu_core_vtable_6502;
 
+/** Vtable du cœur 65C816 (B1.2 : squelette init/reset, pas d'opcodes). */
+extern const cpu_core_vtable_t cpu_core_vtable_65c816;
+
 /**
  * @brief Sélectionne la vtable correspondant à un cpu_kind_t.
  * @return NULL si le kind n'est pas (encore) supporté.
