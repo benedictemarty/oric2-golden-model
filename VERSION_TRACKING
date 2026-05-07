@@ -1,12 +1,16 @@
 VERSION_TRACKING - Phosphoric
 =====================================
 
-Current Version: 1.18.0-alpha
+Current Version: 1.18.1-alpha
 Release Date: 2026-05-07
-Status: Alpha (Oric 2 B1.4 — opcodes 6502-équivalents 65C816 mode E, ~406 tests pass)
+Status: Alpha (Oric 2 B1.5 — Klaus Dormann passe sur 6502 et 65C816, 408 tests pass)
 
 Version History:
 ----------------
+- 1.18.1-alpha (2026-05-07): Oric 2 B1.5 — Klaus Dormann test (408 tests, +2)
+  * Add: tests/integration/test_klaus_dormann.c (runner gated)
+  * Validation: 6502 et 65C816 mode E passent les ~96M cycles Klaus
+  * ADR-11(c) validée empiriquement (bug JMP indirect testé par Klaus)
 - 1.18.0-alpha (2026-05-07): Oric 2 B1.4 — opcodes 6502-équivalents mode E (~406 tests, +47 net)
   * ADR-11 ratifiée (c) hybride : bug JMP indirect reproduit, illégaux NMOS = NOP
   * Add: src/cpu/cpu65c816_opcodes.c (~600 lignes, port mode E complet)

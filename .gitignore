@@ -121,3 +121,7 @@ __pycache__/
 # Save states
 *.sav
 *.state
+
+# Klaus Dormann tests (cloned externally - see test_klaus_dormann.c)
+third_party/6502_65C02_functional_tests/
+test_klaus

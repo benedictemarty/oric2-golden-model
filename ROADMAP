@@ -469,7 +469,8 @@ Voir `/home/bmarty/oric2/CLAUDE.md` pour la vision Oric 2 (machine chimère
 - [x] **B1.3** XCE + flag manipulation (CLC/SEC/CLI/SEI/CLD/SED/CLV) (v1.17.2-alpha, 2026-05-07)
 - [x] **B1.4** Opcodes 6502-équivalents en mode E — ADR-11(c) hybride (v1.18.0-alpha, 2026-05-07)
        Sous-jalons a-i (infra/load-store/ALU/shift/inc-dec/branch/stack/IRQ/CLI) consolidés
-- [ ] **B1.5** Klaus Dormann functional test intégré sur les deux cœurs
+- [x] **B1.5** Klaus Dormann functional test sur les deux cœurs (v1.18.1-alpha, 2026-05-07)
+       Validation cycle-exacte ~96M cycles, passe sur 6502 et 65C816 mode E
 - [ ] **B1.6** Boot ROM Oric 1 sous --cpu 65c816 validé
 - [ ] **B1.7** Mode natif : REP/SEP, registres 16 bits, bus 24 bits gated
 - [ ] **B1.8** Opcodes natifs 65C816 (MVN/MVP, JSL/RTL, long addressing, …)
@@ -515,7 +516,7 @@ Voir `/home/bmarty/oric2/CLAUDE.md` pour la vision Oric 2 (machine chimère
 - [ ] <5% CPU overhead on modern hardware
 
 ### Quality
-- [x] ~406 tests passing (make tests)
+- [x] 408 tests passing (make tests, dont 2 Klaus Dormann)
 - [x] Zero critical bugs in test suite
 - [x] API documentation complete
 - [x] Comprehensive user guide
@@ -523,5 +524,5 @@ Voir `/home/bmarty/oric2/CLAUDE.md` pour la vision Oric 2 (machine chimère
 ---
 
 **Last Updated**: 2026-05-07
-**Current Version**: 1.18.0-alpha
-**Next Milestone**: B1.5 (Klaus Dormann functional test sur les deux cœurs)
+**Current Version**: 1.18.1-alpha
+**Next Milestone**: B1.6 (boot ROM Oric 1 sous --cpu 65c816)

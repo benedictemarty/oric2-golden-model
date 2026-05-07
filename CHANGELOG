@@ -5,6 +5,38 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.18.1-alpha] - 2026-05-07
+
+### Oric 2 — Jalon B1.5 : Klaus Dormann functional test sur les deux cœurs
+
+#### Added
+- **`tests/integration/test_klaus_dormann.c`** : runner intégrant le binaire
+  pré-construit `6502_functional_test.bin` (Klaus2m5 64 KiB) ; charge
+  $0000-$BFFF en RAM et $C000-$FFFF en ROM, force PC=$0400 (le vecteur
+  RESET de Klaus pointe sur un trap anti-reset), boucle step jusqu'à
+  détection d'un `jmp *` (PC stable sur deux échantillons de 65 536 cycles).
+  Succès si PC == $3469 (macro `success` Klaus).
+- Test gated : skip silencieux si le binaire n'est pas présent (le clone
+  Klaus est externe — repo public Klaus2m5/6502_65C02_functional_tests
+  attendu sous `third_party/6502_65C02_functional_tests/`).
+- Make target `test-klaus`, intégré à `make tests`. Exécution ~2 s sur
+  hardware moderne (~96 M cycles/cœur).
+
+#### Validated
+- **Cœur 6502 Phosphoric** : passe Klaus, confirme les fondations
+  cycle-exactes (BCD, RMW, branche cross-page, JMP indirect bug).
+- **Cœur 65C816 mode E** : passe Klaus, validation forte d'ADR-11(c) —
+  notamment la conservation du bug `JMP ($xxFF)`. Le port B1.4 est
+  **fonctionnellement équivalent** au 6502 sur l'intégralité du jeu
+  d'instructions officiel.
+
+#### Notes
+- `.gitignore` exclut `third_party/6502_65C02_functional_tests/` (code
+  externe sous license séparée — voir `license.txt` du repo Klaus).
+- 408 tests passent (était 406, +2 Klaus).
+- B1.6 (boot ROM Oric 1 sous `--cpu 65c816`) reste à faire ; il s'agit
+  d'un test système avec timing PAL et ULA, plus large que Klaus.
+
 ## [1.18.0-alpha] - 2026-05-07
 
 ### Oric 2 — Jalon B1.4 : opcodes 6502-équivalents en mode émulation
