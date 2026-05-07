@@ -48,7 +48,11 @@ void cpu816_reset(cpu65c816_t* cpu) {
     cpu->DBR = 0;
     cpu->PBR = 0;
     cpu->S   = 0x01FF;
-    cpu->P   = (uint8_t)(FLAG_INTERRUPT | FLAG_BREAK | FLAG_UNUSED);
+    /* P aligné sur le 6502 Phosphoric : U=1, I=1, autres clear. Le bit B
+     * (FLAG_BREAK, bit 4) n'existe pas comme vrai flag CPU sur NMOS 6502 —
+     * il n'apparaît qu'à la valeur pushed par BRK/PHP. Le forcer à 1 dans
+     * P diverge du 6502 et casse l'équivalence boot ROM (B1.6). */
+    cpu->P   = (uint8_t)(FLAG_INTERRUPT | FLAG_UNUSED);
 
     uint8_t lo = memory_read(cpu->memory, 0xFFFC);
     uint8_t hi = memory_read(cpu->memory, 0xFFFD);

@@ -5,6 +5,42 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.18.2-alpha] - 2026-05-07
+
+### Oric 2 — Jalon B1.6 : équivalence boot ROM Oric 1 entre les deux cœurs
+
+#### Added
+- **`tests/integration/test_oric_boot_dual.c`** : équivalence stricte
+  6502 ↔ 65C816 mode E sur boot de la ROM BASIC 1.0 réelle.
+  Charge `roms/basic10.rom` (16 KiB) en `mem.rom` ($C000-$FFFF), reset
+  les deux cœurs, exécute respectivement 100 K et 1 M cycles sans I/O,
+  puis vérifie l'**égalité bit-à-bit** :
+  - registres CPU (A=C&0xFF, X, Y, SP=S&0xFF, PC, P, cycles)
+  - hash FNV-1a 64 de la RAM complète $0000-$BFFF
+  - high byte de C (B register) reste à 0 (pas de pollution par ops 8b)
+- 4 tests : reset vector match, écriture zéro page après init, équivalence
+  100 K cycles, équivalence 1 M cycles.
+- Test gated : skip si `roms/basic10.rom` absent (la ROM est fournie
+  par l'utilisateur, pas dans le repo).
+- Make target `test-boot-dual`, intégré à `make tests`. Exécution ~1 s.
+
+#### Fixed
+- **`cpu816_reset`** : `P` ne force plus le bit `FLAG_BREAK` à 1 au reset.
+  Sur 6502/65C816 mode E, le bit B (bit 4) **n'est pas un vrai flag CPU**
+  — il n'apparaît qu'à la valeur pushed par BRK/PHP. Le forcer divergeait
+  du 6502 Phosphoric et cassait l'équivalence boot ROM. P aligné sur
+  `FLAG_UNUSED | FLAG_INTERRUPT` (= 0x24) comme le 6502.
+- Test B1.2 `test_reset_processor_status` mis à jour : B doit être à 0
+  au reset (était `ASSERT_TRUE(B)`, devient `ASSERT_FALSE(B)`).
+
+#### Notes
+- L'équivalence stricte sur 1 M cycles démontre que le port 65C816 mode E
+  est non seulement fonctionnellement (Klaus B1.5) mais **bit-à-bit**
+  identique au 6502 sur du code Oric 1 réel.
+- 412 tests passent (était 408, +4 boot dual).
+- B1 quasi-fermé. Restent B1.7 (mode natif, REP/SEP, 16b, bus 24b) et
+  B1.8 (opcodes natifs MVN/MVP/JSL/RTL/long addressing).
+
 ## [1.18.1-alpha] - 2026-05-07
 
 ### Oric 2 — Jalon B1.5 : Klaus Dormann functional test sur les deux cœurs

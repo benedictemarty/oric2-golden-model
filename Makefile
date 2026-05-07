@@ -96,7 +96,7 @@ BINDIR = $(PREFIX)/bin
 DATADIR = $(PREFIX)/share/phosphoric
 DOCDIR = $(PREFIX)/share/doc/phosphoric
 
-.PHONY: all clean tools tests test-cpu test-cpu-core test-cpu65c816 test-cpu65c816-e test-klaus test-memory test-io test-storage test-system test-rom test-video test-audio test-debugger test-cast test-savestate test-atmos test-joystick test-printer test-mcp40 test-renderer test-trace test-profiler test-rominfo test-serial test-keyboard valgrind static-analysis coverage coverage-report install uninstall help
+.PHONY: all clean tools tests test-cpu test-cpu-core test-cpu65c816 test-cpu65c816-e test-klaus test-boot-dual test-memory test-io test-storage test-system test-rom test-video test-audio test-debugger test-cast test-savestate test-atmos test-joystick test-printer test-mcp40 test-renderer test-trace test-profiler test-rominfo test-serial test-keyboard valgrind static-analysis coverage coverage-report install uninstall help
 
 all: $(TARGET)
 
@@ -145,6 +145,11 @@ TEST_KLAUS_SRCS = tests/integration/test_klaus_dormann.c \
                   src/cpu/cpu65c816.c src/cpu/cpu65c816_opcodes.c \
                   src/memory/memory.c src/memory/banking.c src/utils/logging.c
 
+TEST_BOOT_DUAL_SRCS = tests/integration/test_oric_boot_dual.c \
+                      src/cpu/cpu6502.c src/cpu/opcodes.c src/cpu/addressing.c \
+                      src/cpu/cpu65c816.c src/cpu/cpu65c816_opcodes.c \
+                      src/memory/memory.c src/memory/banking.c src/utils/logging.c
+
 TEST_MEM_SRCS = tests/unit/test_memory.c src/memory/memory.c \
                 src/memory/banking.c src/utils/logging.c
 
@@ -176,6 +181,10 @@ test-cpu65c816-e: $(TEST_CPU816_E_SRCS)
 test-klaus: $(TEST_KLAUS_SRCS)
 	@$(CC) $(CFLAGS) -O2 $(TEST_KLAUS_SRCS) $(LDFLAGS) -o test_klaus
 	@./test_klaus
+
+test-boot-dual: $(TEST_BOOT_DUAL_SRCS)
+	@$(CC) $(CFLAGS) -O2 $(TEST_BOOT_DUAL_SRCS) $(LDFLAGS) -o test_boot_dual
+	@./test_boot_dual
 
 test-memory: $(TEST_MEM_SRCS)
 	@$(CC) $(CFLAGS) $(TEST_MEM_SRCS) $(LDFLAGS) -o test_memory
@@ -325,7 +334,7 @@ test-coverage: $(TEST_COVERAGE_SRCS)
 	@$(CC) $(CFLAGS) $(TEST_COVERAGE_SRCS) $(LDFLAGS) -o test_coverage
 	@./test_coverage
 
-tests: test-cpu test-cpu-core test-cpu65c816 test-cpu65c816-e test-klaus test-memory test-io test-storage test-system test-video test-audio test-debugger test-savestate test-atmos test-joystick test-printer test-mcp40 test-renderer test-trace test-profiler test-rominfo test-serial test-keyboard test-coverage
+tests: test-cpu test-cpu-core test-cpu65c816 test-cpu65c816-e test-klaus test-boot-dual test-memory test-io test-storage test-system test-video test-audio test-debugger test-savestate test-atmos test-joystick test-printer test-mcp40 test-renderer test-trace test-profiler test-rominfo test-serial test-keyboard test-coverage
 	@echo ""
 	@echo "═══════════════════════════════════════════════════════"
 	@echo "  All test suites completed!"

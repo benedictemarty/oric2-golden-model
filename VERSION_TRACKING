@@ -1,12 +1,16 @@
 VERSION_TRACKING - Phosphoric
 =====================================
 
-Current Version: 1.18.1-alpha
+Current Version: 1.18.2-alpha
 Release Date: 2026-05-07
-Status: Alpha (Oric 2 B1.5 — Klaus Dormann passe sur 6502 et 65C816, 408 tests pass)
+Status: Alpha (Oric 2 B1.6 — équivalence boot ROM Oric 1 6502↔65C816, 412 tests pass)
 
 Version History:
 ----------------
+- 1.18.2-alpha (2026-05-07): Oric 2 B1.6 — équivalence boot ROM Oric 1 (412 tests, +4)
+  * Add: tests/integration/test_oric_boot_dual.c (équivalence bit-à-bit)
+  * Fix: cpu816_reset n'aligne plus le bit B (FLAG_BREAK) à 1, conformément 6502
+  * Validation: RAM identique après 1M cycles de boot ROM réel
 - 1.18.1-alpha (2026-05-07): Oric 2 B1.5 — Klaus Dormann test (408 tests, +2)
   * Add: tests/integration/test_klaus_dormann.c (runner gated)
   * Validation: 6502 et 65C816 mode E passent les ~96M cycles Klaus

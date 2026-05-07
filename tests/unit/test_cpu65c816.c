@@ -133,11 +133,13 @@ TEST(test_reset_processor_status) {
     place_reset_vector(&mem, 0x0200);
     cpu816_init(&cpu, &mem);
     cpu816_reset(&cpu);
-    /* I doit être à 1 (IRQ masquée), D à 0 (post-reset), B et UNUSED à 1
-     * (alignement avec le 6502 Phosphoric). */
+    /* I doit être à 1 (IRQ masquée), D à 0 (post-reset), UNUSED à 1.
+     * B (FLAG_BREAK) n'est pas un vrai flag CPU sur 6502/65C816 mode E —
+     * il n'existe qu'à la valeur pushed par BRK/PHP. Aligné avec le
+     * 6502 Phosphoric, B doit être à 0 au reset. */
     ASSERT_TRUE(cpu.P & FLAG_INTERRUPT);
     ASSERT_FALSE(cpu.P & FLAG_DECIMAL);
-    ASSERT_TRUE(cpu.P & FLAG_BREAK);
+    ASSERT_FALSE(cpu.P & FLAG_BREAK);
     ASSERT_TRUE(cpu.P & FLAG_UNUSED);
 }
 
