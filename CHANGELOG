@@ -5,6 +5,37 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.17.2-alpha] - 2026-05-07
+
+### Oric 2 — Jalon B1.3 : XCE + flag instructions
+
+#### Added
+- **XCE (`$FB`)** : Exchange Carry / Emulation. (E,C) ↔ (C,E). Transition
+  vers E=1 force `M=X=1`, `X.high=Y.high=0`, `S.high=$01` conformément à
+  la datasheet WDC W65C816S §2.20 (helper `enter_emulation_mode`).
+- **Flag instructions** (toutes 1 byte / 2 cycles, mode implicite) :
+  CLC `$18`, SEC `$38`, CLI `$58`, SEI `$78`, CLV `$B8`, CLD `$D8`, SED `$F8`.
+- **`cpu816_execute_cycles()`** opérationnel (boucle `cpu816_step`).
+- **Helper `fetch_pc_byte()`** : lecture PC + incrément (wraparound 16
+  bits dans le bank ; PBR ignoré tant que le bus 24 bits n'est pas
+  introduit en B1.7).
+- **11 nouveaux tests `test_cpu65c816`** : CLC/SEC/CLI/SEI/CLD/SED/CLV
+  individuels, XCE E→N, XCE N→E force les invariants 6502, XCE round-trip
+  préserve B (high byte de C), XCE consomme 2 cycles, opcode inconnu
+  retourne -1 (et restaure PC pour debug).
+
+#### Changed
+- `cpu816_step()` : dispatch sur 8 opcodes (les autres retournent -1
+  avec `log_error`). Cycle counter alimenté.
+- Test `test_step_returns_error_in_skeleton` retiré, remplacé par
+  `test_unimplemented_opcode_returns_error` (LDA #imm `$A9` non
+  implémenté en B1.3).
+
+#### Notes
+- ADR-11 toujours ouverte mais non engagée par B1.3 (XCE et flag insts
+  sont sémantiquement identiques entre NMOS, WDC strict et hybride).
+- 359 tests passent (348 − 11 + 22), aucune régression.
+
 ## [1.17.1-alpha] - 2026-05-07
 
 ### Oric 2 — Jalon B1.2 : squelette 65C816 (init + reset)

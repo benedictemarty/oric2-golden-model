@@ -1,12 +1,18 @@
 VERSION_TRACKING - Phosphoric
 =====================================
 
-Current Version: 1.17.1-alpha
+Current Version: 1.17.2-alpha
 Release Date: 2026-05-07
-Status: Alpha (Oric 2 B1.2 — squelette 65C816 init/reset, 348 tests pass)
+Status: Alpha (Oric 2 B1.3 — XCE + flag instructions, 359 tests pass)
 
 Version History:
 ----------------
+- 1.17.2-alpha (2026-05-07): Oric 2 B1.3 — XCE + flag insts (359 tests, +11 net)
+  * Add: XCE ($FB) avec transition mode forcée (M=X=1, S.high, X/Y.high)
+  * Add: CLC, SEC, CLI, SEI, CLV, CLD, SED (8 opcodes 2 cycles total avec XCE)
+  * Add: cpu816_execute_cycles opérationnel
+  * Add: fetch_pc_byte helper, dispatch step sur 8 opcodes
+  * Test: 22 tests test_cpu65c816 (-1 retiré, +12 ajoutés)
 - 1.17.1-alpha (2026-05-07): Oric 2 B1.2 — squelette 65C816 (348 tests, +11)
   * Add: include/cpu/cpu65c816.h, src/cpu/cpu65c816.c (registres complets, init, reset)
   * Add: vtable cpu_core_vtable_65c816 (résolue par --cpu 65c816)

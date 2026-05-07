@@ -196,21 +196,151 @@ TEST(test_irq_set_wakes_from_wai) {
     ASSERT_FALSE(cpu.waiting);
 }
 
-/* ─── Exécution non encore disponible ────────────────────────────────── */
+/* ─── Helpers d'exécution ────────────────────────────────────────────── */
 
-TEST(test_step_returns_error_in_skeleton) {
-    cpu65c816_t cpu;
-    memory_t mem;
-    memory_init(&mem);
-    place_reset_vector(&mem, 0x0200);
-    cpu816_init(&cpu, &mem);
-    cpu816_reset(&cpu);
-    /* B1.2 : aucune instruction implémentée. step doit retourner < 0.
-     * Le log_error attendu est imprimé sur stderr — bruit assumé. */
+static void load_prog(memory_t* mem, uint16_t addr, const uint8_t* code, size_t n) {
+    for (size_t i = 0; i < n; i++) memory_write(mem, (uint16_t)(addr + i), code[i]);
+}
+
+static void boot(cpu65c816_t* cpu, memory_t* mem) {
+    memory_init(mem);
+    place_reset_vector(mem, 0x0200);
+    cpu816_init(cpu, mem);
+    cpu816_reset(cpu);
+}
+
+/* ─── Flag instructions (CLC/SEC/CLI/SEI/CLD/SED/CLV) ────────────────── */
+
+TEST(test_clc_clears_carry) {
+    cpu65c816_t cpu; memory_t mem; boot(&cpu, &mem);
+    cpu.P |= FLAG_CARRY;
+    const uint8_t prog[] = { 0x18 }; load_prog(&mem, 0x0200, prog, 1);
+    int c = cpu816_step(&cpu);
+    ASSERT_EQ(c, 2);
+    ASSERT_FALSE(cpu.P & FLAG_CARRY);
+    ASSERT_EQ((int)cpu.PC, 0x0201);
+}
+
+TEST(test_sec_sets_carry) {
+    cpu65c816_t cpu; memory_t mem; boot(&cpu, &mem);
+    cpu.P &= (uint8_t)~FLAG_CARRY;
+    const uint8_t prog[] = { 0x38 }; load_prog(&mem, 0x0200, prog, 1);
+    int c = cpu816_step(&cpu);
+    ASSERT_EQ(c, 2);
+    ASSERT_TRUE(cpu.P & FLAG_CARRY);
+}
+
+TEST(test_cli_clears_interrupt) {
+    cpu65c816_t cpu; memory_t mem; boot(&cpu, &mem);
+    cpu.P |= FLAG_INTERRUPT;
+    const uint8_t prog[] = { 0x58 }; load_prog(&mem, 0x0200, prog, 1);
+    cpu816_step(&cpu);
+    ASSERT_FALSE(cpu.P & FLAG_INTERRUPT);
+}
+
+TEST(test_sei_sets_interrupt) {
+    cpu65c816_t cpu; memory_t mem; boot(&cpu, &mem);
+    cpu.P &= (uint8_t)~FLAG_INTERRUPT;
+    const uint8_t prog[] = { 0x78 }; load_prog(&mem, 0x0200, prog, 1);
+    cpu816_step(&cpu);
+    ASSERT_TRUE(cpu.P & FLAG_INTERRUPT);
+}
+
+TEST(test_cld_clears_decimal) {
+    cpu65c816_t cpu; memory_t mem; boot(&cpu, &mem);
+    cpu.P |= FLAG_DECIMAL;
+    const uint8_t prog[] = { 0xD8 }; load_prog(&mem, 0x0200, prog, 1);
+    cpu816_step(&cpu);
+    ASSERT_FALSE(cpu.P & FLAG_DECIMAL);
+}
+
+TEST(test_sed_sets_decimal) {
+    cpu65c816_t cpu; memory_t mem; boot(&cpu, &mem);
+    const uint8_t prog[] = { 0xF8 }; load_prog(&mem, 0x0200, prog, 1);
+    cpu816_step(&cpu);
+    ASSERT_TRUE(cpu.P & FLAG_DECIMAL);
+}
+
+TEST(test_clv_clears_overflow) {
+    cpu65c816_t cpu; memory_t mem; boot(&cpu, &mem);
+    cpu.P |= FLAG_OVERFLOW;
+    const uint8_t prog[] = { 0xB8 }; load_prog(&mem, 0x0200, prog, 1);
+    cpu816_step(&cpu);
+    ASSERT_FALSE(cpu.P & FLAG_OVERFLOW);
+}
+
+/* ─── XCE — Exchange Carry / Emulation ──────────────────────────────── */
+
+TEST(test_xce_e_to_native_when_clc_then_xce) {
+    cpu65c816_t cpu; memory_t mem; boot(&cpu, &mem);
+    /* Reset → E=1, C=? (0). CLC ; XCE → E doit recevoir l'ancien C (0) → mode N. */
+    const uint8_t prog[] = { 0x18, 0xFB }; load_prog(&mem, 0x0200, prog, 2);
+    ASSERT_TRUE(cpu.E);
+    cpu816_step(&cpu);             /* CLC */
+    int c = cpu816_step(&cpu);     /* XCE */
+    ASSERT_EQ(c, 2);
+    ASSERT_FALSE(cpu.E);
+    /* Nouveau C = ancien E (1). */
+    ASSERT_TRUE(cpu.P & FLAG_CARRY);
+}
+
+TEST(test_xce_native_to_e_forces_emulation_invariants) {
+    cpu65c816_t cpu; memory_t mem; boot(&cpu, &mem);
+    /* Bascule en mode N : CLC ; XCE → N */
+    const uint8_t prog[] = { 0x18, 0xFB, 0x38, 0xFB };
+    load_prog(&mem, 0x0200, prog, 4);
+    cpu816_step(&cpu); cpu816_step(&cpu);
+    ASSERT_FALSE(cpu.E);
+    /* Salit l'état natif : registres 16 bits, S 16 bits, M=X=0 */
+    cpu.P &= (uint8_t)~(FLAG816_M_MEM | FLAG816_X_INDEX);
+    cpu.X = 0xCAFE;
+    cpu.Y = 0xBABE;
+    cpu.S = 0x1FF0;
+    /* SEC ; XCE : C=1 → E=1, transition force M=X=1, X.high=Y.high=0, S.high=$01 */
+    cpu816_step(&cpu); cpu816_step(&cpu);
+    ASSERT_TRUE(cpu.E);
+    ASSERT_TRUE(cpu.P & FLAG816_M_MEM);
+    ASSERT_TRUE(cpu.P & FLAG816_X_INDEX);
+    ASSERT_EQ((int)(cpu.X >> 8), 0);
+    ASSERT_EQ((int)(cpu.Y >> 8), 0);
+    ASSERT_EQ((int)(cpu.S >> 8), 0x01);
+}
+
+TEST(test_xce_round_trip_preserves_b_high_byte_of_C) {
+    cpu65c816_t cpu; memory_t mem; boot(&cpu, &mem);
+    /* C (16 bits) = $9942 : B=$99, A=$42. En mode E, A est 8 bits effectifs ;
+     * B doit survivre à E→N→E. */
+    cpu.C = 0x9942;
+    const uint8_t prog[] = { 0x18, 0xFB,   /* E→N */
+                              0x38, 0xFB }; /* N→E */
+    load_prog(&mem, 0x0200, prog, 4);
+    cpu816_step(&cpu); cpu816_step(&cpu);
+    ASSERT_FALSE(cpu.E);
+    ASSERT_EQ((int)cpu.C, 0x9942);  /* B et A intacts */
+    cpu816_step(&cpu); cpu816_step(&cpu);
+    ASSERT_TRUE(cpu.E);
+    ASSERT_EQ((int)cpu.C, 0x9942);  /* B retenu après retour en mode E */
+}
+
+TEST(test_xce_consumes_two_cycles) {
+    cpu65c816_t cpu; memory_t mem; boot(&cpu, &mem);
+    const uint8_t prog[] = { 0xFB }; load_prog(&mem, 0x0200, prog, 1);
+    uint64_t before = cpu.cycles;
+    int c = cpu816_step(&cpu);
+    ASSERT_EQ(c, 2);
+    ASSERT_EQ((int)(cpu.cycles - before), 2);
+}
+
+/* ─── Opcodes non implémentés (B1.4) ────────────────────────────────── */
+
+TEST(test_unimplemented_opcode_returns_error) {
+    cpu65c816_t cpu; memory_t mem; boot(&cpu, &mem);
+    /* LDA #imm ($A9) — pas encore implémenté en B1.3. */
+    const uint8_t prog[] = { 0xA9, 0x42 }; load_prog(&mem, 0x0200, prog, 2);
     int rc = cpu816_step(&cpu);
     ASSERT_TRUE(rc < 0);
-    rc = cpu816_execute_cycles(&cpu, 100);
-    ASSERT_TRUE(rc < 0);
+    /* PC doit être restauré pour aider le debug */
+    ASSERT_EQ((int)cpu.PC, 0x0200);
 }
 
 int main(void) {
@@ -229,7 +359,18 @@ int main(void) {
     RUN(test_irq_set_clear_bitfield);
     RUN(test_nmi_sets_pending);
     RUN(test_irq_set_wakes_from_wai);
-    RUN(test_step_returns_error_in_skeleton);
+    RUN(test_clc_clears_carry);
+    RUN(test_sec_sets_carry);
+    RUN(test_cli_clears_interrupt);
+    RUN(test_sei_sets_interrupt);
+    RUN(test_cld_clears_decimal);
+    RUN(test_sed_sets_decimal);
+    RUN(test_clv_clears_overflow);
+    RUN(test_xce_e_to_native_when_clc_then_xce);
+    RUN(test_xce_native_to_e_forces_emulation_invariants);
+    RUN(test_xce_round_trip_preserves_b_high_byte_of_C);
+    RUN(test_xce_consumes_two_cycles);
+    RUN(test_unimplemented_opcode_returns_error);
 
     printf("\n═══════════════════════════════════════════════════════\n");
     printf("  Results: %d passed, %d failed\n", tests_passed, tests_failed);
