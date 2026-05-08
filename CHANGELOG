@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - 2026-05-08
+
+### Test — OricOS Sprint 2.d.1 driver clavier (no Phosphoric code change)
+- Le test `test_oricos_sprint2a_via_t1_timer_drives_scheduler` valide
+  désormais implicitement le driver clavier OricOS : kernel_kbd_scan
+  est appelé depuis IRQ T1 handler, période T1 passée à 4096 cycles
+  dans le kernel. Aucun changement côté Phosphoric, mais 494 tests
+  passent encore avec le nouveau kernel.bin.
+
+### Bug latent identifié (à fixer)
+- **TXS en mode N + X=1 (8-bit) copie seulement low byte de X dans S**.
+  L'implémentation actuelle (`cpu816_opcodes.c:841`) fait
+  `cpu->S = x_get_X(cpu)` qui en X=1 retourne `cpu->X & 0xFF` → S=$00FF
+  au lieu de $01FF attendu pour une stack page 1 standard. Reproductible
+  via OricOS `ldx #$FF; txs` en mode N M=X=1, observable par
+  `TASK_A_S=$00F8` après save_A. À investiguer côté WDC datasheet
+  (comportement TXS exact en mode N + X=1). Le kernel OricOS fonctionne
+  actuellement par chance (stack en bank 0 page 0).
+
+---
+
 ## [1.22.8-alpha] - 2026-05-08
 
 ### Oric 2 — Démo OricOS visible (`--kernel`)
