@@ -283,9 +283,12 @@ TEST(test_oricos_sprint2a_via_t1_timer_drives_scheduler) {
      * retourner BUNDLE_OK ($00). Stocké à $01549C par le boot. */
     ASSERT_EQ((int)memory_read24(&mem, 0x01549C), 0x00);
 
-    /* Sprint 2.k : kernel_bundle_validate sur bundle_test inline doit
-     * retourner BUNDLE_OK ($00). Stocké à $01549C par le boot. */
-    ASSERT_EQ((int)memory_read24(&mem, 0x01549C), 0x00);
+    /* Sprint 2.l : kernel_bundle_find_code sur bundle_test doit
+     * trouver la section CODE : size = $0002, offset = $0010. */
+    ASSERT_EQ((int)memory_read24(&mem, 0x015498), 0x02); /* size lo */
+    ASSERT_EQ((int)memory_read24(&mem, 0x015499), 0x00); /* size hi */
+    ASSERT_EQ((int)memory_read24(&mem, 0x01549A), 0x10); /* offset lo */
+    ASSERT_EQ((int)memory_read24(&mem, 0x01549B), 0x00); /* offset hi */
 
     memory_cleanup(&mem);
 }
