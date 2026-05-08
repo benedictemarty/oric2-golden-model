@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - 2026-05-08
 
+### Test — OricOS Sprint 2.j.1 driver SD fonctionnel
+
+#### Added
+- **`tests/integration/test_oricos_sd.c`** : test d'intégration full-system
+  qui valide le pipeline complet driver SD côté kernel ↔ device émulé :
+  1. Crée image SD test 512B avec pattern A..Z répété.
+  2. Charge kernel + setup VIA + sd_device + io routing.
+  3. Run kernel jusqu'à STP.
+  4. ASSERT que `mem[$01:5D40..]` contient le pattern (kernel a copié
+     le bloc 0 via `kernel_sd_read_block` au boot).
+- **`make test-oricos-sd`** target dédiée.
+- 502 tests OK (+1 nouveau).
+
 ### Oric 2 — Device SD bloc minimal (Sprint 2.j.0)
 
 #### Added
