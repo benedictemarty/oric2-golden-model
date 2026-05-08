@@ -98,6 +98,22 @@ static void install_irq_trampoline(memory_t* mem) {
 }
 
 /**
+ * @brief Installe le trampoline COP bank 0 $0150 + vecteur natif $00FFE4.
+ *        Le trampoline JML vers le COP handler kernel en bank 1 $5700.
+ *        ADR-13 : syscall mechanism via COP + table.
+ */
+static void install_cop_trampoline(memory_t* mem) {
+    /* bank 0 $0150 : JML $015700 (kernel COP handler) */
+    memory_write24(mem, 0x000150, 0x5C);
+    memory_write24(mem, 0x000151, 0x00);
+    memory_write24(mem, 0x000152, 0x57);
+    memory_write24(mem, 0x000153, 0x01);
+    /* Vecteur COP mode N $00FFE4 → $0150 */
+    mem->rom[0x3FE4] = 0x50;
+    mem->rom[0x3FE5] = 0x01;
+}
+
+/**
  * @brief Installe le stub trampoline RESET en bank 0 $0100 :
  *   CLC ; XCE ; JML $010200 (kernel entry).
  */
@@ -172,6 +188,7 @@ TEST(test_oricos_sprint2a_via_t1_timer_drives_scheduler) {
     install_reset_stub(&mem);
     install_nmi_trampoline(&mem);
     install_irq_trampoline(&mem);
+    install_cop_trampoline(&mem);
 
     via_init(&via);
     via_reset(&via);
@@ -248,6 +265,10 @@ TEST(test_oricos_sprint2a_via_t1_timer_drives_scheduler) {
     /* Au-delà du banner (offset 12+) le screen est cleared (espaces) */
     ASSERT_EQ((int)memory_read24(&mem, 0x00BB8D), 0x20);
     ASSERT_EQ((int)memory_read24(&mem, 0x00BFDF), 0x20);
+
+    /* Sprint 2.f : SYS_PRINT_CHAR via COP a écrit 'Y' à $BBA8 (ligne 2 col 0,
+     * après le LF de fin de banner "OricOS v0.7\n"). */
+    ASSERT_EQ((int)memory_read24(&mem, 0x00BBA8), 'Y');
 
     memory_cleanup(&mem);
 }

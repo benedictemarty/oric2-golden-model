@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - 2026-05-08
 
+### Oric 2 — Trampoline COP pour syscalls OricOS (ADR-13)
+
+#### Added
+- **`--kernel`** installe désormais aussi un trampoline COP en bank 0
+  `$0150` (`JML $015700`) et le vecteur natif `$00FFE4` (mode N) +
+  `$00FFF4` (mode E). Permet à OricOS d'utiliser `cop #imm` comme
+  mécanisme de syscall (cf. ADR-13 dans workspace `CLAUDE.md`).
+- **Test `test_oricos_boot`** étendu : `install_cop_trampoline` +
+  ASSERT que `mem[$BBA8] = 'Y'` après le syscall test du kernel.
+- 494 tests OK.
+
 ### Test — OricOS Sprint 2.d.1 driver clavier (no Phosphoric code change)
 - Le test `test_oricos_sprint2a_via_t1_timer_drives_scheduler` valide
   désormais implicitement le driver clavier OricOS : kernel_kbd_scan

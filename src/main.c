@@ -1673,12 +1673,19 @@ int main(int argc, char* argv[]) {
         for (size_t i = 0; i < sizeof(nmi_trampo); i++) {
             memory_write24(&emu.memory, 0x000130u + (uint32_t)i, nmi_trampo[i]);
         }
+        /* COP trampoline bank 0 $0150 : JML $015700 (ADR-13 syscall vector). */
+        static const uint8_t cop_trampo[] = { 0x5C, 0x00, 0x57, 0x01 };
+        for (size_t i = 0; i < sizeof(cop_trampo); i++) {
+            memory_write24(&emu.memory, 0x000150u + (uint32_t)i, cop_trampo[i]);
+        }
         /* Vecteurs en mem.rom (bank 0 $C000-$FFFF). */
         emu.memory.rom[0x3FFC] = 0x00; emu.memory.rom[0x3FFD] = 0x01; /* RESET → $0100 */
         emu.memory.rom[0x3FFE] = 0x40; emu.memory.rom[0x3FFF] = 0x01; /* IRQ/BRK mode E → $0140 */
         emu.memory.rom[0x3FEE] = 0x40; emu.memory.rom[0x3FEF] = 0x01; /* IRQ mode N → $0140 */
         emu.memory.rom[0x3FEA] = 0x30; emu.memory.rom[0x3FEB] = 0x01; /* NMI mode N → $0130 */
         emu.memory.rom[0x3FFA] = 0x30; emu.memory.rom[0x3FFB] = 0x01; /* NMI mode E → $0130 */
+        emu.memory.rom[0x3FE4] = 0x50; emu.memory.rom[0x3FE5] = 0x01; /* COP mode N → $0150 */
+        emu.memory.rom[0x3FF4] = 0x50; emu.memory.rom[0x3FF5] = 0x01; /* COP mode E → $0150 */
         log_info("Loaded OricOS kernel %s (%zu bytes) in bank 1 $0200", kernel_path, kn);
     }
 
