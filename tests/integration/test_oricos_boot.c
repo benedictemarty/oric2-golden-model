@@ -244,11 +244,15 @@ TEST(test_oricos_sprint2a_via_t1_timer_drives_scheduler) {
     ASSERT_TRUE(!cpu.E);
     ASSERT_EQ((int)cpu.PBR, 0x01);
 
-    /* Sprint 2.b : bank allocator. */
+    /* Sprint 2.b : bank allocator (3 alloc bump). */
     ASSERT_EQ((int)memory_read24(&mem, 0x015460), 0x04);
     ASSERT_EQ((int)memory_read24(&mem, 0x015461), 0x05);
     ASSERT_EQ((int)memory_read24(&mem, 0x015462), 0x06);
     ASSERT_EQ((int)memory_read24(&mem, 0x015450), 0x07);
+
+    /* Sprint 2.h : free list LIFO. Après free($05) + alloc, le bank
+     * retourné doit être $05 (LIFO), pas $07 (bump suivant). */
+    ASSERT_EQ((int)memory_read24(&mem, 0x015463), 0x05);
 
     /* Sprint 2.c : driver console. Le boot kernel a clear screen et
      * écrit attribute INK $07 + "OricOS v0.7" à partir de $00BB80. */
