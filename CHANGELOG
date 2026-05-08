@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - 2026-05-08
 
+### Test — OricOS Sprint 2.j.3 parse complet boot sector
+
+- `test_oricos_fat_init_validates_fat32_signature` étendu : ASSERT
+  les 6 champs FAT32 parsés (BPS, SPC, RSC, NFAT, SPF, ROOT) + le
+  calculé FDS = RSC + NFAT*SPF.
+- Sur image FAT32 test : BPS=$0200, SPC=$01, RSC=$0020, NFAT=$02,
+  SPF=$00000040, ROOT=$00000002 → FDS=$00A0 (= 160).
+- 503 tests OK.
+
 ### Test — OricOS Sprint 2.j.2 fat_init signature FAT32
 
 - `tests/integration/test_oricos_sd.c` étendu avec `create_fat32_test_image`

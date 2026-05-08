@@ -313,6 +313,27 @@ TEST(test_oricos_fat_init_validates_fat32_signature) {
     /* FS_INIT_RESULT = $016160 doit être 0 (OK). */
     ASSERT_EQ((int)memory_read24(&mem, 0x016160), 0x00);
 
+    /* Sprint 2.j.3 : champs parsés du boot sector. */
+    /* FS_BPS = 512 = $0200 LE → low=$00, high=$02 */
+    ASSERT_EQ((int)memory_read24(&mem, 0x016161), 0x00);
+    ASSERT_EQ((int)memory_read24(&mem, 0x016162), 0x02);
+    /* FS_SPC = 1 */
+    ASSERT_EQ((int)memory_read24(&mem, 0x016163), 0x01);
+    /* FS_RSC = 32 = $0020 → low=$20, high=$00 */
+    ASSERT_EQ((int)memory_read24(&mem, 0x016164), 0x20);
+    ASSERT_EQ((int)memory_read24(&mem, 0x016165), 0x00);
+    /* FS_NFAT = 2 */
+    ASSERT_EQ((int)memory_read24(&mem, 0x016166), 0x02);
+    /* FS_SPF = 64 = $00000040 LE */
+    ASSERT_EQ((int)memory_read24(&mem, 0x016167), 0x40);
+    ASSERT_EQ((int)memory_read24(&mem, 0x016168), 0x00);
+    /* FS_ROOT = 2 = $00000002 LE */
+    ASSERT_EQ((int)memory_read24(&mem, 0x01616B), 0x02);
+    ASSERT_EQ((int)memory_read24(&mem, 0x01616C), 0x00);
+    /* FS_FDS = FS_RSC + NFAT * FS_SPF = 32 + 2*64 = 160 = $00A0 LE */
+    ASSERT_EQ((int)memory_read24(&mem, 0x01616F), 0xA0);
+    ASSERT_EQ((int)memory_read24(&mem, 0x016170), 0x00);
+
     sd_close(&sd);
     memory_cleanup(&mem);
 }
