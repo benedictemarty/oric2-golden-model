@@ -16,6 +16,7 @@
 #include <stdbool.h>
 
 #include "cpu/cpu6502.h"
+#include "cpu/cpu65c816.h"
 #include "cpu/cpu_core.h"
 #include "memory/memory.h"
 #include "io/via6522.h"
@@ -34,7 +35,7 @@
 #include "utils/profiler.h"
 #include "network/cast_server.h"
 
-#define EMU_VERSION "1.22.7-alpha"
+#define EMU_VERSION "1.22.8-alpha"
 
 /**
  * @brief ORIC machine model
@@ -95,8 +96,10 @@ typedef struct emulator_s {
     const rom_patches_t* rom_patches;
 
     cpu6502_t cpu;
+    cpu65c816_t cpu816;          /* B1.2+ : cœur 65C816 pour mode Oric 2 / OricOS */
     /* B1.1 (Oric 2): vtable pour cohabitation 6502 / 65C816.
-     * cpu_impl pointe sur l'implémentation active (&emu->cpu en B1.1). */
+     * cpu_impl pointe sur l'implémentation active (&emu->cpu pour 6502,
+     * &emu->cpu816 pour 65C816). */
     cpu_kind_t cpu_kind;
     const cpu_core_vtable_t* cpu_vt;
     void* cpu_impl;

@@ -234,29 +234,20 @@ TEST(test_oricos_sprint2a_via_t1_timer_drives_scheduler) {
     ASSERT_EQ((int)memory_read24(&mem, 0x015450), 0x07);
 
     /* Sprint 2.c : driver console. Le boot kernel a clear screen et
-     * écrit "OricOS v0.7" à $00BB80 (screen RAM Oric 1, bank 0). */
+     * écrit attribute INK $07 + "OricOS v0.7" à partir de $00BB80. */
+    ASSERT_EQ((int)memory_read24(&mem, 0x00BB80), 0x07); /* attribute INK white */
     static const char banner[] = "OricOS v0.7";
     for (int i = 0; i < (int)sizeof(banner) - 1; i++) {
-        int got = (int)memory_read24(&mem, 0x00BB80 + i);
+        int got = (int)memory_read24(&mem, 0x00BB81 + i);
         if (got != (int)(unsigned char)banner[i]) {
             printf("FAIL\n    screen[%d] = 0x%02X, expected '%c' (0x%02X)\n",
-                   i, got, banner[i], banner[i]);
+                   i + 1, got, banner[i], banner[i]);
             tests_failed++; memory_cleanup(&mem); return;
         }
     }
-    /* Vérifie aussi qu'au-delà du banner le screen est cleared (espaces) */
-    {
-        int got = (int)memory_read24(&mem, 0x00BB8C);
-        if (got != 0x20) {
-            printf("FAIL\n    screen[12] = 0x%02X (after banner). Dump $BB80-$BB9F:\n    ", got);
-            for (int i = 0; i < 32; i++) {
-                printf("%02X ", (unsigned)memory_read24(&mem, 0x00BB80 + i));
-            }
-            printf("\n");
-            tests_failed++; memory_cleanup(&mem); return;
-        }
-    }
-    ASSERT_EQ((int)memory_read24(&mem, 0x00BFDF), 0x20);      /* dernier byte écran (40*28-1) */
+    /* Au-delà du banner (offset 12+) le screen est cleared (espaces) */
+    ASSERT_EQ((int)memory_read24(&mem, 0x00BB8D), 0x20);
+    ASSERT_EQ((int)memory_read24(&mem, 0x00BFDF), 0x20);
 
     memory_cleanup(&mem);
 }

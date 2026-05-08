@@ -1,12 +1,19 @@
 VERSION_TRACKING - Phosphoric
 =====================================
 
-Current Version: 1.22.7-alpha
+Current Version: 1.22.8-alpha
 Release Date: 2026-05-08
-Status: Alpha (OricOS Sprint 2.c — driver console + fix addr_abs_x, 494 tests pass)
+Status: Alpha (Démo OricOS visible via --kernel, 494 tests pass)
 
 Version History:
 ----------------
+- 1.22.8-alpha (2026-05-08): Démo OricOS visible (--kernel)
+  * Add CLI --kernel FILE : charge kernel.bin OricOS, force machine oric2 + cpu_kind 65C816,
+    skippe ROM Oric 1, installe trampolines RESET/IRQ/NMI bank 0 + vecteurs natifs E/N.
+  * Boucle main tolérante au STP : la fenêtre SDL2 reste ouverte après arrêt kernel.
+  * Test test_oricos_sprint2a étendu : vérifie attribute INK $07 à $BB80 + banner $BB81+.
+  * Démo visible : "OricOS v0.7" affiché en blanc dans la fenêtre SDL2.
+  * 494 tests, =.
 - 1.22.7-alpha (2026-05-08): OricOS Sprint 2.c + fix addr_abs_x/y X-aware
   * Fix critique : addr816_abs_x/y et indirect_indexed utilisaient toujours x8/y8.
     En mode N X=0 (16-bit), index doit être 16-bit. Klaus/boot dual non affectés.

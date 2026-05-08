@@ -470,6 +470,7 @@ static bool emulator_init(emulator_t* emu) {
     }
 
     cpu_init(&emu->cpu, &emu->memory);
+    cpu816_init(&emu->cpu816, &emu->memory);
 
     /* B2 (Oric 2) : en mode oric2, alloue banks 1-3 (192 KiB additionnels)
      * pour exposer 256 KiB minimum (cf. docs/MEMORY_MAP.md). Bank 0 = ram/rom
@@ -484,14 +485,16 @@ static bool emulator_init(emulator_t* emu) {
         log_info("Oric 2 machine: banks 0-3 ready (256 KiB)");
     }
 
-    /* B1.1 (Oric 2): bind du cœur via vtable. cpu_kind est positionné par
-     * le parsing CLI avant emulator_init (par défaut CPU_KIND_6502). */
-    emu->cpu_vt   = cpu_core_vtable_for(emu->cpu_kind);
-    emu->cpu_impl = &emu->cpu;
+    /* B1.1 (Oric 2): bind du cœur via vtable. cpu_impl pointe sur le
+     * cœur correspondant à cpu_kind (cpu6502 ou cpu816). */
+    emu->cpu_vt = cpu_core_vtable_for(emu->cpu_kind);
     if (!emu->cpu_vt) {
-        log_error("CPU kind %d not supported (yet)", (int)emu->cpu_kind);
+        log_error("CPU kind %d not supported", (int)emu->cpu_kind);
         return false;
     }
+    emu->cpu_impl = (emu->cpu_kind == CPU_KIND_65C816)
+                        ? (void*)&emu->cpu816
+                        : (void*)&emu->cpu;
     log_info("CPU core: %s", emu->cpu_vt->name);
 
     via_init(&emu->via);
@@ -839,6 +842,18 @@ static void emulator_run(emulator_t* emu) {
             tape_patches(emu);
 
             int step = emu->cpu_vt->step(emu->cpu_impl);
+            if (step <= 0) {
+                /* CPU halted/stopped (notamment STP du 65C816) ou erreur :
+                 * on consomme le reste du frame pour ne pas boucler.
+                 * Le rendu SDL2 continue afin de garder la fenêtre ouverte. */
+                frame_cycles = CYCLES_PER_FRAME;
+                static bool stp_logged = false;
+                if (!stp_logged && emu->cpu_kind == CPU_KIND_65C816 && emu->cpu816.stopped) {
+                    log_info("CPU stopped (STP). Window stays open — close to exit.");
+                    stp_logged = true;
+                }
+                break;
+            }
             frame_cycles += step;
 
             /* Post-CLOAD BASIC rechain: the ORIC ROM does NOT rechain
@@ -1219,12 +1234,13 @@ int main(int argc, char* argv[]) {
     const char* acia_addr_arg = NULL;
     const char* cpu_arg = NULL;
     const char* machine_arg = NULL;
+    const char* kernel_path = NULL;
     bool serial_v23 = false;
     int serial_buffer_size = 0;
     bool serial_irq_on_rdrf = false;
     const char* serial_trace_file = NULL;
     /* Long option codes for options without short equivalents */
-    enum { OPT_SCREENSHOT = 256, OPT_SCREENSHOT_AT, OPT_FRAME_DUMP, OPT_FRAME_DUMP_INTERVAL, OPT_TYPE_KEYS, OPT_DISK_ROM, OPT_DISK1, OPT_DISK2, OPT_DISK3, OPT_BREAKPOINT, OPT_DEBUG_BREAK, OPT_CAST_SERVER, OPT_CAST_DISCOVER, OPT_CAST_TO, OPT_SAVE_STATE, OPT_LOAD_STATE, OPT_MODEL, OPT_JOYSTICK, OPT_PRINTER, OPT_PRINTER_TYPE, OPT_SCALE, OPT_TRACE, OPT_TRACE_MAX, OPT_PROFILE, OPT_ROM_INFO, OPT_SERIAL, OPT_SERIAL_V23, OPT_ACIA_ADDR, OPT_SERIAL_BUFFER, OPT_SERIAL_IRQ_RDRF, OPT_SERIAL_TRACE, OPT_CPU, OPT_MACHINE };
+    enum { OPT_SCREENSHOT = 256, OPT_SCREENSHOT_AT, OPT_FRAME_DUMP, OPT_FRAME_DUMP_INTERVAL, OPT_TYPE_KEYS, OPT_DISK_ROM, OPT_DISK1, OPT_DISK2, OPT_DISK3, OPT_BREAKPOINT, OPT_DEBUG_BREAK, OPT_CAST_SERVER, OPT_CAST_DISCOVER, OPT_CAST_TO, OPT_SAVE_STATE, OPT_LOAD_STATE, OPT_MODEL, OPT_JOYSTICK, OPT_PRINTER, OPT_PRINTER_TYPE, OPT_SCALE, OPT_TRACE, OPT_TRACE_MAX, OPT_PROFILE, OPT_ROM_INFO, OPT_SERIAL, OPT_SERIAL_V23, OPT_ACIA_ADDR, OPT_SERIAL_BUFFER, OPT_SERIAL_IRQ_RDRF, OPT_SERIAL_TRACE, OPT_CPU, OPT_MACHINE, OPT_KERNEL };
 
     static struct option long_options[] = {
         {"tape",                required_argument, 0, 't'},
@@ -1270,6 +1286,7 @@ int main(int argc, char* argv[]) {
         {"acia-addr",           required_argument, 0, OPT_ACIA_ADDR},
         {"cpu",                 required_argument, 0, OPT_CPU},
         {"machine",             required_argument, 0, OPT_MACHINE},
+        {"kernel",              required_argument, 0, OPT_KERNEL},
         {"help",                no_argument,       0, '?'},
         {0, 0, 0, 0}
     };
@@ -1353,6 +1370,9 @@ int main(int argc, char* argv[]) {
             case OPT_MACHINE:
                 machine_arg = optarg;
                 break;
+            case OPT_KERNEL:
+                kernel_path = optarg;
+                break;
             case '?':
             default:
                 print_usage(argv[0]);
@@ -1407,6 +1427,13 @@ int main(int argc, char* argv[]) {
          * non exécutable (jalon B1.7+) — toute tentative de bascule via XCE
          * sera trappée à l'exécution avec log_error. */
         emu.cpu_kind = k;
+    }
+
+    /* OricOS kernel : --kernel force machine=oric2 et cpu=65c816. */
+    if (kernel_path) {
+        emu.machine = ORIC_MACHINE_ORIC2;
+        emu.cpu_kind = CPU_KIND_65C816;
+        log_info("OricOS kernel mode: forcing --machine oric2 and --cpu 65c816");
     }
 
     if (!emulator_init(&emu)) {
@@ -1610,8 +1637,53 @@ int main(int argc, char* argv[]) {
     emu.diskrom_path = disk_rom_file;
     emu.tape_path = tape_file;
 
+    /* OricOS kernel : charge le binaire en bank 1 $0200, installe les
+     * trampolines et vecteurs natifs. Mode oric2 + 65C816 forcés plus tôt. */
+    if (kernel_path) {
+        FILE* kfp = fopen(kernel_path, "rb");
+        if (!kfp) {
+            log_error("Failed to open kernel: %s", kernel_path);
+            emulator_cleanup(&emu);
+            return 1;
+        }
+        uint8_t kbuf[0xE000];
+        size_t kn = fread(kbuf, 1, sizeof(kbuf), kfp);
+        fclose(kfp);
+        if (kn == 0) {
+            log_error("Empty kernel file: %s", kernel_path);
+            emulator_cleanup(&emu);
+            return 1;
+        }
+        /* Bank 1 $0200 + n. */
+        for (size_t i = 0; i < kn; i++) {
+            memory_write24(&emu.memory, 0x010200u + (uint32_t)i, kbuf[i]);
+        }
+        /* RESET stub bank 0 $0100 : CLC ; XCE ; JML $010200. */
+        static const uint8_t reset_stub[] = { 0x18, 0xFB, 0x5C, 0x00, 0x02, 0x01 };
+        for (size_t i = 0; i < sizeof(reset_stub); i++) {
+            memory_write24(&emu.memory, 0x000100u + (uint32_t)i, reset_stub[i]);
+        }
+        /* IRQ trampoline bank 0 $0140 : JML $015600. */
+        static const uint8_t irq_trampo[] = { 0x5C, 0x00, 0x56, 0x01 };
+        for (size_t i = 0; i < sizeof(irq_trampo); i++) {
+            memory_write24(&emu.memory, 0x000140u + (uint32_t)i, irq_trampo[i]);
+        }
+        /* NMI trampoline bank 0 $0130 : JML $015500. */
+        static const uint8_t nmi_trampo[] = { 0x5C, 0x00, 0x55, 0x01 };
+        for (size_t i = 0; i < sizeof(nmi_trampo); i++) {
+            memory_write24(&emu.memory, 0x000130u + (uint32_t)i, nmi_trampo[i]);
+        }
+        /* Vecteurs en mem.rom (bank 0 $C000-$FFFF). */
+        emu.memory.rom[0x3FFC] = 0x00; emu.memory.rom[0x3FFD] = 0x01; /* RESET → $0100 */
+        emu.memory.rom[0x3FFE] = 0x40; emu.memory.rom[0x3FFF] = 0x01; /* IRQ/BRK mode E → $0140 */
+        emu.memory.rom[0x3FEE] = 0x40; emu.memory.rom[0x3FEF] = 0x01; /* IRQ mode N → $0140 */
+        emu.memory.rom[0x3FEA] = 0x30; emu.memory.rom[0x3FEB] = 0x01; /* NMI mode N → $0130 */
+        emu.memory.rom[0x3FFA] = 0x30; emu.memory.rom[0x3FFB] = 0x01; /* NMI mode E → $0130 */
+        log_info("Loaded OricOS kernel %s (%zu bytes) in bank 1 $0200", kernel_path, kn);
+    }
+
     /* Load ROM if specified */
-    if (rom_file) {
+    if (rom_file && !kernel_path) {
         log_info("Loading ROM: %s", rom_file);
         if (!memory_load_rom(&emu.memory, rom_file, 0)) {
             log_error("Failed to load ROM: %s", rom_file);

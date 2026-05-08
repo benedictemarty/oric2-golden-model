@@ -5,6 +5,42 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.22.8-alpha] - 2026-05-08
+
+### Oric 2 — Démo OricOS visible (`--kernel`)
+
+#### Added
+- **Option CLI `--kernel FILE`** : charge un binaire OricOS kernel
+  (`OricOS/build/kernel.bin`) à la place du ROM Oric 1, force machine
+  oric2 / cpu_kind 65C816. Skippe `rom_load`. Installe les trampolines
+  bank 0 (RESET `$0100` → `CLC; XCE; JML $010200` ; IRQ `$0140` → JML
+  `$015600` ; NMI `$0130` → JML `$015500`) et les vecteurs natifs
+  E/N (`$3FFC`, `$3FEA/$3FEE`, `$3FFA/$3FFE`).
+- **Champ `cpu816` dans `emulator_t`** + init dans `emulator_init`,
+  `cpu_impl` pointe sur `&cpu816` quand `cpu_kind = 65C816`.
+- **Boucle main loop tolérante au STP** en mode `--kernel` : la sortie
+  STP ne ferme pas la fenêtre SDL2, le rendu continue à présenter le
+  framebuffer Oric 1 final pour visualisation. STP loggué une fois.
+- **Test `test_oricos_sprint2a_via_t1_timer_drives_scheduler` étendu** :
+  vérifie attribute byte `$07` à `$00BB80` + banner "OricOS v0.7" à
+  `$00BB81-$00BB8B`.
+
+#### Demo
+```
+cd OricOS && make
+cd Phosphoric && ./oric1-emu --kernel ../OricOS/build/kernel.bin
+```
+Affiche "OricOS v0.7" en blanc en haut-gauche (banner kernel + scheduler
+préemptif round-robin alimenté par VIA T1).
+
+#### Tests
+- 494 tests passent (compteur inchangé).
+
+#### Bumped
+- `EMU_VERSION` 1.22.7-alpha → 1.22.8-alpha.
+
+---
+
 ## [1.22.7-alpha] - 2026-05-08
 
 ### Oric 2 — OricOS Sprint 2.c + fix addr_abs_x/y X-aware
