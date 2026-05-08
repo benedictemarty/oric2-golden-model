@@ -53,6 +53,7 @@ SOURCES = src/main.c \
           src/io/microdisc.c \
           src/io/acia6551.c \
           src/io/serial_backend.c \
+          src/io/sd_device.c \
           src/video/video.c \
           src/video/textmode.c \
           src/video/hires.c \

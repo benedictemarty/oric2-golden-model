@@ -278,6 +278,11 @@ static uint8_t io_read_callback(uint16_t address, void* userdata) {
         return microdisc_read(&emu->microdisc, address);
     }
 
+    /* SD device (Oric 2 Sprint 2.j): $0320-$0327 */
+    if (emu->has_sd && address >= 0x0320 && address <= 0x0327) {
+        return sd_read(&emu->sd, (uint8_t)(address - 0x0320));
+    }
+
     /* VIA 6522: $0300-$030F (mirrored in $0300-$03FF) */
     return via_read(&emu->via, (uint8_t)(address & 0x0F));
 }
@@ -404,6 +409,12 @@ static void io_write_callback(uint16_t address, uint8_t value, void* userdata) {
         return;
     }
 
+    /* SD device (Oric 2 Sprint 2.j): $0320-$0327 */
+    if (emu->has_sd && address >= 0x0320 && address <= 0x0327) {
+        sd_write(&emu->sd, (uint8_t)(address - 0x0320), value);
+        return;
+    }
+
     uint8_t reg = (uint8_t)(address & 0x0F);
 
     /* Intercept VIA Port A writes to forward to PSG data bus */
@@ -500,6 +511,10 @@ static bool emulator_init(emulator_t* emu) {
     via_init(&emu->via);
     via_reset(&emu->via);
 
+    /* SD device (Sprint 2.j Oric 2) — désactivé jusqu'à --sd-image. */
+    sd_init(&emu->sd);
+    emu->has_sd = false;
+
     /* Initialize keyboard */
     oric_keyboard_init(&emu->keyboard);
 
@@ -577,6 +592,7 @@ static void emulator_cleanup(emulator_t* emu) {
     }
     video_cleanup(&emu->video);
     hostfs_cleanup(&emu->hostfs);
+    sd_close(&emu->sd);
     memory_cleanup(&emu->memory);
     if (emu->tapebuf) {
         free(emu->tapebuf);
@@ -1235,12 +1251,13 @@ int main(int argc, char* argv[]) {
     const char* cpu_arg = NULL;
     const char* machine_arg = NULL;
     const char* kernel_path = NULL;
+    const char* sd_path = NULL;
     bool serial_v23 = false;
     int serial_buffer_size = 0;
     bool serial_irq_on_rdrf = false;
     const char* serial_trace_file = NULL;
     /* Long option codes for options without short equivalents */
-    enum { OPT_SCREENSHOT = 256, OPT_SCREENSHOT_AT, OPT_FRAME_DUMP, OPT_FRAME_DUMP_INTERVAL, OPT_TYPE_KEYS, OPT_DISK_ROM, OPT_DISK1, OPT_DISK2, OPT_DISK3, OPT_BREAKPOINT, OPT_DEBUG_BREAK, OPT_CAST_SERVER, OPT_CAST_DISCOVER, OPT_CAST_TO, OPT_SAVE_STATE, OPT_LOAD_STATE, OPT_MODEL, OPT_JOYSTICK, OPT_PRINTER, OPT_PRINTER_TYPE, OPT_SCALE, OPT_TRACE, OPT_TRACE_MAX, OPT_PROFILE, OPT_ROM_INFO, OPT_SERIAL, OPT_SERIAL_V23, OPT_ACIA_ADDR, OPT_SERIAL_BUFFER, OPT_SERIAL_IRQ_RDRF, OPT_SERIAL_TRACE, OPT_CPU, OPT_MACHINE, OPT_KERNEL };
+    enum { OPT_SCREENSHOT = 256, OPT_SCREENSHOT_AT, OPT_FRAME_DUMP, OPT_FRAME_DUMP_INTERVAL, OPT_TYPE_KEYS, OPT_DISK_ROM, OPT_DISK1, OPT_DISK2, OPT_DISK3, OPT_BREAKPOINT, OPT_DEBUG_BREAK, OPT_CAST_SERVER, OPT_CAST_DISCOVER, OPT_CAST_TO, OPT_SAVE_STATE, OPT_LOAD_STATE, OPT_MODEL, OPT_JOYSTICK, OPT_PRINTER, OPT_PRINTER_TYPE, OPT_SCALE, OPT_TRACE, OPT_TRACE_MAX, OPT_PROFILE, OPT_ROM_INFO, OPT_SERIAL, OPT_SERIAL_V23, OPT_ACIA_ADDR, OPT_SERIAL_BUFFER, OPT_SERIAL_IRQ_RDRF, OPT_SERIAL_TRACE, OPT_CPU, OPT_MACHINE, OPT_KERNEL, OPT_SD_IMAGE };
 
     static struct option long_options[] = {
         {"tape",                required_argument, 0, 't'},
@@ -1287,6 +1304,7 @@ int main(int argc, char* argv[]) {
         {"cpu",                 required_argument, 0, OPT_CPU},
         {"machine",             required_argument, 0, OPT_MACHINE},
         {"kernel",              required_argument, 0, OPT_KERNEL},
+        {"sd-image",            required_argument, 0, OPT_SD_IMAGE},
         {"help",                no_argument,       0, '?'},
         {0, 0, 0, 0}
     };
@@ -1373,6 +1391,9 @@ int main(int argc, char* argv[]) {
             case OPT_KERNEL:
                 kernel_path = optarg;
                 break;
+            case OPT_SD_IMAGE:
+                sd_path = optarg;
+                break;
             case '?':
             default:
                 print_usage(argv[0]);
@@ -1439,6 +1460,15 @@ int main(int argc, char* argv[]) {
     if (!emulator_init(&emu)) {
         log_error("Failed to initialize emulator");
         return 1;
+    }
+
+    /* Sprint 2.j : charger image SD si --sd-image */
+    if (sd_path) {
+        if (sd_load_image(&emu.sd, sd_path)) {
+            emu.has_sd = true;
+        } else {
+            log_warning("--sd-image: failed to open %s, SD device disabled", sd_path);
+        }
     }
 
     emu.fast_load = fast_load;

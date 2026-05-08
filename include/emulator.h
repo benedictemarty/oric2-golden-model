@@ -28,6 +28,7 @@
 #include "io/microdisc.h"
 #include "io/acia6551.h"
 #include "io/serial_backend.h"
+#include "io/sd_device.h"
 #include "storage/sedoric.h"
 #include "hostfs/hostfs.h"
 #include "debugger.h"
@@ -129,6 +130,10 @@ typedef struct emulator_s {
     microdisc_t microdisc;
     sedoric_disk_t* disks[MICRODISC_MAX_DRIVES]; /* 4 drives: A, B, C, D */
     bool has_microdisc;
+
+    /* SD device (Sprint 2.j Oric 2) — bloc 512 bytes via I/O $0320-$0327 */
+    sd_device_t sd;
+    bool has_sd;
 
     /* Tape buffer for ROM patching (CLOAD support) */
     uint8_t* tapebuf;       /* TAP file data loaded in memory */

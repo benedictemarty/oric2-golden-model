@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - 2026-05-08
 
+### Oric 2 — Device SD bloc minimal (Sprint 2.j.0)
+
+#### Added
+- **`include/io/sd_device.h` + `src/io/sd_device.c`** : émulation device
+  SD/MMC bloc minimal exposé via 8 registres I/O à `$0320-$0327`.
+  Modèle : LBA 24-bit, CTRL (read trigger / busy), DATA port
+  auto-increment 512 octets.
+- **Option CLI `--sd-image FILE`** : binde une image SD (raw ou FAT32)
+  au device émulé. Hook dans `io_read_callback`/`io_write_callback`.
+  Cleanup `sd_close` à `emulator_cleanup`.
+- **Champ `emulator_t::sd` + `has_sd`**.
+- **Makefile** : ajout `src/io/sd_device.c`.
+
+#### Why
+Premier bloc d'infrastructure pour OS-2.j (FAT32 SD) côté OricOS.
+Cible HDL ULX3S = SPI native ; le device émulé permet de prototyper
+le driver kernel sans toucher au timing SPI exact.
+
+#### Validation
+- Build OK avec `--sd-image`.
+- 501 tests OK (compteur inchangé — pas de test SD encore, infrastructure
+  silencieuse sans option).
+
+#### v0.1+ (reportés)
+- Test d'intégration avec image SD test (en attendant OS-2.j.1 OricOS).
+- Écriture (CTRL bit 1 = write trigger).
+- Busy asynchrone (cycles d'attente simulés pour cible HDL).
+
+---
+
+## [Unreleased] - 2026-05-08
+
 ### CPU 65C816 — fix MAJEUR : P pushé/pulled corrompait X/M en mode N (PH-bug-dp-indirect-Y-bank1)
 
 #### Fixed
