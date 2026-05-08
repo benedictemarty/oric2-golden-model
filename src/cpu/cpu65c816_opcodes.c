@@ -185,16 +185,29 @@ static inline void write_M_24(cpu65c816_t* cpu, uint32_t addr24, uint16_t val) {
         memory_write24(cpu->memory, (addr24 + 1) & 0xFFFFFFu, (uint8_t)(val >> 8));
 }
 
-/* ─── Stack (mode E : page 1 forcée) ────────────────────────────────── */
+/* ─── Stack ──────────────────────────────────────────────────────────
+ * Mode E : S verrouillé en page 1 ($01xx).
+ * Mode N : S 16-bit, accès en bank 0 plein.
+ * Cf. WDC W65C816S datasheet.
+ */
 
 void cpu816_push(cpu65c816_t* cpu, uint8_t val) {
-    cpu816_mem_write(cpu, (uint16_t)(0x0100 | sp8(cpu)), val);
-    set_sp8(cpu, (uint8_t)(sp8(cpu) - 1));
+    cpu816_mem_write(cpu, cpu->S, val);
+    if (cpu->E) {
+        /* Mode E : décrément seulement le low byte, high reste à $01. */
+        cpu->S = (uint16_t)(0x0100 | ((cpu->S - 1) & 0xFF));
+    } else {
+        cpu->S = (uint16_t)(cpu->S - 1);
+    }
 }
 
 uint8_t cpu816_pull(cpu65c816_t* cpu) {
-    set_sp8(cpu, (uint8_t)(sp8(cpu) + 1));
-    return cpu816_mem_read(cpu, (uint16_t)(0x0100 | sp8(cpu)));
+    if (cpu->E) {
+        cpu->S = (uint16_t)(0x0100 | ((cpu->S + 1) & 0xFF));
+    } else {
+        cpu->S = (uint16_t)(cpu->S + 1);
+    }
+    return cpu816_mem_read(cpu, cpu->S);
 }
 
 void cpu816_push_word(cpu65c816_t* cpu, uint16_t val) {

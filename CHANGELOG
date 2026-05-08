@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.22.3-alpha] - 2026-05-08
+
+### Oric 2 — OricOS Sprint 1.b + corrections stack mode N
+
+#### Fixed (stack mode N — bug structurel B1.7)
+- **`cpu816_push` / `cpu816_pull`** (`cpu65c816_opcodes.c`) : en mode N
+  (E=0), les accès stack utilisent **S 16-bit complet en bank 0**, et
+  non plus la page 1 forcée. Mode E reste à $01xx (compat 6502).
+  Fix critique : sans cette correction, le scheduler OricOS Sprint 1.b
+  ne peut pas pré-initialiser la stack de task B en bank 0 $02FB.
+- Aucune régression sur Klaus B1.5 et boot dual B1.6 (mode E uniquement).
+
+#### Added
+- **`tests/integration/test_oricos_boot.c`** mis à jour pour Sprint 1.b :
+  - Inject 12 NMI après une grâce de boot (1000 cycles), un toutes les
+    200 cycles. Le kernel STP au tick #10.
+  - Vérifie sentinel "ORIOS\x00", version "v0.3\x00", tick=10, et
+    surtout **les deux compteurs task A et task B > 0** — preuve que
+    le scheduler round-robin fonctionne.
+
+#### Notes
+- OricOS Sprint 1.b livre le premier scheduler préemptif (2 tâches
+  asm 65C816 round-robin via NMI tick).
+- 493 tests passent (inchangé), aucune régression.
+
 ## [1.22.2-alpha] - 2026-05-08
 
 ### Oric 2 — OricOS Sprint 1.a + corrections natives interrupts

@@ -106,7 +106,7 @@ static void install_reset_stub(memory_t* mem) {
 
 /* ─── Tests ─────────────────────────────────────────────────────────── */
 
-TEST(test_oricos_sprint1a_nmi_handler) {
+TEST(test_oricos_sprint1b_scheduler_round_robin) {
     cpu65c816_t cpu;
     memory_t mem;
     memory_init(&mem);
@@ -128,34 +128,66 @@ TEST(test_oricos_sprint1a_nmi_handler) {
     cpu816_init(&cpu, &mem);
     cpu816_reset(&cpu);
 
-    /* Boucle : tant que le kernel ne s'arrête pas, on injecte des NMI
-     * périodiquement. Limite cycles globale = 100k. */
+    /* Boucle : injection NMI périodique (~50 cycles) jusqu'à STP.
+     * Le kernel STP après TICK_GOAL=10 NMI traités. */
     int nmi_injected = 0;
-    int safety = 100000;
+    int safety = 200000;
+    int last_inject = 0;
+    int cycle_total = 0;
+    /* Le NMI étant non-maskable, on attend que le kernel ait fini son
+     * init avant d'injecter (sinon on réveille un scheduler sur des
+     * descripteurs non initialisés). Boot ~1000 cycles. */
+    const int BOOT_GRACE_CYCLES = 1000;
     while (safety-- > 0 && !cpu.stopped) {
         int c = cpu816_step(&cpu);
         if (c < 0) {
-            printf("FAIL\n    step error at %02X:%04X\n", cpu.PBR, cpu.PC);
+            printf("FAIL\n    step error at %02X:%04X (cycles=%d)\n",
+                   cpu.PBR, cpu.PC, cycle_total);
             tests_failed++;
             memory_cleanup(&mem);
             return;
         }
-        /* Tous les ~50 cycles, injecte un NMI tant qu'on n'a pas atteint 5. */
-        if (nmi_injected < 5 && (safety % 50) == 0) {
+        cycle_total += c;
+        if (cycle_total < BOOT_GRACE_CYCLES) continue;
+        /* Inject 1 NMI tous les ~200 cycles après la grâce de boot. */
+        if (nmi_injected < 12 && (cycle_total - last_inject) >= 200) {
             cpu816_nmi(&cpu);
             nmi_injected++;
+            last_inject = cycle_total;
         }
     }
-    ASSERT_TRUE(cpu.stopped);
+    if (!cpu.stopped) {
+        printf("FAIL\n    cpu not stopped after %d cycles. NMI inj=%d, "
+               "tick=%d, A_ctr=%d, B_ctr=%d, PBR:PC=%02X:%04X\n",
+               cycle_total, nmi_injected,
+               (int)memory_read24(&mem, 0x015400),
+               (int)memory_read24(&mem, 0x015440),
+               (int)memory_read24(&mem, 0x015444),
+               cpu.PBR, cpu.PC);
+        tests_failed++; memory_cleanup(&mem); return;
+    }
 
-    /* Le kernel a écrit "ORIOS\x00" et "v0.2\x00" (Sprint 1.a) */
+    /* Sentinel + version "v0.3" Sprint 1.b */
     ASSERT_EQ((int)memory_read24(&mem, 0x015000), 'O');
-    ASSERT_EQ((int)memory_read24(&mem, 0x015013), '2'); /* version bumped */
+    ASSERT_EQ((int)memory_read24(&mem, 0x015013), '3');
 
-    /* Le tick counter doit valoir 5 (5 NMI injectés, 5 incréments). */
-    ASSERT_EQ((int)memory_read24(&mem, 0x015400), 5);
+    /* Tick counter == TICK_GOAL = 10 */
+    ASSERT_EQ((int)memory_read24(&mem, 0x015400), 10);
 
-    /* CPU mode N, PBR = bank 1 (kernel) */
+    /* Compteurs des deux tâches doivent être > 0 (chaque tâche a tourné).
+     * Avec 10 ticks et round-robin, chaque task a eu ~5 slices. */
+    int task_a_ctr = (int)memory_read24(&mem, 0x015440);
+    int task_b_ctr = (int)memory_read24(&mem, 0x015444);
+    if (task_a_ctr == 0) {
+        printf("FAIL\n    task A counter = 0 (jamais exécutée)\n");
+        tests_failed++; memory_cleanup(&mem); return;
+    }
+    if (task_b_ctr == 0) {
+        printf("FAIL\n    task B counter = 0 (jamais exécutée)\n");
+        tests_failed++; memory_cleanup(&mem); return;
+    }
+
+    /* CPU mode N, PBR = $01 */
     ASSERT_TRUE(!cpu.E);
     ASSERT_EQ((int)cpu.PBR, 0x01);
 
@@ -168,7 +200,7 @@ int main(void) {
     printf("  OricOS Sprint 1.a boot + NMI test (--machine oric2)\n");
     printf("═══════════════════════════════════════════════════════\n\n");
 
-    RUN(test_oricos_sprint1a_nmi_handler);
+    RUN(test_oricos_sprint1b_scheduler_round_robin);
 
     printf("\n═══════════════════════════════════════════════════════\n");
     printf("  Results: %d passed, %d failed\n", tests_passed, tests_failed);

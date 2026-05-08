@@ -1,12 +1,15 @@
 VERSION_TRACKING - Phosphoric
 =====================================
 
-Current Version: 1.22.2-alpha
+Current Version: 1.22.3-alpha
 Release Date: 2026-05-08
-Status: Alpha (Oric 2 + OricOS Sprint 1.a NMI handler, 493 tests pass)
+Status: Alpha (OricOS Sprint 1.b scheduler préemptif round-robin, 493 tests pass)
 
 Version History:
 ----------------
+- 1.22.3-alpha (2026-05-08): OricOS Sprint 1.b + stack mode N fix (493 tests, =)
+  * Fix: cpu816_push/pull mode N → stack en bank 0 plein (vs page 1 forcée)
+  * Update: test_oricos_boot Sprint 1.b — 2 tasks round-robin, tick=10, A>0 B>0
 - 1.22.2-alpha (2026-05-08): OricOS Sprint 1.a + interrupts natives (493 tests, =)
   * Fix: handle_irq_or_nmi/RTI/BRK/COP push/pull PBR en mode N
   * Fix: vecteurs NMI/IRQ corrects $FFEA/$FFEE en mode N (vs $FFFA/$FFFE en E)
