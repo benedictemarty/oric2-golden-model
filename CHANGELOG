@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - 2026-05-08
 
+### Test — OricOS Sprint 2.j.5/6 app chargée depuis SD ✨
+
+- `create_fat32_test_image` étendu : 162 secteurs au lieu de 161.
+  Ajout du bloc 161 (= cluster 3) contenant le bundle hello (23B :
+  header OOS\\x01 + section CODE + app code).
+- `test_oricos_fat_init_validates_fat32_signature` étendu :
+  - ASSERT mem[$01:6200..] contient le bundle (OOS\\x01... + 'Z'
+    immediate + opcodes app).
+  - ASSERT mem[$BBAB] = 'Z' (premier 'Z' du bundle inline).
+  - ASSERT mem[$BBAC] = 'Z' (second 'Z' du bundle SD-loaded).
+- Démo visuelle : "OricOS v0.7" + "YABZZ" (deux 'Z' = double exec
+  app inline + app from SD).
+- 503 tests OK.
+
 ### Test — OricOS Sprint 2.j.4 fat_open root dir lookup
 
 - `create_fat32_test_image` étendu : image 161 secteurs au lieu de 1.

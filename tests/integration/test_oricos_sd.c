@@ -140,7 +140,7 @@ static void install_trampolines(memory_t* mem) {
  * Total image : 161 secteurs = 82432 octets.
  */
 #define FAT32_TEST_FDS  160u
-#define FAT32_TEST_TOTAL_SECTORS  (FAT32_TEST_FDS + 1u)
+#define FAT32_TEST_TOTAL_SECTORS  (FAT32_TEST_FDS + 2u)  /* root dir + cluster 3 */
 
 static int create_fat32_test_image(const char* path) {
     FILE* f = fopen(path, "wb");
@@ -166,15 +166,24 @@ static int create_fat32_test_image(const char* path) {
 
     /* Bloc FDS : root dir avec 1 entry "HELLO   BIN" cluster=3, size=$DEADBEEF. */
     memset(sec, 0, SD_BLOCK_SIZE);
-    /* Entry 0 (offset 0..31) */
     memcpy(&sec[0x00], "HELLO   BIN", 11);
     sec[0x0B] = 0x20;                  /* archive flag, regular file */
-    /* cluster_high $14..$15 = 0 */
-    sec[0x14] = 0x00; sec[0x15] = 0x00;
-    /* cluster_low $1A..$1B = 3 LE */
-    sec[0x1A] = 0x03; sec[0x1B] = 0x00;
-    /* size $1C..$1F = $DEADBEEF LE */
-    sec[0x1C] = 0xEF; sec[0x1D] = 0xBE; sec[0x1E] = 0xAD; sec[0x1F] = 0xDE;
+    sec[0x14] = 0x00; sec[0x15] = 0x00; /* cluster_high = 0 */
+    sec[0x1A] = 0x03; sec[0x1B] = 0x00; /* cluster_low = 3 LE */
+    sec[0x1C] = 0xEF; sec[0x1D] = 0xBE; sec[0x1E] = 0xAD; sec[0x1F] = 0xDE; /* size $DEADBEEF */
+    fwrite(sec, 1, SD_BLOCK_SIZE, f);
+
+    /* Bloc FDS+1 : cluster 3 = contenu du fichier "HELLO.BIN".
+     * Pour valider read_cluster, on y met le bundle hello (23 bytes :
+     * 8B header + 8B section + 7B code). Le reste du secteur = 0. */
+    memset(sec, 0, SD_BLOCK_SIZE);
+    static const uint8_t hello_bundle[] = {
+        /* Header */ 'O', 'O', 'S', 0x01, 0x01, 0x00, 0x01, 0x00,
+        /* Section CODE entry */ 0x01, 0x00, 0x07, 0x00, 0x10, 0x00, 0x00, 0x00,
+        /* Code app : ldx #'Z' ; lda #1 ; cop #$AA ; rtl */
+        0xA2, 'Z', 0xA9, 0x01, 0x02, 0xAA, 0x6B,
+    };
+    memcpy(sec, hello_bundle, sizeof(hello_bundle));
     fwrite(sec, 1, SD_BLOCK_SIZE, f);
 
     fclose(f);
@@ -372,6 +381,28 @@ TEST(test_oricos_fat_init_validates_fat32_signature) {
     ASSERT_EQ((int)memory_read24(&mem, 0x016178), 0xBE);
     ASSERT_EQ((int)memory_read24(&mem, 0x016179), 0xAD);
     ASSERT_EQ((int)memory_read24(&mem, 0x01617A), 0xDE);
+
+    /* Sprint 2.j.5 : kernel_fat_read_cluster a copié cluster 3
+     * (= bloc FDS+1=161) vers $01:6200. Vérifier les bytes du bundle. */
+    ASSERT_EQ((int)memory_read24(&mem, 0x016200), 'O');
+    ASSERT_EQ((int)memory_read24(&mem, 0x016201), 'O');
+    ASSERT_EQ((int)memory_read24(&mem, 0x016202), 'S');
+    ASSERT_EQ((int)memory_read24(&mem, 0x016203), 0x01);
+    ASSERT_EQ((int)memory_read24(&mem, 0x016204), 0x01); /* version */
+    /* Section CODE entry */
+    ASSERT_EQ((int)memory_read24(&mem, 0x016208), 0x01); /* type CODE */
+    ASSERT_EQ((int)memory_read24(&mem, 0x01620A), 0x07); /* size lo = 7 */
+    /* App code à offset 16 */
+    ASSERT_EQ((int)memory_read24(&mem, 0x016210), 0xA2); /* LDX */
+    ASSERT_EQ((int)memory_read24(&mem, 0x016211), 'Z');
+    ASSERT_EQ((int)memory_read24(&mem, 0x016216), 0x6B); /* RTL */
+
+    /* Sprint 2.j.6 : kernel_app_exec sur le bundle chargé via SD a
+     * exécuté l'app, qui a écrit un 'Z' supplémentaire après le 'Z' du
+     * bundle inline. CURSOR_ADDR = $BBAB (premier Z, bundle inline) +
+     * 1 = $BBAC (Z du bundle SD). */
+    ASSERT_EQ((int)memory_read24(&mem, 0x00BBAB), 'Z');
+    ASSERT_EQ((int)memory_read24(&mem, 0x00BBAC), 'Z');
 
     sd_close(&sd);
     memory_cleanup(&mem);
