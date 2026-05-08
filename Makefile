@@ -269,6 +269,7 @@ test-audio: $(TEST_AUDIO_SRCS)
 
 TEST_DEBUGGER_SRCS = tests/unit/test_debugger.c src/debugger.c \
                      src/cpu/cpu6502.c src/cpu/opcodes.c src/cpu/addressing.c \
+                     src/cpu/cpu65c816.c src/cpu/cpu65c816_opcodes.c src/cpu/cpu_core.c \
                      src/memory/memory.c src/memory/banking.c \
                      src/io/via6522.c src/utils/logging.c
 
@@ -364,7 +365,9 @@ test-keyboard: $(TEST_KEYBOARD_SRCS)
 	@./test_keyboard
 
 TEST_COVERAGE_SRCS = tests/unit/test_coverage.c src/cpu/cpu6502.c src/cpu/opcodes.c \
-                     src/cpu/addressing.c src/memory/memory.c src/memory/banking.c \
+                     src/cpu/addressing.c \
+                     src/cpu/cpu65c816.c src/cpu/cpu65c816_opcodes.c src/cpu/cpu_core.c \
+                     src/memory/memory.c src/memory/banking.c \
                      src/io/via6522.c src/io/keyboard.c src/io/joystick.c \
                      src/io/printer.c src/io/mcp40.c src/io/microdisc.c \
                      src/storage/sedoric.c src/storage/disk.c \

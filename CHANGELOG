@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - 2026-05-08
 
+### Debugger — extension 65C816 (PH-debug816)
+
+#### Added
+- **`cpu816_get_state_string`** : formate l'état CPU pour le debugger
+  interactif. Distinct selon mode :
+  - **[E]** mode E : `A:%02X X:%02X Y:%02X S:%04X P:NV-BDIZC D:.. DB:.. PB:.. PC:..:....`
+  - **[N]** mode N : `C:%04X X:%04X Y:%04X S:%04X P:NVMXDIZC e=0 D:.. DB:.. PB:.. PC:..:....`
+- **Debugger `regs` / `r`** : route maintenant vers `cpu816_get_state_string`
+  si `cpu_kind == CPU_KIND_65C816`.
+- **Debugger `set <reg> <val>`** étendu pour 65C816 : C/A, X, Y (16-bit),
+  S (16-bit), PC (16-bit), P (8-bit), D (16-bit), DB/DBR (8-bit), PB/PBR
+  (8-bit). Maintient la compat 6502 (A, X, Y, SP, PC, P).
+- 2 tests unitaires : `test_state_string_emulation_format` (mode E) et
+  `test_state_string_native_format` (mode N).
+
+#### Fixed
+- Makefile : `TEST_DEBUGGER_SRCS` et `TEST_COVERAGE_SRCS` incluent désormais
+  `cpu65c816.c`/`cpu65c816_opcodes.c`/`cpu_core.c` (debugger en dépend).
+
+#### Tests
+- 500 tests OK (498 → +2).
+
+---
+
+## [Unreleased] - 2026-05-08
+
 ### CPU 65C816 — bug fixes & opcodes manquants
 
 #### Added (PH-fix-dp-indirect)

@@ -161,8 +161,12 @@ bool debugger_should_break(debugger_t* dbg, emulator_t* emu) {
 /* ═══════════════════════════════════════════════════════════════════ */
 
 static void show_registers(emulator_t* emu) {
-    char state[128];
-    cpu_get_state_string(&emu->cpu, state, sizeof(state));
+    char state[160];
+    if (emu->cpu_kind == CPU_KIND_65C816) {
+        cpu816_get_state_string(&emu->cpu816, state, sizeof(state));
+    } else {
+        cpu_get_state_string(&emu->cpu, state, sizeof(state));
+    }
     printf("%s\n", state);
 }
 
@@ -300,7 +304,9 @@ static void show_help(void) {
     printf("  via               Show VIA 6522 state\n");
     printf("  psg               Show PSG AY-3-8910 state\n");
     printf("  stack             Show stack contents\n");
-    printf("  set reg val       Set register (A,X,Y,SP,PC,P)\n");
+    printf("  set reg val       Set register :\n");
+    printf("                      6502  : A,X,Y,SP,PC,P\n");
+    printf("                      65C816: C/A,X,Y,S,PC,P,D,DB,PB\n");
     printf("  q / quit          Quit emulator\n");
     printf("  h / help          Show this help\n");
     printf("\n");
@@ -487,7 +493,11 @@ void debugger_repl(debugger_t* dbg, emulator_t* emu) {
         /* ── SET REGISTER ───────────────────────────────── */
         else if (strcmp(cmd, "set") == 0) {
             if (!arg1[0] || !arg2[0]) {
-                printf("  Usage: set <reg> <value>  (reg: A,X,Y,SP,PC,P)\n");
+                if (emu->cpu_kind == CPU_KIND_65C816) {
+                    printf("  Usage: set <reg> <value>  (reg: C,A,X,Y,S,PC,P,D,DB,PB)\n");
+                } else {
+                    printf("  Usage: set <reg> <value>  (reg: A,X,Y,SP,PC,P)\n");
+                }
             } else {
                 uint16_t val = (uint16_t)strtol(arg2, NULL, 16);
                 /* Case-insensitive register name */
@@ -496,7 +506,39 @@ void debugger_repl(debugger_t* dbg, emulator_t* emu) {
                 reg[sizeof(reg) - 1] = '\0';
                 for (int i = 0; reg[i]; i++) reg[i] = (char)toupper(reg[i]);
 
-                if (strcmp(reg, "A") == 0) {
+                if (emu->cpu_kind == CPU_KIND_65C816) {
+                    /* Registres 65C816 (16-bit pour C/X/Y/S/PC/D, 8-bit autres) */
+                    if (strcmp(reg, "C") == 0 || strcmp(reg, "A") == 0) {
+                        emu->cpu816.C = val;
+                        printf("  C = $%04X\n", emu->cpu816.C);
+                    } else if (strcmp(reg, "X") == 0) {
+                        emu->cpu816.X = val;
+                        printf("  X = $%04X\n", emu->cpu816.X);
+                    } else if (strcmp(reg, "Y") == 0) {
+                        emu->cpu816.Y = val;
+                        printf("  Y = $%04X\n", emu->cpu816.Y);
+                    } else if (strcmp(reg, "S") == 0 || strcmp(reg, "SP") == 0) {
+                        emu->cpu816.S = val;
+                        printf("  S = $%04X\n", emu->cpu816.S);
+                    } else if (strcmp(reg, "PC") == 0) {
+                        emu->cpu816.PC = val;
+                        printf("  PC = $%04X\n", emu->cpu816.PC);
+                    } else if (strcmp(reg, "P") == 0) {
+                        emu->cpu816.P = (uint8_t)val;
+                        printf("  P = $%02X\n", emu->cpu816.P);
+                    } else if (strcmp(reg, "D") == 0) {
+                        emu->cpu816.D = val;
+                        printf("  D = $%04X\n", emu->cpu816.D);
+                    } else if (strcmp(reg, "DB") == 0 || strcmp(reg, "DBR") == 0) {
+                        emu->cpu816.DBR = (uint8_t)val;
+                        printf("  DB = $%02X\n", emu->cpu816.DBR);
+                    } else if (strcmp(reg, "PB") == 0 || strcmp(reg, "PBR") == 0) {
+                        emu->cpu816.PBR = (uint8_t)val;
+                        printf("  PB = $%02X\n", emu->cpu816.PBR);
+                    } else {
+                        printf("  Unknown register: %s (65C816 : C/A,X,Y,S,PC,P,D,DB,PB)\n", arg1);
+                    }
+                } else if (strcmp(reg, "A") == 0) {
                     emu->cpu.A = (uint8_t)val;
                     printf("  A = $%02X\n", emu->cpu.A);
                 } else if (strcmp(reg, "X") == 0) {

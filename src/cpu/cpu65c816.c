@@ -8,6 +8,7 @@
  * Le mode natif (E=0) est non encore exécutable (jalon B1.7+).
  */
 
+#include <stdio.h>
 #include <string.h>
 
 #include "cpu/cpu65c816.h"
@@ -168,4 +169,47 @@ void cpu816_irq_set(cpu65c816_t* cpu, cpu_irq_source_t source) {
 void cpu816_irq_clear(cpu65c816_t* cpu, cpu_irq_source_t source) {
     if (!cpu) return;
     cpu->irq &= (uint8_t)~source;
+}
+
+void cpu816_get_state_string(const cpu65c816_t* cpu, char* buffer, size_t buffer_size) {
+    if (!cpu || !buffer || buffer_size == 0) return;
+    if (cpu->E) {
+        /* Mode E : layout 6502-compatible mais avec PBR/DBR/D pour visibilité */
+        snprintf(buffer, buffer_size,
+                 "[E] A:%02X X:%02X Y:%02X S:%04X P:%c%c%c%c%c%c%c%c "
+                 "D:%04X DB:%02X PB:%02X PC:%02X:%04X CYC:%llu",
+                 (unsigned)(cpu->C & 0xFF),
+                 (unsigned)(cpu->X & 0xFF),
+                 (unsigned)(cpu->Y & 0xFF),
+                 cpu->S,
+                 (cpu->P & FLAG_NEGATIVE)  ? 'N' : '.',
+                 (cpu->P & FLAG_OVERFLOW)  ? 'V' : '.',
+                 (cpu->P & FLAG_UNUSED)    ? '-' : '.',
+                 (cpu->P & FLAG_BREAK)     ? 'B' : '.',
+                 (cpu->P & FLAG_DECIMAL)   ? 'D' : '.',
+                 (cpu->P & FLAG_INTERRUPT) ? 'I' : '.',
+                 (cpu->P & FLAG_ZERO)      ? 'Z' : '.',
+                 (cpu->P & FLAG_CARRY)     ? 'C' : '.',
+                 cpu->D, cpu->DBR, cpu->PBR,
+                 cpu->PBR, cpu->PC,
+                 (unsigned long long)cpu->cycles);
+    } else {
+        /* Mode N : NVMXDIZC + e flag, registres pleins */
+        snprintf(buffer, buffer_size,
+                 "[N] C:%04X X:%04X Y:%04X S:%04X P:%c%c%c%c%c%c%c%c e=%d "
+                 "D:%04X DB:%02X PB:%02X PC:%02X:%04X CYC:%llu",
+                 cpu->C, cpu->X, cpu->Y, cpu->S,
+                 (cpu->P & FLAG_NEGATIVE)   ? 'N' : '.',
+                 (cpu->P & FLAG_OVERFLOW)   ? 'V' : '.',
+                 (cpu->P & FLAG816_M_MEM)   ? 'M' : '.',
+                 (cpu->P & FLAG816_X_INDEX) ? 'X' : '.',
+                 (cpu->P & FLAG_DECIMAL)    ? 'D' : '.',
+                 (cpu->P & FLAG_INTERRUPT)  ? 'I' : '.',
+                 (cpu->P & FLAG_ZERO)       ? 'Z' : '.',
+                 (cpu->P & FLAG_CARRY)      ? 'C' : '.',
+                 cpu->E ? 1 : 0,
+                 cpu->D, cpu->DBR, cpu->PBR,
+                 cpu->PBR, cpu->PC,
+                 (unsigned long long)cpu->cycles);
+    }
 }

@@ -18,6 +18,7 @@
  */
 
 #include <stdio.h>
+#include <string.h>
 #include "cpu/cpu65c816.h"
 #include "cpu/cpu6502.h"
 #include "memory/memory.h"
@@ -527,6 +528,44 @@ TEST(test_lda_dp_indirect_reads_DBR_bank) {
     ASSERT_EQ((int)(cpu.C & 0xFF), 0x99);
 }
 
+/* PH-debug816 : cpu816_get_state_string formate l'état CPU pour le
+ * debugger interactif. Mode E → "[E] A:..." ; mode N → "[N] C:..." +
+ * flags MX au lieu de B. */
+TEST(test_state_string_emulation_format) {
+    cpu65c816_t cpu; memory_t mem; boot(&cpu, &mem);
+    cpu.C = 0x1234;     /* low byte = $34 visible en mode E */
+    cpu.X = 0x0042;
+    cpu.Y = 0x0099;
+    char buf[160];
+    cpu816_get_state_string(&cpu, buf, sizeof(buf));
+    /* Mode E : [E] A:34 X:42 Y:99 ... (8-bit) */
+    ASSERT_TRUE(strstr(buf, "[E]") != NULL);
+    ASSERT_TRUE(strstr(buf, "A:34") != NULL);
+    ASSERT_TRUE(strstr(buf, "X:42") != NULL);
+    ASSERT_TRUE(strstr(buf, "Y:99") != NULL);
+}
+
+TEST(test_state_string_native_format) {
+    cpu65c816_t cpu; memory_t mem; boot(&cpu, &mem);
+    enter_native_M0_X0(&cpu, &mem);
+    cpu.C = 0xCAFE;
+    cpu.X = 0xBABE;
+    cpu.Y = 0xDEAD;
+    cpu.D = 0x1234;
+    cpu.DBR = 0x12;
+    cpu.PBR = 0x01;
+    char buf[160];
+    cpu816_get_state_string(&cpu, buf, sizeof(buf));
+    ASSERT_TRUE(strstr(buf, "[N]") != NULL);
+    ASSERT_TRUE(strstr(buf, "C:CAFE") != NULL);
+    ASSERT_TRUE(strstr(buf, "X:BABE") != NULL);
+    ASSERT_TRUE(strstr(buf, "Y:DEAD") != NULL);
+    ASSERT_TRUE(strstr(buf, "D:1234") != NULL);
+    ASSERT_TRUE(strstr(buf, "DB:12") != NULL);
+    ASSERT_TRUE(strstr(buf, "PB:01") != NULL);
+    ASSERT_TRUE(strstr(buf, "e=0") != NULL);
+}
+
 /* SEP #$10 doit forcer high byte de X et Y à 0 (conformément WDC).
  * Cf. cpu65c816_opcodes.c case 0xE2. */
 TEST(test_sep_x_truncates_x_and_y) {
@@ -966,6 +1005,8 @@ int main(void) {
     RUN(test_txs_native_X0_copies_full_16bit);
     RUN(test_sta_dp_indirect_writes_DBR_bank);
     RUN(test_lda_dp_indirect_reads_DBR_bank);
+    RUN(test_state_string_emulation_format);
+    RUN(test_state_string_native_format);
     RUN(test_sep_x_truncates_x_and_y);
     RUN(test_phx_in_emulation_is_nop);
 

@@ -83,6 +83,15 @@ void cpu816_irq_set(cpu65c816_t* cpu, cpu_irq_source_t source);
 void cpu816_irq_clear(cpu65c816_t* cpu, cpu_irq_source_t source);
 
 /**
+ * @brief Format état CPU 65C816 en string (debugger).
+ *
+ * Affiche tous les registres natifs : C (16-bit acc), X/Y (16-bit indices),
+ * S (16-bit stack), D (direct page), DBR/PBR (data/program bank), P (flags).
+ * En mode E, le format reflète NV1BDIZC ; en mode N, NVMXDIZC + e flag.
+ */
+void cpu816_get_state_string(const cpu65c816_t* cpu, char* buffer, size_t buffer_size);
+
+/**
  * @brief true si le cœur est en mode émulation (E=1).
  */
 static inline bool cpu816_is_emulation(const cpu65c816_t* cpu) {
