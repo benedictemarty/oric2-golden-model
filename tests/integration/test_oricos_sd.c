@@ -140,7 +140,8 @@ static void install_trampolines(memory_t* mem) {
  * Total image : 161 secteurs = 82432 octets.
  */
 #define FAT32_TEST_FDS  160u
-#define FAT32_TEST_TOTAL_SECTORS  (FAT32_TEST_FDS + 2u)  /* root dir + cluster 3 */
+#define FAT32_TEST_TOTAL_SECTORS  (FAT32_TEST_FDS + 4u)
+    /* root dir + cluster 3 (HELLO.BIN) + cluster 4 + cluster 5 (BIG.BIN) */
 
 static int create_fat32_test_image(const char* path) {
     FILE* f = fopen(path, "wb");
@@ -185,13 +186,22 @@ static int create_fat32_test_image(const char* path) {
         }
     }
 
-    /* Bloc FDS : root dir avec 1 entry "HELLO   BIN" cluster=3, size=$DEADBEEF. */
+    /* Bloc FDS : root dir avec 2 entries.
+     *   Entry 0 : HELLO   BIN  cluster=3  size=$DEADBEEF (single cluster)
+     *   Entry 1 : BIG     BIN  cluster=4  size=$00000400 (= 1024 = 2 clusters) */
     memset(sec, 0, SD_BLOCK_SIZE);
+    /* Entry 0 : HELLO.BIN */
     memcpy(&sec[0x00], "HELLO   BIN", 11);
-    sec[0x0B] = 0x20;                  /* archive flag, regular file */
-    sec[0x14] = 0x00; sec[0x15] = 0x00; /* cluster_high = 0 */
-    sec[0x1A] = 0x03; sec[0x1B] = 0x00; /* cluster_low = 3 LE */
-    sec[0x1C] = 0xEF; sec[0x1D] = 0xBE; sec[0x1E] = 0xAD; sec[0x1F] = 0xDE; /* size $DEADBEEF */
+    sec[0x0B] = 0x20;
+    sec[0x14] = 0x00; sec[0x15] = 0x00;
+    sec[0x1A] = 0x03; sec[0x1B] = 0x00;
+    sec[0x1C] = 0xEF; sec[0x1D] = 0xBE; sec[0x1E] = 0xAD; sec[0x1F] = 0xDE;
+    /* Entry 1 : BIG.BIN  (offset 32) */
+    memcpy(&sec[0x20], "BIG     BIN", 11);
+    sec[0x2B] = 0x20;
+    sec[0x34] = 0x00; sec[0x35] = 0x00;
+    sec[0x3A] = 0x04; sec[0x3B] = 0x00;                       /* cluster_low = 4 */
+    sec[0x3C] = 0x00; sec[0x3D] = 0x04; sec[0x3E] = 0x00; sec[0x3F] = 0x00; /* size = 1024 */
     fwrite(sec, 1, SD_BLOCK_SIZE, f);
 
     /* Bloc FDS+1 : cluster 3 = contenu du fichier "HELLO.BIN".
@@ -205,6 +215,16 @@ static int create_fat32_test_image(const char* path) {
         0xA2, 'Z', 0xA9, 0x01, 0x02, 0xAA, 0x6B,
     };
     memcpy(sec, hello_bundle, sizeof(hello_bundle));
+    fwrite(sec, 1, SD_BLOCK_SIZE, f);
+
+    /* Bloc FDS+2 : cluster 4 = premier cluster de BIG.BIN (1024 octets).
+     * Pattern distinctif 0xAA pour vérifier la lecture du cluster 4. */
+    memset(sec, 0xAA, SD_BLOCK_SIZE);
+    fwrite(sec, 1, SD_BLOCK_SIZE, f);
+
+    /* Bloc FDS+3 : cluster 5 = second cluster de BIG.BIN.
+     * Pattern distinctif 0x55 pour vérifier la traversée FAT[4]→5. */
+    memset(sec, 0x55, SD_BLOCK_SIZE);
     fwrite(sec, 1, SD_BLOCK_SIZE, f);
 
     fclose(f);
@@ -389,19 +409,21 @@ TEST(test_oricos_fat_init_validates_fat32_signature) {
     ASSERT_EQ((int)memory_read24(&mem, 0x01616F), 0xA0);
     ASSERT_EQ((int)memory_read24(&mem, 0x016170), 0x00);
 
-    /* Sprint 2.j.4 : kernel_fat_open("HELLO   BIN") doit avoir trouvé
-     * l'entry au bloc FDS (160). FS_OPEN_RESULT = $00 (OK). */
+    /* Sprint 2.j.4 + v0.3 : le boot kernel ouvre HELLO.BIN puis BIG.BIN.
+     * L'état final FS_FOUND_* reflète le DERNIER fat_open (= BIG.BIN).
+     * FS_OPEN_RESULT = $00 (BIG.BIN trouvé OK). */
     ASSERT_EQ((int)memory_read24(&mem, 0x01617B), 0x00);
-    /* FS_FOUND_CLUSTER = 3 LE (cluster_low=$0003, cluster_high=$0000). */
-    ASSERT_EQ((int)memory_read24(&mem, 0x016173), 0x03);
+    /* FS_FOUND_CLUSTER = 4 (BIG.BIN cluster=4 LE).
+     * read_file restaure FS_FOUND_CLUSTER (préservation état). */
+    ASSERT_EQ((int)memory_read24(&mem, 0x016173), 0x04);
     ASSERT_EQ((int)memory_read24(&mem, 0x016174), 0x00);
     ASSERT_EQ((int)memory_read24(&mem, 0x016175), 0x00);
     ASSERT_EQ((int)memory_read24(&mem, 0x016176), 0x00);
-    /* FS_FOUND_SIZE = $DEADBEEF LE = $EF $BE $AD $DE. */
-    ASSERT_EQ((int)memory_read24(&mem, 0x016177), 0xEF);
-    ASSERT_EQ((int)memory_read24(&mem, 0x016178), 0xBE);
-    ASSERT_EQ((int)memory_read24(&mem, 0x016179), 0xAD);
-    ASSERT_EQ((int)memory_read24(&mem, 0x01617A), 0xDE);
+    /* FS_FOUND_SIZE = $00000400 = 1024 LE = $00 $04 $00 $00. */
+    ASSERT_EQ((int)memory_read24(&mem, 0x016177), 0x00);
+    ASSERT_EQ((int)memory_read24(&mem, 0x016178), 0x04);
+    ASSERT_EQ((int)memory_read24(&mem, 0x016179), 0x00);
+    ASSERT_EQ((int)memory_read24(&mem, 0x01617A), 0x00);
 
     /* Sprint 2.j.5 : kernel_fat_read_cluster a copié cluster 3
      * (= bloc FDS+1=161) vers $01:6200. Vérifier les bytes du bundle. */
@@ -425,12 +447,21 @@ TEST(test_oricos_fat_init_validates_fat32_signature) {
     ASSERT_EQ((int)memory_read24(&mem, 0x00BBAB), 'Z');
     ASSERT_EQ((int)memory_read24(&mem, 0x00BBAC), 'Z');
 
-    /* Sprint 2.j v0.2 : kernel_fat_next_cluster a lu FAT[4] = 5.
-     * FS_NEXT_CLUSTER = $01617C..$01617F, valeur attendue = $00000005. */
-    ASSERT_EQ((int)memory_read24(&mem, 0x01617C), 0x05);
-    ASSERT_EQ((int)memory_read24(&mem, 0x01617D), 0x00);
-    ASSERT_EQ((int)memory_read24(&mem, 0x01617E), 0x00);
-    ASSERT_EQ((int)memory_read24(&mem, 0x01617F), 0x00);
+    /* Sprint 2.j v0.2 + v0.3 : FS_NEXT_CLUSTER reflète le dernier appel
+     * à kernel_fat_next_cluster. read_file consomme la chaîne BIG.BIN
+     * (4 → 5 → EOC) jusqu'à EOC. Dernière valeur = $0FFFFFF8 LE. */
+    ASSERT_EQ((int)memory_read24(&mem, 0x01617C), 0xF8);
+    ASSERT_EQ((int)memory_read24(&mem, 0x01617D), 0xFF);
+    ASSERT_EQ((int)memory_read24(&mem, 0x01617E), 0xFF);
+    ASSERT_EQ((int)memory_read24(&mem, 0x01617F), 0x0F);
+
+    /* Sprint 2.j v0.3 : kernel_fat_read_file("BIG.BIN") a lu 1024 octets
+     * via cluster chain (cluster 4 = $AA, cluster 5 = $55) vers $01:7000.
+     * Vérifie les 4 bornes : début/fin cluster 4, début/fin cluster 5. */
+    ASSERT_EQ((int)memory_read24(&mem, 0x017000), 0xAA);
+    ASSERT_EQ((int)memory_read24(&mem, 0x0171FF), 0xAA);
+    ASSERT_EQ((int)memory_read24(&mem, 0x017200), 0x55);
+    ASSERT_EQ((int)memory_read24(&mem, 0x0173FF), 0x55);
 
     sd_close(&sd);
     memory_cleanup(&mem);

@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - 2026-05-08
 
+### Test — OricOS Sprint 2.j v0.3 multi-cluster (kernel_fat_read_file)
+
+- `create_fat32_test_image` étendu : 164 secteurs au lieu de 162.
+  - Root dir contient désormais 2 entries : HELLO.BIN (cluster 3) +
+    BIG.BIN (cluster 4, size 1024).
+  - Cluster 4 (LBA 162) : 512 octets de pattern $AA.
+  - Cluster 5 (LBA 163) : 512 octets de pattern $55.
+- `test_oricos_fat_init_validates_fat32_signature` étendu :
+  - ASSERT mem[$01:7000] = $AA (début cluster 4).
+  - ASSERT mem[$01:71FF] = $AA (fin cluster 4).
+  - ASSERT mem[$01:7200] = $55 (début cluster 5, traversée FAT[4]→5).
+  - ASSERT mem[$01:73FF] = $55 (fin cluster 5).
+- ASSERTs FS_FOUND_* adaptés au nouvel état (boot kernel ouvre HELLO
+  puis BIG ; FS_FOUND_CLUSTER=4, FS_FOUND_SIZE=1024).
+- ASSERT FS_NEXT_CLUSTER adapté : EOC ($0FFFFFF8) après consommation
+  de la chaîne par read_file.
+- 503 tests OK.
+
 ### Test — OricOS Sprint 2.j v0.2 cluster chain (kernel_fat_next_cluster)
 
 - `create_fat32_test_image` étendu : LBA 32 (= FS_RSC, premier secteur
