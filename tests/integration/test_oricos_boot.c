@@ -248,7 +248,9 @@ TEST(test_oricos_sprint2a_via_t1_timer_drives_scheduler) {
     ASSERT_EQ((int)memory_read24(&mem, 0x015460), 0x04);
     ASSERT_EQ((int)memory_read24(&mem, 0x015461), 0x05);
     ASSERT_EQ((int)memory_read24(&mem, 0x015462), 0x06);
-    ASSERT_EQ((int)memory_read24(&mem, 0x015450), 0x07);
+    /* Sprint 2.l.1 : kernel_app_exec a fait 1 alloc supplémentaire (bank
+     * $07 pour l'app), donc BANK_NEXT avancé à $08. */
+    ASSERT_EQ((int)memory_read24(&mem, 0x015450), 0x08);
 
     /* Sprint 2.h : free list LIFO. Après free($05) + alloc, le bank
      * retourné doit être $05 (LIFO), pas $07 (bump suivant). */
@@ -284,11 +286,17 @@ TEST(test_oricos_sprint2a_via_t1_timer_drives_scheduler) {
     ASSERT_EQ((int)memory_read24(&mem, 0x01549C), 0x00);
 
     /* Sprint 2.l : kernel_bundle_find_code sur bundle_test doit
-     * trouver la section CODE : size = $0002, offset = $0010. */
-    ASSERT_EQ((int)memory_read24(&mem, 0x015498), 0x02); /* size lo */
+     * trouver la section CODE : size = $0007 (7 bytes app), offset = $0010. */
+    ASSERT_EQ((int)memory_read24(&mem, 0x015498), 0x07); /* size lo */
     ASSERT_EQ((int)memory_read24(&mem, 0x015499), 0x00); /* size hi */
     ASSERT_EQ((int)memory_read24(&mem, 0x01549A), 0x10); /* offset lo */
     ASSERT_EQ((int)memory_read24(&mem, 0x01549B), 0x00); /* offset hi */
+
+    /* Sprint 2.l.1 : kernel_app_exec a allocué une bank, copié l'app,
+     * exécuté JSL → app a fait SYS_PRINT_CHAR avec X='Z' → 'Z' à $BBAB. */
+    ASSERT_EQ((int)memory_read24(&mem, 0x00BBAB), 'Z');
+    /* Bank app allouée = $07 (après les 3 demos + LIFO réuse de $05). */
+    ASSERT_EQ((int)memory_read24(&mem, 0x01549F), 0x07);
 
     memory_cleanup(&mem);
 }
