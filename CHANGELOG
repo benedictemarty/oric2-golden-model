@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.22.1-alpha] - 2026-05-08
+
+### Oric 2 — Premier test d'intégration OricOS
+
+#### Added
+- **`tests/integration/test_oricos_boot.c`** : test d'intégration boot
+  OricOS Sprint 0 sous Phosphoric `--machine oric2` simulé. Charge
+  `../OricOS/build/kernel.bin` (binaire produit par cc65/ca65 dans le
+  sous-projet `OricOS/`), installe le stub trampoline RESET en bank 0
+  (CLC ; XCE ; JML $010200), exécute jusqu'à STP et vérifie le
+  sentinel "ORIOS\x00" et la version "v0.1\x00" écrits par le kernel
+  en bank 1 $5000 / $5010.
+- Test gated : skip si `kernel.bin` absent (le binaire est produit par
+  `make` dans `OricOS/`, pas inclus en git).
+
+#### Notes
+- Première démonstration end-to-end de la chaîne **OricOS → Phosphoric**.
+- Le kernel asm 65C816 (Sprint 0, ~89 octets) tourne sous Phosphoric et
+  écrit son sentinel à l'emplacement attendu en bank 1.
+- Référence sous-projet : github.com/benedictemarty/OricOS
+- 493 tests passent (était 492, +1 OricOS boot).
+
 ## [1.22.0-alpha] - 2026-05-08
 
 ### Oric 2 — Jalons B3 + B4 : paravirtualisation + compositor (clôt Track B)
