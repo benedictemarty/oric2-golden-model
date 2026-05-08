@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.22.6-alpha] - 2026-05-08
+
+### Oric 2 — OricOS Sprint 2.b : bank allocator
+
+#### Added
+- Test mis à jour : vérifie le bank allocator OricOS v0.6 (boot alloue
+  3 banks, retourne 4/5/6, BANK_NEXT pointe sur 7).
+
+#### Notes
+- Pas de changement Phosphoric côté core. Le test est étendu pour
+  valider la nouvelle fonctionnalité du kernel asm.
+- 494 tests (inchangé).
+
 ## [1.22.5-alpha] - 2026-05-08
 
 ### Oric 2 — OricOS Sprint 2.a : VIA T1 timer full-system

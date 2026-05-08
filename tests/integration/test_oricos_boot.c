@@ -227,6 +227,14 @@ TEST(test_oricos_sprint2a_via_t1_timer_drives_scheduler) {
     ASSERT_TRUE(!cpu.E);
     ASSERT_EQ((int)cpu.PBR, 0x01);
 
+    /* Sprint 2.b : bank allocator. Kernel boot a appelé alloc_bank x3,
+     * stockés à $015460-2. Pool démarre à $04, allocation incrémentale. */
+    ASSERT_EQ((int)memory_read24(&mem, 0x015460), 0x04); /* 1er alloc */
+    ASSERT_EQ((int)memory_read24(&mem, 0x015461), 0x05); /* 2e */
+    ASSERT_EQ((int)memory_read24(&mem, 0x015462), 0x06); /* 3e */
+    /* BANK_NEXT pointe maintenant sur le 4e bank libre */
+    ASSERT_EQ((int)memory_read24(&mem, 0x015450), 0x07);
+
     memory_cleanup(&mem);
 }
 

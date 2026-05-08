@@ -1,12 +1,15 @@
 VERSION_TRACKING - Phosphoric
 =====================================
 
-Current Version: 1.22.5-alpha
+Current Version: 1.22.6-alpha
 Release Date: 2026-05-08
-Status: Alpha (OricOS Sprint 2.a — VIA T1 autonome, 494 tests pass)
+Status: Alpha (OricOS Sprint 2.b — bank allocator v0.1, 494 tests pass)
 
 Version History:
 ----------------
+- 1.22.6-alpha (2026-05-08): OricOS Sprint 2.b — bank allocator (494 tests, =)
+  * kernel_alloc_bank incrémental, pool 4-127
+  * Test étend assertions pour valider 3 alloc successifs
 - 1.22.5-alpha (2026-05-08): OricOS Sprint 2.a — VIA T1 timer drives scheduler (494 tests, +1)
   * Add: test full-system avec via6522 + I/O routing + tick autonome
   * Kernel : setup VIA T1 (ACR/T1CL/T1CH/IER) en mode continuous IRQ
