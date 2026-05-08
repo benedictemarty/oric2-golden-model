@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - 2026-05-09
 
+### Sprint 3.a — Mode HIRES Oric 2 (ADR-12) ✨
+
+#### Added
+- `include/video/hires_oric2.h` + `src/video/hires_oric2.c` :
+  implémentation de l'ADR-12 (mode HIRES Oric 2 : 240×200×3bpp,
+  palette 8 couleurs Oric 1 fixes).
+- API : `hires_oric2_get_pixel`, `hires_oric2_set_pixel`,
+  `hires_oric2_clear`, `hires_oric2_render_argb`,
+  `hires_oric2_export_ppm`.
+- Constantes : `HIRES2_W=240`, `HIRES2_H=200`,
+  `HIRES2_BYTES_PER_LINE=90`, `HIRES2_FB_SIZE=18000`,
+  `HIRES2_BANK_DEFAULT=128`.
+- Format pixel figé : 8 pixels en 24 bits sur 3 octets, big-endian
+  (pixel 0 = bits hauts).
+- Adressage : bank 128 ($80xxxx) offset 0, 90 octets/ligne, 200 lignes.
+- Tests unitaires `tests/unit/test_hires_oric2.c` : 8 tests
+  (round-trip, layout big-endian explicite, palette, clear,
+  overwrite isolation, bornes, PPM export, full line).
+- Makefile target `test-hires-oric2` ajouté à `make tests`.
+
+#### Validation
+- 511 tests OK (503 → 511, +8 nouveaux).
+- ADR-12 sort de l'état "vaporware" (point critique architecte
+  senior #1 — 5 ADRs ratifiées sans implémentation).
+- Building block pour Sprint 3.b (kernel OricOS dessine en pixels)
+  et Sprint 3.c+ (window manager).
+
+#### Reportés Sprint 3.a v0.2
+- Intégration compositor (host = HIRES Oric 2 framebuffer).
+- Bank framebuffer configurable via registre I/O.
+- Double-buffering (swap A/B).
+- Mode étendu 320×240 (B4 v2).
+
 ### Test — OricOS Sprint 2.l v0.2 app multi-cluster depuis SD ✨
 
 - `create_fat32_test_image` étendu à 166 secteurs :
