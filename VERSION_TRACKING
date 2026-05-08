@@ -1,12 +1,18 @@
 VERSION_TRACKING - Phosphoric
 =====================================
 
-Current Version: 1.21.0-alpha
+Current Version: 1.22.0-alpha
 Release Date: 2026-05-08
-Status: Alpha (Oric 2 B2 — modèle mémoire bank-based 256K, 481 tests pass)
+Status: Alpha (Oric 2 Track B CLÔTURÉ — paravirt + compositor, 492 tests pass)
 
 Version History:
 ----------------
+- 1.22.0-alpha (2026-05-08): Oric 2 B3+B4 — paravirt demo + compositor (492 tests, +11)
+  * Add: tests/integration/test_paravirt_demo.c (kernel/guest round-trip)
+  * Add: STP $DB / WAI $CB (NOP en mode E)
+  * Add: include/video/compositor.h + src/video/compositor.c (ADR-02)
+  * Add: 9 tests test_compositor (mix host+guest avec clipping)
+  * Track B Phosphoric golden model CLÔTURÉ (B1+B2+B3+B4)
 - 1.21.0-alpha (2026-05-08): Oric 2 B2 — memory map 256K + machine mode (481 tests, +9)
   * Add: docs/MEMORY_MAP.md (spec formelle banks 0-255)
   * Add: oric_machine_t (ORIC1/ORIC2), CLI --machine

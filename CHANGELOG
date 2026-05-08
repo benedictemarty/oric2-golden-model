@@ -5,6 +5,48 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.22.0-alpha] - 2026-05-08
+
+### Oric 2 — Jalons B3 + B4 : paravirtualisation + compositor (clôt Track B)
+
+#### Added (B3 — démonstrateur bascule mode + virtualisation guest)
+- **`tests/integration/test_paravirt_demo.c`** : 2 tests démontrant la
+  séquence kernel-mode-N → guest-mode-E → trampoline IRQ → kernel.
+  - `test_paravirt_kernel_guest_round_trip` : RESET → stub bank 0
+    (CLC ; XCE ; JML $01:0200) → kernel bank 1 → JML $00:0200 →
+    guest mode N → SEC ; XCE → guest mode E → BRK → trampoline
+    bank 0 (CLC ; XCE ; JML $01:5000) → handler kernel bank 1 → STP.
+    Vérifie 4 sentinels écrits aux bonnes adresses dans les bons banks.
+  - `test_paravirt_demonstrates_xce_round_trip_with_b_preserved` :
+    version simplifiée, mode N pur cross-bank, valide JML + STP.
+- **STP `$DB`** et **WAI `$CB`** opérationnels en mode N (NOP en
+  mode E par ADR-11(c)). STP positionne `cpu->stopped`, WAI active
+  `cpu->waiting`. Tests couverts par paravirt_demo.
+
+#### Added (B4 — compositor logiciel + double ULA modèle)
+- **`include/video/compositor.h` + `src/video/compositor.c`** : modèle
+  logiciel du compositor matériel ULX3S (ADR-02). Structure
+  `compositor_t` avec deux framebuffers ARGB8888 (host + guest) et
+  position fenêtre guest sur host. `compositor_compose()` produit le
+  framebuffer de sortie avec clipping aux bords du host (offset négatif,
+  débordement droite/bas, hors-écran complet).
+- **9 tests `test_compositor`** : init/cleanup, guest invisible, guest
+  à l'origine, fenêtre centrée, clipping négatif, débordement, hors
+  écran, layout Oric 2 typique (host 320×240, guest 240×200 centré
+  à (40,20)).
+
+#### Notes
+- B3 et B4 livrent les **golden models** des deux mécanismes structurants
+  d'Oric 2 (paravirtualisation et compositor double-ULA). Le HDL ULX3S
+  implémentera les mêmes contrats en logique combinatoire/séquentielle.
+- 492 tests passent (était 481, +11 : 2 paravirt + 9 compositor).
+- Track B (Phosphoric golden model) **CLÔTURÉ** : B1 + B2 + B3 + B4 livrés.
+- 6502 Phosphoric original : aucune régression. Klaus B1.5 et boot dual
+  B1.6 toujours verts. Mode `--machine oric1` reste défaut.
+
+#### Changed
+- `cpu65c816_opcodes.c` : ajoute STP $DB et WAI $CB.
+
 ## [1.21.0-alpha] - 2026-05-08
 
 ### Oric 2 — Jalon B2 : modèle mémoire bank-based 256 KiB minimum

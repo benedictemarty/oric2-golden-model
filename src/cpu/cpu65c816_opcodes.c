@@ -1039,6 +1039,13 @@ int cpu816_execute_opcode_e(cpu65c816_t* cpu, uint8_t opcode) {
     /* ─── B1.7c — WDM : reserved 2-byte NOP ($42) ─── */
     case 0x42: (void)cpu816_fetch_byte(cpu); cycles = 2; break;
 
+    /* ─── B3 — STP / WAI : halt CPU
+     *     STP $DB : arrêt total (sortie uniquement par RESET).
+     *     WAI $CB : attend NMI ou IRQ (sortie même si I=1).
+     *     NOP en mode E par ADR-11(c) (illégaux NMOS). */
+    case 0xDB: if (cpu->E) break; cpu->stopped = true; cycles = 3; break;
+    case 0xCB: if (cpu->E) break; cpu->waiting = true; cycles = 3; break;
+
     /* ─── B1.7c — STZ : store zero (M-aware) — 65C02/65C816 ───
      *     En mode E (ADR-11(c)) : NOP (consomme la taille opérande). */
     case 0x9C: if (cpu->E) { (void)cpu816_fetch_word_pc(cpu); break; }

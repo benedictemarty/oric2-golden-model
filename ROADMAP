@@ -488,8 +488,17 @@ Voir `/home/bmarty/oric2/CLAUDE.md` pour la vision Oric 2 (machine chimère
 - [x] memory_alloc_bank (1-255), allocation banks 1-3 en mode oric2
 - [x] Tests : 9 cas (alloc, idempotence, bank 0 invariant, lazy, cleanup)
 - [x] Klaus B1.5 et boot dual B1.6 préservés (mode oric1 = no-op)
-### B3 — Démonstrateur bascule mode + virtualisation guest (stub kernel) (à venir)
-### B4 — Compositor logiciel + double ULA (à venir)
+### B3 — Démonstrateur bascule mode + virtualisation guest ✅ (v1.22.0-alpha, 2026-05-08)
+- [x] Test intégration paravirt : RESET → kernel mode N → guest mode E → trampoline → kernel
+- [x] STP $DB et WAI $CB (NOP en mode E par ADR-11(c))
+- [x] 2 tests `test_paravirt_demo`
+
+### B4 — Compositor logiciel + double ULA ✅ (v1.22.0-alpha, 2026-05-08)
+- [x] include/video/compositor.h + src/video/compositor.c (modèle ADR-02)
+- [x] Compose host (320×240+) + guest (240×200) avec clipping
+- [x] 9 tests `test_compositor`
+
+### 🏁 Track B CLÔTURÉ (2026-05-08) — golden model Phosphoric complet, prêt pour HDL ULX3S.
 
 ### ADR ouvertes (à trancher)
 - ADR-03 modèle de multitâche, ADR-04 isolation mémoire, ADR-05 langage OricOS,
@@ -528,7 +537,7 @@ Voir `/home/bmarty/oric2/CLAUDE.md` pour la vision Oric 2 (machine chimère
 - [ ] <5% CPU overhead on modern hardware
 
 ### Quality
-- [x] 481 tests passing (make tests, dont 2 Klaus + 4 boot dual + 60 mode N + 9 oric2 mem)
+- [x] 492 tests passing (make tests, dont 2 Klaus + 4 boot dual + 60 mode N + 9 oric2 mem + 2 paravirt + 9 compositor)
 - [x] Zero critical bugs in test suite
 - [x] API documentation complete
 - [x] Comprehensive user guide
@@ -536,5 +545,5 @@ Voir `/home/bmarty/oric2/CLAUDE.md` pour la vision Oric 2 (machine chimère
 ---
 
 **Last Updated**: 2026-05-08
-**Current Version**: 1.21.0-alpha
-**B1+B2 livrés**. **Next Milestone** : B3 (démonstrateur bascule mode + virtualisation guest) — projet Oric 2.
+**Current Version**: 1.22.0-alpha
+**🏁 Track B CLÔTURÉ** — golden model Phosphoric complet (B1+B2+B3+B4). **Next** : démarrer Track HDL ULX3S ou Track OricOS.
