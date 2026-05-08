@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - 2026-05-09
 
+### Sprint 3.a v0.2 — Intégration compositor + HIRES Oric 2 ✨
+
+#### Added
+- `tests/integration/test_compositor_hires_oric2.c` : test d'intégration
+  démontrant que le framebuffer Oric 2 (bank 128) peut être utilisé
+  comme `host` du compositor matériel ADR-02.
+- Pipeline validé : mémoire bank 128 → `hires_oric2_render_argb` →
+  `compositor.host.pixels` → `compositor_compose` → output ARGB.
+- 3 scénarios :
+  - `test_oric2_renders_as_compositor_host` : carré rouge sur fond noir,
+    coins + centre vérifiés post-compose.
+  - `test_oric2_host_with_guest_overlay` : host cyan + guest 80×50
+    magenta à (50, 30), overlay correct + clipping.
+  - `test_oric2_host_guest_invisible` : host blanc + guest invisible,
+    compose ignore guest.
+- Aucune modification des modules existants (compositor.c, hires_oric2.c) :
+  l'intégration est naturelle car `hires_oric2_render_argb` écrit dans
+  un `uint32_t*` et `compositor_fb_t.pixels` est `uint32_t*`.
+
+#### Validation
+- 514 tests OK (511 → 514, +3 intégration).
+
+#### Reportés Sprint 3.a v0.3
+- Intégration au main loop SDL2 (`--video-mode oric2` ou similaire) :
+  rendre le framebuffer Oric 2 visible via SDL en mode `--machine oric2`.
+- Avec ça, OricOS Sprint 3.b/c sera testable visuellement en temps réel.
+
 ### Sprint 3.a — Mode HIRES Oric 2 (ADR-12) ✨
 
 #### Added
