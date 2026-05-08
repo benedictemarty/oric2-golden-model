@@ -5,6 +5,36 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.22.7-alpha] - 2026-05-08
+
+### Oric 2 — OricOS Sprint 2.c + fix addr_abs_x/y X-aware
+
+#### Fixed (B1.7b — bug d'adressage indexé)
+- **`addr816_abs_x`, `addr816_abs_y`, `addr816_indirect_indexed`**
+  utilisaient toujours `x8`/`y8` (8-bit) pour l'index, même en mode
+  N avec X=0 (16-bit indices). Conformément WDC W65C816S, l'index
+  doit être largeur X-aware. Sans le fix, `STA $abs,X` avec X
+  16-bit utilisait seulement le low byte → boucle de balayage
+  d'écran ne couvrait pas $BB80+0x100..$BFE7. Klaus B1.5 et boot
+  dual B1.6 inchangés (mode E uniquement).
+
+#### Changed
+- **Test `test_oricos_boot`** : retire test 1.c (manual injection),
+  conserve uniquement 2.a (full-system VIA T1) qui le supersède.
+  2.a inclut maintenant les vérifications Sprint 2.b (bank allocator)
+  et 2.c (screen "OricOS v0.7" + clear).
+
+#### Added
+- Test vérifie en plus :
+  * banner "OricOS v0.7" à `$00BB80-$00BB8A` (11 caractères)
+  * Espaces ($20) à $BB8C et $BFDF (clear screen complet)
+
+#### Notes
+- 494 tests passent (inchangé), aucune régression.
+- Le kernel asm écrit désormais dans la RAM écran Oric 1 — la base
+  pour une démo visuelle est en place. Reste à ajouter `--kernel`
+  à oric1-emu pour booter OricOS via SDL2.
+
 ## [1.22.6-alpha] - 2026-05-08
 
 ### Oric 2 — OricOS Sprint 2.b : bank allocator

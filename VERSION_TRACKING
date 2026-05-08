@@ -1,12 +1,17 @@
 VERSION_TRACKING - Phosphoric
 =====================================
 
-Current Version: 1.22.6-alpha
+Current Version: 1.22.7-alpha
 Release Date: 2026-05-08
-Status: Alpha (OricOS Sprint 2.b — bank allocator v0.1, 494 tests pass)
+Status: Alpha (OricOS Sprint 2.c — driver console + fix addr_abs_x, 494 tests pass)
 
 Version History:
 ----------------
+- 1.22.7-alpha (2026-05-08): OricOS Sprint 2.c + fix addr_abs_x/y X-aware
+  * Fix critique : addr816_abs_x/y et indirect_indexed utilisaient toujours x8/y8.
+    En mode N X=0 (16-bit), index doit être 16-bit. Klaus/boot dual non affectés.
+  * OricOS : kernel_clear_screen (screen RAM 40x28) + kernel_print_banner ("OricOS v0.7")
+  * Test consolidé 2.a (supersedé 1.c)
 - 1.22.6-alpha (2026-05-08): OricOS Sprint 2.b — bank allocator (494 tests, =)
   * kernel_alloc_bank incrémental, pool 4-127
   * Test étend assertions pour valider 3 alloc successifs

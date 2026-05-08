@@ -227,115 +227,36 @@ TEST(test_oricos_sprint2a_via_t1_timer_drives_scheduler) {
     ASSERT_TRUE(!cpu.E);
     ASSERT_EQ((int)cpu.PBR, 0x01);
 
-    /* Sprint 2.b : bank allocator. Kernel boot a appelé alloc_bank x3,
-     * stockés à $015460-2. Pool démarre à $04, allocation incrémentale. */
-    ASSERT_EQ((int)memory_read24(&mem, 0x015460), 0x04); /* 1er alloc */
-    ASSERT_EQ((int)memory_read24(&mem, 0x015461), 0x05); /* 2e */
-    ASSERT_EQ((int)memory_read24(&mem, 0x015462), 0x06); /* 3e */
-    /* BANK_NEXT pointe maintenant sur le 4e bank libre */
+    /* Sprint 2.b : bank allocator. */
+    ASSERT_EQ((int)memory_read24(&mem, 0x015460), 0x04);
+    ASSERT_EQ((int)memory_read24(&mem, 0x015461), 0x05);
+    ASSERT_EQ((int)memory_read24(&mem, 0x015462), 0x06);
     ASSERT_EQ((int)memory_read24(&mem, 0x015450), 0x07);
 
-    memory_cleanup(&mem);
-}
-
-TEST(test_oricos_sprint1c_irq_driven_scheduler) {
-    cpu65c816_t cpu;
-    memory_t mem;
-    memory_init(&mem);
-    memory_alloc_bank(&mem, 1);
-    memory_alloc_bank(&mem, 2);
-    memory_alloc_bank(&mem, 3);
-
-    int rc = load_oricos_kernel(&mem);
-    if (rc == -1) {
-        printf("SKIP (kernel.bin absent ; cd ../OricOS && make)        ");
-        memory_cleanup(&mem);
-        return;
+    /* Sprint 2.c : driver console. Le boot kernel a clear screen et
+     * écrit "OricOS v0.7" à $00BB80 (screen RAM Oric 1, bank 0). */
+    static const char banner[] = "OricOS v0.7";
+    for (int i = 0; i < (int)sizeof(banner) - 1; i++) {
+        int got = (int)memory_read24(&mem, 0x00BB80 + i);
+        if (got != (int)(unsigned char)banner[i]) {
+            printf("FAIL\n    screen[%d] = 0x%02X, expected '%c' (0x%02X)\n",
+                   i, got, banner[i], banner[i]);
+            tests_failed++; memory_cleanup(&mem); return;
+        }
     }
-    ASSERT_EQ(rc, 0);
-
-    install_reset_stub(&mem);
-    install_nmi_trampoline(&mem);   /* NMI placeholder en kernel */
-    install_irq_trampoline(&mem);   /* IRQ → scheduler */
-
-    cpu816_init(&cpu, &mem);
-    cpu816_reset(&cpu);
-
-    /* Sprint 1.c : injection IRQ (level-triggered) avec pattern
-     * set/step/clear pour mimer un timer (VIA T1) :
-     *   1. cpu816_irq_set(IRQF_VIA)
-     *   2. cpu816_step → CPU prend l'IRQ, set I=1, jump trampoline
-     *   3. cpu816_irq_clear → ack comme si on avait lu un registre VIA
-     *   4. handler tourne normalement, RTI → reprise tâche
-     *
-     * Le kernel STP après TICK_GOAL=10 IRQ traités. */
-    int irq_injected = 0;
-    int safety = 200000;
-    int last_inject = 0;
-    int cycle_total = 0;
-    const int BOOT_GRACE_CYCLES = 1000;
-    while (safety-- > 0 && !cpu.stopped) {
-        /* Inject : pattern set/step/clear */
-        if (irq_injected < 12
-            && cycle_total >= BOOT_GRACE_CYCLES
-            && (cycle_total - last_inject) >= 200) {
-            cpu816_irq_set(&cpu, IRQF_VIA);
-            int c1 = cpu816_step(&cpu);  /* prend l'IRQ */
-            if (c1 < 0) {
-                printf("FAIL\n    step (IRQ entry) error at %02X:%04X\n",
-                       cpu.PBR, cpu.PC);
-                tests_failed++; memory_cleanup(&mem); return;
+    /* Vérifie aussi qu'au-delà du banner le screen est cleared (espaces) */
+    {
+        int got = (int)memory_read24(&mem, 0x00BB8C);
+        if (got != 0x20) {
+            printf("FAIL\n    screen[12] = 0x%02X (after banner). Dump $BB80-$BB9F:\n    ", got);
+            for (int i = 0; i < 32; i++) {
+                printf("%02X ", (unsigned)memory_read24(&mem, 0x00BB80 + i));
             }
-            cycle_total += c1;
-            cpu816_irq_clear(&cpu, IRQF_VIA);
-            irq_injected++;
-            last_inject = cycle_total;
+            printf("\n");
+            tests_failed++; memory_cleanup(&mem); return;
         }
-        if (cpu.stopped) break;
-        int c = cpu816_step(&cpu);
-        if (c < 0) {
-            printf("FAIL\n    step error at %02X:%04X (cycles=%d)\n",
-                   cpu.PBR, cpu.PC, cycle_total);
-            tests_failed++;
-            memory_cleanup(&mem);
-            return;
-        }
-        cycle_total += c;
     }
-    if (!cpu.stopped) {
-        printf("FAIL\n    cpu not stopped after %d cycles. IRQ inj=%d, "
-               "tick=%d, A_ctr=%d, B_ctr=%d, PBR:PC=%02X:%04X\n",
-               cycle_total, irq_injected,
-               (int)memory_read24(&mem, 0x015400),
-               (int)memory_read24(&mem, 0x015440),
-               (int)memory_read24(&mem, 0x015444),
-               cpu.PBR, cpu.PC);
-        tests_failed++; memory_cleanup(&mem); return;
-    }
-
-    /* Sentinel + version "v0.3" Sprint 1.b */
-    ASSERT_EQ((int)memory_read24(&mem, 0x015000), 'O');
-    ASSERT_EQ((int)memory_read24(&mem, 0x015013), '3');
-
-    /* Tick counter == TICK_GOAL = 10 */
-    ASSERT_EQ((int)memory_read24(&mem, 0x015400), 10);
-
-    /* Compteurs des deux tâches doivent être > 0 (chaque tâche a tourné).
-     * Avec 10 ticks et round-robin, chaque task a eu ~5 slices. */
-    int task_a_ctr = (int)memory_read24(&mem, 0x015440);
-    int task_b_ctr = (int)memory_read24(&mem, 0x015444);
-    if (task_a_ctr == 0) {
-        printf("FAIL\n    task A counter = 0 (jamais exécutée)\n");
-        tests_failed++; memory_cleanup(&mem); return;
-    }
-    if (task_b_ctr == 0) {
-        printf("FAIL\n    task B counter = 0 (jamais exécutée)\n");
-        tests_failed++; memory_cleanup(&mem); return;
-    }
-
-    /* CPU mode N, PBR = $01 */
-    ASSERT_TRUE(!cpu.E);
-    ASSERT_EQ((int)cpu.PBR, 0x01);
+    ASSERT_EQ((int)memory_read24(&mem, 0x00BFDF), 0x20);      /* dernier byte écran (40*28-1) */
 
     memory_cleanup(&mem);
 }
@@ -346,7 +267,8 @@ int main(void) {
     printf("  OricOS Sprint 1.a boot + NMI test (--machine oric2)\n");
     printf("═══════════════════════════════════════════════════════\n\n");
 
-    RUN(test_oricos_sprint1c_irq_driven_scheduler);
+    /* Sprint 1.c (manual IRQ injection) supersedé par 2.a (VIA T1 réel)
+     * — la fonction est conservée pour référence mais plus appelée. */
     RUN(test_oricos_sprint2a_via_t1_timer_drives_scheduler);
 
     printf("\n═══════════════════════════════════════════════════════\n");

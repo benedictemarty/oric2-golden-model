@@ -2,8 +2,8 @@ CIRRUS_OS - Phosphoric Build & Development Status
 ======================================================
 
 Project: Phosphoric — ORIC-1/Atmos Cycle-Accurate Emulator
-Version: 1.22.6-alpha
-Build Status: ALPHA (OricOS Sprint 2.b — bank allocator v0.1)
+Version: 1.22.7-alpha
+Build Status: ALPHA (OricOS Sprint 2.c — driver console + addr fix)
 Last Updated: 2026-05-08
 
 ================================================================

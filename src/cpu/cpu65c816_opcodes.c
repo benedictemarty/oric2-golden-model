@@ -87,14 +87,17 @@ static uint16_t addr816_abs(cpu65c816_t* cpu) {
 
 static uint16_t addr816_abs_x(cpu65c816_t* cpu, bool* page_crossed) {
     uint16_t base = cpu816_fetch_word_pc(cpu);
-    uint16_t a = (uint16_t)(base + x8(cpu));
+    /* B1.7b fix : utilise X complet (8 ou 16 bits) selon flag X. */
+    uint16_t idx = X_is_8bit(cpu) ? (uint16_t)(cpu->X & 0xFF) : cpu->X;
+    uint16_t a = (uint16_t)(base + idx);
     if (page_crossed) *page_crossed = ((base & 0xFF00) != (a & 0xFF00));
     return a;
 }
 
 static uint16_t addr816_abs_y(cpu65c816_t* cpu, bool* page_crossed) {
     uint16_t base = cpu816_fetch_word_pc(cpu);
-    uint16_t a = (uint16_t)(base + y8(cpu));
+    uint16_t idx = X_is_8bit(cpu) ? (uint16_t)(cpu->Y & 0xFF) : cpu->Y;
+    uint16_t a = (uint16_t)(base + idx);
     if (page_crossed) *page_crossed = ((base & 0xFF00) != (a & 0xFF00));
     return a;
 }
@@ -126,7 +129,9 @@ static uint16_t addr816_indirect_indexed(cpu65c816_t* cpu, bool* page_crossed) {
     uint8_t lo = cpu816_mem_read(cpu, zpg);
     uint8_t hi = cpu816_mem_read(cpu, (uint8_t)((zpg + 1) & 0xFF));
     uint16_t base = (uint16_t)((hi << 8) | lo);
-    uint16_t a = (uint16_t)(base + y8(cpu));
+    /* B1.7b fix : utilise Y complet (8 ou 16 bits) selon flag X. */
+    uint16_t idx = X_is_8bit(cpu) ? (uint16_t)(cpu->Y & 0xFF) : cpu->Y;
+    uint16_t a = (uint16_t)(base + idx);
     if (page_crossed) *page_crossed = ((base & 0xFF00) != (a & 0xFF00));
     return a;
 }
