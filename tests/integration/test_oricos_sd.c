@@ -140,8 +140,8 @@ static void install_trampolines(memory_t* mem) {
  * Total image : 161 secteurs = 82432 octets.
  */
 #define FAT32_TEST_FDS  160u
-#define FAT32_TEST_TOTAL_SECTORS  (FAT32_TEST_FDS + 4u)
-    /* root dir + cluster 3 (HELLO.BIN) + cluster 4 + cluster 5 (BIG.BIN) */
+#define FAT32_TEST_TOTAL_SECTORS  (FAT32_TEST_FDS + 6u)
+    /* root + clusters 3 (HELLO) + 4,5 (BIG) + 6,7 (MULTI bundle 527B) */
 
 static int create_fat32_test_image(const char* path) {
     FILE* f = fopen(path, "wb");
@@ -180,6 +180,10 @@ static int create_fat32_test_image(const char* path) {
             fat[16]=0x05; fat[17]=0x00; fat[18]=0x00; fat[19]=0x00;
             /* FAT[5] = $0FFFFFF8 (BIG.BIN EOC) */
             fat[20]=0xF8; fat[21]=0xFF; fat[22]=0xFF; fat[23]=0x0F;
+            /* FAT[6] = $00000007 (MULTI.BIN cluster 6 → 7) */
+            fat[24]=0x07; fat[25]=0x00; fat[26]=0x00; fat[27]=0x00;
+            /* FAT[7] = $0FFFFFF8 (MULTI.BIN EOC) */
+            fat[28]=0xF8; fat[29]=0xFF; fat[30]=0xFF; fat[31]=0x0F;
             fwrite(fat, 1, SD_BLOCK_SIZE, f);
         } else {
             fwrite(sec, 1, SD_BLOCK_SIZE, f);
@@ -202,6 +206,12 @@ static int create_fat32_test_image(const char* path) {
     sec[0x34] = 0x00; sec[0x35] = 0x00;
     sec[0x3A] = 0x04; sec[0x3B] = 0x00;                       /* cluster_low = 4 */
     sec[0x3C] = 0x00; sec[0x3D] = 0x04; sec[0x3E] = 0x00; sec[0x3F] = 0x00; /* size = 1024 */
+    /* Entry 2 : MULTI.BIN (offset 64) — bundle multi-cluster (527B). */
+    memcpy(&sec[0x40], "MULTI   BIN", 11);
+    sec[0x4B] = 0x20;
+    sec[0x54] = 0x00; sec[0x55] = 0x00;
+    sec[0x5A] = 0x06; sec[0x5B] = 0x00;                       /* cluster_low = 6 */
+    sec[0x5C] = 0x0F; sec[0x5D] = 0x02; sec[0x5E] = 0x00; sec[0x5F] = 0x00; /* size = 527 */
     fwrite(sec, 1, SD_BLOCK_SIZE, f);
 
     /* Bloc FDS+1 : cluster 3 = contenu du fichier "HELLO.BIN".
@@ -225,6 +235,29 @@ static int create_fat32_test_image(const char* path) {
     /* Bloc FDS+3 : cluster 5 = second cluster de BIG.BIN.
      * Pattern distinctif 0x55 pour vérifier la traversée FAT[4]→5. */
     memset(sec, 0x55, SD_BLOCK_SIZE);
+    fwrite(sec, 1, SD_BLOCK_SIZE, f);
+
+    /* Bloc FDS+4 : cluster 6 = premier cluster de MULTI.BIN.
+     * Bundle multi-cluster : header (8B) + section CODE entry (8B) avec
+     * offset=520, size=7 + padding (496 octets de zéros). Total cluster=512B. */
+    memset(sec, 0, SD_BLOCK_SIZE);
+    /* Header bundle */
+    sec[0]='O'; sec[1]='O'; sec[2]='S'; sec[3]=0x01;
+    sec[4]=0x01; sec[5]=0x00; sec[6]=0x01; sec[7]=0x00;
+    /* Section CODE entry : offset = 520 = $00000208 LE, size = 7 */
+    sec[8]=0x01; sec[9]=0x00; sec[10]=0x07; sec[11]=0x00;
+    sec[12]=0x08; sec[13]=0x02; sec[14]=0x00; sec[15]=0x00;
+    /* sec[16..511] = padding 0 (déjà via memset) */
+    fwrite(sec, 1, SD_BLOCK_SIZE, f);
+
+    /* Bloc FDS+5 : cluster 7 = second cluster de MULTI.BIN.
+     * Le bundle continue : offsets 512-526. Code app à offset 520
+     * (= cluster_offset 520-512 = 8). 7 octets de code, reste = 0. */
+    memset(sec, 0, SD_BLOCK_SIZE);
+    /* Code app à cluster_offset 8 (= bundle offset 520) :
+     *   ldx #'X' ; lda #1 ; cop #$AA ; rtl */
+    sec[8]=0xA2; sec[9]='X'; sec[10]=0xA9; sec[11]=0x01;
+    sec[12]=0x02; sec[13]=0xAA; sec[14]=0x6B;
     fwrite(sec, 1, SD_BLOCK_SIZE, f);
 
     fclose(f);
@@ -409,19 +442,19 @@ TEST(test_oricos_fat_init_validates_fat32_signature) {
     ASSERT_EQ((int)memory_read24(&mem, 0x01616F), 0xA0);
     ASSERT_EQ((int)memory_read24(&mem, 0x016170), 0x00);
 
-    /* Sprint 2.j.4 + v0.3 : le boot kernel ouvre HELLO.BIN puis BIG.BIN.
-     * L'état final FS_FOUND_* reflète le DERNIER fat_open (= BIG.BIN).
-     * FS_OPEN_RESULT = $00 (BIG.BIN trouvé OK). */
+    /* Sprint 2.j.4 + v0.3 + 2.l v0.2 : le boot kernel ouvre HELLO puis
+     * BIG puis MULTI. État final FS_FOUND_* reflète le DERNIER fat_open
+     * (= MULTI.BIN). FS_OPEN_RESULT = $00 (MULTI trouvé OK). */
     ASSERT_EQ((int)memory_read24(&mem, 0x01617B), 0x00);
-    /* FS_FOUND_CLUSTER = 4 (BIG.BIN cluster=4 LE).
+    /* FS_FOUND_CLUSTER = 6 (MULTI.BIN cluster=6 LE).
      * read_file restaure FS_FOUND_CLUSTER (préservation état). */
-    ASSERT_EQ((int)memory_read24(&mem, 0x016173), 0x04);
+    ASSERT_EQ((int)memory_read24(&mem, 0x016173), 0x06);
     ASSERT_EQ((int)memory_read24(&mem, 0x016174), 0x00);
     ASSERT_EQ((int)memory_read24(&mem, 0x016175), 0x00);
     ASSERT_EQ((int)memory_read24(&mem, 0x016176), 0x00);
-    /* FS_FOUND_SIZE = $00000400 = 1024 LE = $00 $04 $00 $00. */
-    ASSERT_EQ((int)memory_read24(&mem, 0x016177), 0x00);
-    ASSERT_EQ((int)memory_read24(&mem, 0x016178), 0x04);
+    /* FS_FOUND_SIZE = $0000020F = 527 LE = $0F $02 $00 $00. */
+    ASSERT_EQ((int)memory_read24(&mem, 0x016177), 0x0F);
+    ASSERT_EQ((int)memory_read24(&mem, 0x016178), 0x02);
     ASSERT_EQ((int)memory_read24(&mem, 0x016179), 0x00);
     ASSERT_EQ((int)memory_read24(&mem, 0x01617A), 0x00);
 
@@ -443,9 +476,13 @@ TEST(test_oricos_fat_init_validates_fat32_signature) {
     /* Sprint 2.j.6 : kernel_app_exec sur le bundle chargé via SD a
      * exécuté l'app, qui a écrit un 'Z' supplémentaire après le 'Z' du
      * bundle inline. CURSOR_ADDR = $BBAB (premier Z, bundle inline) +
-     * 1 = $BBAC (Z du bundle SD). */
+     * 1 = $BBAC (Z du bundle SD).
+     * Sprint 2.l v0.2 : MULTI.BIN multi-cluster app a écrit 'X' à $BBAD
+     * (3e char). Valide que app_exec gère un bundle dont la section CODE
+     * réside au-delà du 1er cluster (offset 520 dans le bundle). */
     ASSERT_EQ((int)memory_read24(&mem, 0x00BBAB), 'Z');
     ASSERT_EQ((int)memory_read24(&mem, 0x00BBAC), 'Z');
+    ASSERT_EQ((int)memory_read24(&mem, 0x00BBAD), 'X');
 
     /* Sprint 2.j v0.2 + v0.3 : FS_NEXT_CLUSTER reflète le dernier appel
      * à kernel_fat_next_cluster. read_file consomme la chaîne BIG.BIN

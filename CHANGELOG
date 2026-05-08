@@ -5,7 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2026-05-08
+## [Unreleased] - 2026-05-09
+
+### Test — OricOS Sprint 2.l v0.2 app multi-cluster depuis SD ✨
+
+- `create_fat32_test_image` étendu à 166 secteurs :
+  - FAT[6] = $00000007 (MULTI.BIN cluster 6 → 7).
+  - FAT[7] = $0FFFFFF8 (MULTI.BIN EOC).
+  - Root dir : 3e entry MULTI.BIN cluster=6 size=527 (= 2 clusters).
+  - Cluster 6 (LBA 164) : header + section CODE entry (offset=520, size=7)
+    + padding 496 octets.
+  - Cluster 7 (LBA 165) : code app à cluster_offset 8 = bundle offset 520.
+- ASSERT supplémentaire : mem[\$BBAD] = 'X' après exec MULTI.BIN.
+- ASSERTs FS_FOUND_* adaptés (état post-MULTI : cluster=6, size=527).
+- 503 tests OK.
 
 ### Test — OricOS Sprint 2.j v0.3 multi-cluster (kernel_fat_read_file)
 
