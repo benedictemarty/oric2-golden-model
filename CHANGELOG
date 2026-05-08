@@ -7,6 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - 2026-05-08
 
+### CPU 65C816 — fix MAJEUR : P pushé/pulled corrompait X/M en mode N (PH-bug-dp-indirect-Y-bank1)
+
+#### Fixed
+- **Bug critique** : 6 emplacements manipulaient `cpu->P` avec
+  `& ~FLAG_BREAK | FLAG_UNUSED` (sémantique 6502 / mode E où bits 4/5
+  = B/UNUSED). En mode N ces bits sont **X/M** (index/accumulator
+  width). Donc en mode N : PHP forçait X=1 M=1 ; PLP/RTI forçaient X=0
+  M=1 ; BRK forçait X=1 M=1 ; COP forçait X=0 M=1 ; IRQ/NMI handler
+  push P forçait X=0 M=1.
+- **Manifestation** : userland en mode N + X=1 (8-bit indices) →
+  `cop #$AA` syscall → COP push P avec X=0 → RTI restore P avec X=0
+  (16-bit) → caller continue avec X=0 → `ldy #$00` consomme 2 bytes
+  d'imm au lieu de 1 → décalage code → crash $00:0000.
+- **Fix** : conditionnement sur `cpu->E`. En mode E, garde la sémantique
+  6502 (B + UNUSED forcés). En mode N, push/pull P entier sans masque ;
+  bits X/M préservés tels quels. Pour PLP/RTI : tronque cpu->X/cpu->Y
+  à 8-bit si transition X 0→1 (cohérent avec SEP #$10).
+- **Emplacements modifiés** :
+  - `cpu65c816_opcodes.c` cases `0x08` (PHP), `0x28` (PLP), `0x40`
+    (RTI), `0x02` (COP), `0x00` (BRK).
+  - `cpu65c816.c` `handle_irq_or_nmi`.
+
+#### Added
+- Test unitaire isolé `test_dp_indirect_long_y_bank1_validate_pattern`
+  (reproduit le pattern de validation OricOS sans le bug, confirme que
+  `lda [dp],Y` fonctionne quand X=1 préservé).
+
+#### Tests
+- 501 tests OK (500 → +1).
+- Validate OricOS fonctionne désormais à toutes positions.
+
+#### Référence
+- WDC W65C816S Programming Manual §7 (Native Mode Instruction Set) et
+  §A.21/A.32 : en mode N, P pushed/pulled doit être préservé entièrement
+  ; les masques de mode E (B/UNUSED) ne s'appliquent qu'en émulation.
+
+---
+
+## [Unreleased] - 2026-05-08
+
 ### CI — test visuel golden frame OricOS (PH-CI-visual)
 
 #### Added

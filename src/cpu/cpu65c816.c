@@ -81,13 +81,19 @@ void cpu816_reset(cpu65c816_t* cpu) {
  */
 static void handle_irq_or_nmi(cpu65c816_t* cpu, uint16_t vector) {
     /* Mode natif : push PB en plus de PC et P (cf. WDC W65C816S §6).
-     * Le handler vit en bank 0 (PBR forcé à 0 par le hardware). */
+     * Le handler vit en bank 0 (PBR forcé à 0 par le hardware).
+     * Mode E : P pushé avec B clear + UNUSED set (sémantique 6502).
+     * Mode N : P pushé entier ; bits 4/5 = X/M préservés (cf. fix
+     *          PH-bug-dp-indirect-Y-bank1 2026-05-08). */
     if (!cpu->E) {
         cpu816_push(cpu, cpu->PBR);
         cpu->PBR = 0;
     }
     cpu816_push_word(cpu, cpu->PC);
-    cpu816_push(cpu, (uint8_t)((cpu->P & ~FLAG_BREAK) | FLAG_UNUSED));
+    if (cpu->E)
+        cpu816_push(cpu, (uint8_t)((cpu->P & ~FLAG_BREAK) | FLAG_UNUSED));
+    else
+        cpu816_push(cpu, cpu->P);
     cpu->P |= FLAG_INTERRUPT;
     if (!cpu->E) cpu->P &= (uint8_t)~FLAG_DECIMAL; /* mode N : D=0 sur interrupt */
     uint8_t lo = cpu816_mem_read(cpu, vector);

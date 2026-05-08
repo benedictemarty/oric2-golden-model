@@ -901,22 +901,34 @@ int cpu816_execute_opcode_e(cpu65c816_t* cpu, uint8_t opcode) {
     /* ─── Stack (PHA/PLA M-aware ; PHP/PLP toujours 8b — P fait 8 bits) ─── */
     case 0x48: push_M(cpu, a_get_M(cpu)); extra += M_extra_cycle(cpu); break;                   /* PHA */
     case 0x68: v16 = pull_M(cpu); a_set_M(cpu, v16); update_nz_M(cpu, v16); extra += M_extra_cycle(cpu); break; /* PLA */
-    case 0x08: cpu816_push(cpu, (uint8_t)(cpu->P | FLAG_BREAK | FLAG_UNUSED)); break;           /* PHP */
+    case 0x08: /* PHP — en mode E, force B|UNUSED (sémantique 6502).
+                * En mode N, push P entier (bits 4/5 = X/M doivent être
+                * préservés sans modification). */
+        if (cpu->E) cpu816_push(cpu, (uint8_t)(cpu->P | FLAG_BREAK | FLAG_UNUSED));
+        else        cpu816_push(cpu, cpu->P);
+        break;
     /* ─── PHX/PHY/PLX/PLY 65C816-only (X-aware, NOP en mode E ADR-11(c)) ─── */
     case 0xDA: if (cpu->E) break; push_X(cpu, x_get_X(cpu)); break;                       /* PHX */
     case 0x5A: if (cpu->E) break; push_X(cpu, y_get_X(cpu)); break;                       /* PHY */
     case 0xFA: if (cpu->E) break; v16 = pull_X(cpu); x_set_X(cpu, v16); update_nz_X(cpu, v16); break; /* PLX */
     case 0x7A: if (cpu->E) break; v16 = pull_X(cpu); y_set_X(cpu, v16); update_nz_X(cpu, v16); break; /* PLY */
 
-    case 0x28: cpu->P = (uint8_t)((cpu816_pull(cpu) & ~FLAG_BREAK) | FLAG_UNUSED);
-               /* En mode E, les bits 4-5 sont interprétés comme B et UNUSED
-                * (pas comme M/X) — la sémantique 6502 est respectée par le
-                * masquage ci-dessus. M_is_8bit/X_is_8bit court-circuitent
-                * sur cpu->E donc forcer M/X est inutile.
-                * En mode N, PLP peut effectivement changer M et X ; le
-                * tronquage des high bytes de X/Y est appliqué de manière
-                * paresseuse à l'usage suivant. */
-               break; /* PLP */
+    case 0x28: /* PLP — en mode E, masque B et force UNUSED (6502).
+                * En mode N, pull P entier ; bits 4/5 = X/M restaurés
+                * tels quels (cf. WDC W65C816S §A.21). Si X passe à 1
+                * (8-bit), le high byte de X/Y est tronqué (cf. SEP). */
+        if (cpu->E) {
+            cpu->P = (uint8_t)((cpu816_pull(cpu) & ~FLAG_BREAK) | FLAG_UNUSED);
+        } else {
+            uint8_t old_x = cpu->P & FLAG816_X_INDEX;
+            cpu->P = cpu816_pull(cpu);
+            /* Si X transitionne de 0 (16-bit) à 1 (8-bit), tronquer X et Y. */
+            if (!old_x && (cpu->P & FLAG816_X_INDEX)) {
+                cpu->X &= 0x00FF;
+                cpu->Y &= 0x00FF;
+            }
+        }
+        break;
 
     /* ─── B1.7c — Stack opcodes 65C816 (NOP en mode E par ADR-11(c)) ─── */
     case 0x8B: if (cpu->E) break; cpu816_push(cpu, cpu->DBR); cycles = 3; break;       /* PHB */
@@ -1053,9 +1065,22 @@ int cpu816_execute_opcode_e(cpu65c816_t* cpu, uint8_t opcode) {
         cpu->PC = (uint16_t)(cpu816_pull_word(cpu) + 1);
         break;
 
-    /* ─── RTI ─── (mode N pulls PBR en plus, cf. WDC datasheet) */
+    /* ─── RTI ─── (mode N pulls PBR en plus, cf. WDC datasheet)
+     * Mode E : P pull avec masque B + force UNUSED (sémantique 6502).
+     * Mode N : P pull entier ; bits X/M restaurés tels quels.
+     *          Tronque X/Y si transition X 0→1 (cf. SEP).
+     */
     case 0x40:
-        cpu->P = (uint8_t)((cpu816_pull(cpu) & ~FLAG_BREAK) | FLAG_UNUSED);
+        if (cpu->E) {
+            cpu->P = (uint8_t)((cpu816_pull(cpu) & ~FLAG_BREAK) | FLAG_UNUSED);
+        } else {
+            uint8_t old_x = cpu->P & FLAG816_X_INDEX;
+            cpu->P = cpu816_pull(cpu);
+            if (!old_x && (cpu->P & FLAG816_X_INDEX)) {
+                cpu->X &= 0x00FF;
+                cpu->Y &= 0x00FF;
+            }
+        }
         cpu->PC = cpu816_pull_word(cpu);
         if (!cpu->E) cpu->PBR = cpu816_pull(cpu);
         break;
@@ -1076,7 +1101,11 @@ int cpu816_execute_opcode_e(cpu65c816_t* cpu, uint8_t opcode) {
     }
 
     /* ─── B1.7c — COP : software interrupt (BRK-like, vecteur dédié)
-     *     Mode N : push PBR + clear PBR (handler en bank 0). */
+     *     Mode N : push PBR + clear PBR (handler en bank 0).
+     *     Le P pushé doit refléter l'état courant (en mode N, bits 4/5
+     *     = X/M, ne PAS forcer comme en mode E). PH-bug-dp-indirect-Y
+     *     2026-05-08 : sans ce fix, RTI restorait X=0 (16-bit) et
+     *     cassait les routines en X=1 du caller. */
     case 0x02: {
         cpu->PC = (uint16_t)(cpu->PC + 1); /* COP suivi d'un signature byte */
         if (!cpu->E) {
@@ -1084,7 +1113,10 @@ int cpu816_execute_opcode_e(cpu65c816_t* cpu, uint8_t opcode) {
             cpu->PBR = 0;
         }
         cpu816_push_word(cpu, cpu->PC);
-        cpu816_push(cpu, (uint8_t)((cpu->P & ~FLAG_BREAK) | FLAG_UNUSED));
+        if (cpu->E)
+            cpu816_push(cpu, (uint8_t)((cpu->P & ~FLAG_BREAK) | FLAG_UNUSED));
+        else
+            cpu816_push(cpu, cpu->P);
         setf(cpu, FLAG_INTERRUPT, true);
         setf(cpu, FLAG_DECIMAL, false); /* mode N : D forcé à 0 par interrupt */
         uint16_t vec = cpu->E ? 0xFFF4 : 0xFFE4;
@@ -1114,7 +1146,10 @@ int cpu816_execute_opcode_e(cpu65c816_t* cpu, uint8_t opcode) {
     case 0x74: if (cpu->E) { (void)cpu816_fetch_byte(cpu); break; }
                write_M(cpu, addr816_zp_x(cpu), 0); extra += M_extra_cycle(cpu); break;
 
-    /* ─── BRK ─── (mode N push PBR + clear PBR, vecteur $00FFE6 ; mode E vecteur $FFFE) */
+    /* ─── BRK ─── (mode N push PBR + clear PBR, vecteur $00FFE6 ; mode E vecteur $FFFE)
+     * Mode E : P pushé avec B|UNUSED (sémantique 6502).
+     * Mode N : P pushé entier ; bits 4/5 = X/M préservés.
+     */
     case 0x00:
         cpu->PC = (uint16_t)(cpu->PC + 1); /* BRK est suivi d'un signature byte */
         if (!cpu->E) {
@@ -1122,7 +1157,10 @@ int cpu816_execute_opcode_e(cpu65c816_t* cpu, uint8_t opcode) {
             cpu->PBR = 0;
         }
         cpu816_push_word(cpu, cpu->PC);
-        cpu816_push(cpu, (uint8_t)(cpu->P | FLAG_BREAK | FLAG_UNUSED));
+        if (cpu->E)
+            cpu816_push(cpu, (uint8_t)(cpu->P | FLAG_BREAK | FLAG_UNUSED));
+        else
+            cpu816_push(cpu, cpu->P);
         setf(cpu, FLAG_INTERRUPT, true);
         if (!cpu->E) setf(cpu, FLAG_DECIMAL, false);
         {

@@ -566,6 +566,92 @@ TEST(test_state_string_native_format) {
     ASSERT_TRUE(strstr(buf, "e=0") != NULL);
 }
 
+/* PH-bug-dp-indirect-Y-bank1 : reproduit le scénario du crash
+ * mystérieux dans OricOS kernel_bundle_validate. Pointer 24-bit en
+ * DP zero page ($08/$09/$0A) vers bank 1 cible. Boucle 5x lda [dp],Y
+ * avec Y croissant, suivi de cmp/bne. Si l'opcode [dp],Y est correct,
+ * tous les bytes devraient être lus correctement. */
+TEST(test_dp_indirect_long_y_bank1_validate_pattern) {
+    cpu65c816_t cpu; memory_t mem; boot(&cpu, &mem);
+    enter_native_M0_X0(&cpu, &mem);
+
+    /* SEP #$30 → M=1, X=1 */
+    const uint8_t sep_prog[] = { 0xE2, 0x30 };
+    load(&mem, cpu.PC, sep_prog, 2);
+    cpu816_step(&cpu);
+
+    /* Setup pointer 24-bit en DP $08/$09/$0A → bank 1 $4000 */
+    memory_write24(&mem, 0x000008, 0x00);
+    memory_write24(&mem, 0x000009, 0x40);
+    memory_write24(&mem, 0x00000A, 0x01);
+    /* Target en bank 1 $4000 : "OOS\x01\x01" (5 bytes) */
+    memory_write24(&mem, 0x014000, 0x4F);
+    memory_write24(&mem, 0x014001, 0x4F);
+    memory_write24(&mem, 0x014002, 0x53);
+    memory_write24(&mem, 0x014003, 0x01);
+    memory_write24(&mem, 0x014004, 0x01);
+
+    /* Programme : reproduit kernel_bundle_validate exact pattern.
+     *   ldy #$00
+     *   lda [DP],Y      ; doit lire $4F
+     *   cmp #$4F
+     *   bne fail
+     *   iny
+     *   lda [DP],Y      ; doit lire $4F
+     *   cmp #$4F
+     *   bne fail
+     *   iny
+     *   lda [DP],Y      ; doit lire $53
+     *   cmp #$53
+     *   bne fail
+     *   iny
+     *   lda [DP],Y      ; doit lire $01
+     *   cmp #$01
+     *   bne fail
+     *   ldy #$04
+     *   lda [DP],Y      ; doit lire $01
+     *   cmp #$01
+     *   bne fail
+     *   lda #$42        ; SUCCESS marker
+     *   stp
+     * fail:
+     *   lda #$99
+     *   stp
+     */
+    const uint8_t prog[] = {
+        0xA0, 0x00,             /* ldy #$00 */
+        0xB7, 0x08,             /* lda [$08],Y */
+        0xC9, 0x4F,             /* cmp #$4F */
+        0xD0, 0x18,             /* bne +24 (fail) */
+        0xC8,                   /* iny */
+        0xB7, 0x08,             /* lda [$08],Y */
+        0xC9, 0x4F,             /* cmp #$4F */
+        0xD0, 0x12,             /* bne +18 */
+        0xC8,                   /* iny */
+        0xB7, 0x08,             /* lda [$08],Y */
+        0xC9, 0x53,             /* cmp #$53 */
+        0xD0, 0x0C,             /* bne +12 */
+        0xC8,                   /* iny */
+        0xB7, 0x08,             /* lda [$08],Y */
+        0xC9, 0x01,             /* cmp #$01 */
+        0xD0, 0x06,             /* bne +6 */
+        0xA0, 0x04,             /* ldy #$04 */
+        0xB7, 0x08,             /* lda [$08],Y */
+        0xC9, 0x01,             /* cmp #$01 */
+        0xD0, 0x04,             /* bne +4 (fail) */
+        0xA9, 0x42,             /* lda #$42 SUCCESS */
+        0x80, 0x02,             /* bra +2 (skip fail) */
+        0xA9, 0x99,             /* lda #$99 FAIL */
+        0xDB,                   /* stp */
+    };
+    load(&mem, cpu.PC, prog, sizeof(prog));
+
+    int safety = 1000;
+    while (safety-- > 0 && !cpu.stopped) cpu816_step(&cpu);
+    ASSERT_TRUE(cpu.stopped);
+    ASSERT_EQ((int)(cpu.C & 0xFF), 0x42); /* SUCCESS marker */
+}
+
 /* SEP #$10 doit forcer high byte de X et Y à 0 (conformément WDC).
  * Cf. cpu65c816_opcodes.c case 0xE2. */
 TEST(test_sep_x_truncates_x_and_y) {
@@ -1007,6 +1093,7 @@ int main(void) {
     RUN(test_lda_dp_indirect_reads_DBR_bank);
     RUN(test_state_string_emulation_format);
     RUN(test_state_string_native_format);
+    RUN(test_dp_indirect_long_y_bank1_validate_pattern);
     RUN(test_sep_x_truncates_x_and_y);
     RUN(test_phx_in_emulation_is_nop);
 

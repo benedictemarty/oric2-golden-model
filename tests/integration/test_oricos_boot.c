@@ -279,6 +279,14 @@ TEST(test_oricos_sprint2a_via_t1_timer_drives_scheduler) {
     ASSERT_EQ((int)memory_read24(&mem, 0x00BBA9), 'A');
     ASSERT_EQ((int)memory_read24(&mem, 0x00BBAA), 'B');
 
+    /* Sprint 2.k : kernel_bundle_validate sur bundle_test inline doit
+     * retourner BUNDLE_OK ($00). Stocké à $01549C par le boot. */
+    ASSERT_EQ((int)memory_read24(&mem, 0x01549C), 0x00);
+
+    /* Sprint 2.k : kernel_bundle_validate sur bundle_test inline doit
+     * retourner BUNDLE_OK ($00). Stocké à $01549C par le boot. */
+    ASSERT_EQ((int)memory_read24(&mem, 0x01549C), 0x00);
+
     memory_cleanup(&mem);
 }
 
