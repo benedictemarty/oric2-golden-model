@@ -274,6 +274,11 @@ TEST(test_oricos_sprint2a_via_t1_timer_drives_scheduler) {
      * après le LF de fin de banner "OricOS v0.7\n"). */
     ASSERT_EQ((int)memory_read24(&mem, 0x00BBA8), 'Y');
 
+    /* Sprint 2.i : kernel_print_hex8 #$AB après 'Y' a écrit "AB" à
+     * $BBA9-$BBAA. Valide print_nibble + print_char enchaînement. */
+    ASSERT_EQ((int)memory_read24(&mem, 0x00BBA9), 'A');
+    ASSERT_EQ((int)memory_read24(&mem, 0x00BBAA), 'B');
+
     memory_cleanup(&mem);
 }
 
