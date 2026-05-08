@@ -129,26 +129,54 @@ static void install_trampolines(memory_t* mem) {
 
 /* ─── Test ─────────────────────────────────────────────────────────── */
 
-/* Crée une image SD FAT32 minimale : un boot sector avec la signature
- * "FAT32   " à offset $52. Reste rempli de zéros. Total 1 bloc. */
+/* Crée une image SD FAT32 minimale (Sprint 2.j.2/3/4) :
+ *   - Bloc 0 (boot sector) : signature + champs BPS/SPC/RSC/NFAT/SPF/ROOT.
+ *   - Blocs 1..(FDS-1) : zéros (FAT non utilisée par fat_init/fat_open v0.1).
+ *   - Bloc FDS (= 160) : root dir avec 1 entry "HELLO   BIN" (cluster=3,
+ *     size=$DEADBEEF=$EFBEADDE LE — distinctif).
+ *
+ * Champs : BPS=512, SPC=1, reserved=32, num_fats=2, SPF=64, root_cluster=2.
+ * → first_data_sector = 32 + 2*64 = 160.
+ * Total image : 161 secteurs = 82432 octets.
+ */
+#define FAT32_TEST_FDS  160u
+#define FAT32_TEST_TOTAL_SECTORS  (FAT32_TEST_FDS + 1u)
+
 static int create_fat32_test_image(const char* path) {
     FILE* f = fopen(path, "wb");
     if (!f) return -1;
-    uint8_t boot[SD_BLOCK_SIZE];
-    memset(boot, 0, SD_BLOCK_SIZE);
-    /* Champs FAT32 minimum (juste pour passage signature ; les autres
-     * sont 0 et seront utilisés par les Sprints 2.j.3+). */
-    boot[0x0B] = 0x00; boot[0x0C] = 0x02; /* bytes_per_sector = 512 LE */
-    boot[0x0D] = 0x01;                     /* sectors_per_cluster = 1 */
-    boot[0x0E] = 0x20; boot[0x0F] = 0x00; /* reserved sectors = 32 LE */
-    boot[0x10] = 0x02;                     /* num_fats = 2 */
-    /* sectors_per_fat (FAT32) à offset $24 */
-    boot[0x24] = 0x40; boot[0x25] = 0x00; boot[0x26] = 0x00; boot[0x27] = 0x00;
-    /* root_cluster (FAT32) à offset $2C */
-    boot[0x2C] = 0x02; boot[0x2D] = 0x00; boot[0x2E] = 0x00; boot[0x2F] = 0x00;
-    /* Signature "FAT32   " à offset $52 (8 bytes, espace-padded) */
-    memcpy(&boot[0x52], "FAT32   ", 8);
-    fwrite(boot, 1, SD_BLOCK_SIZE, f);
+    uint8_t sec[SD_BLOCK_SIZE];
+
+    /* Bloc 0 : boot sector. */
+    memset(sec, 0, SD_BLOCK_SIZE);
+    sec[0x0B] = 0x00; sec[0x0C] = 0x02;
+    sec[0x0D] = 0x01;
+    sec[0x0E] = 0x20; sec[0x0F] = 0x00;
+    sec[0x10] = 0x02;
+    sec[0x24] = 0x40; sec[0x25] = 0x00; sec[0x26] = 0x00; sec[0x27] = 0x00;
+    sec[0x2C] = 0x02; sec[0x2D] = 0x00; sec[0x2E] = 0x00; sec[0x2F] = 0x00;
+    memcpy(&sec[0x52], "FAT32   ", 8);
+    fwrite(sec, 1, SD_BLOCK_SIZE, f);
+
+    /* Blocs 1..(FDS-1) : zéros. */
+    memset(sec, 0, SD_BLOCK_SIZE);
+    for (unsigned i = 1; i < FAT32_TEST_FDS; i++) {
+        fwrite(sec, 1, SD_BLOCK_SIZE, f);
+    }
+
+    /* Bloc FDS : root dir avec 1 entry "HELLO   BIN" cluster=3, size=$DEADBEEF. */
+    memset(sec, 0, SD_BLOCK_SIZE);
+    /* Entry 0 (offset 0..31) */
+    memcpy(&sec[0x00], "HELLO   BIN", 11);
+    sec[0x0B] = 0x20;                  /* archive flag, regular file */
+    /* cluster_high $14..$15 = 0 */
+    sec[0x14] = 0x00; sec[0x15] = 0x00;
+    /* cluster_low $1A..$1B = 3 LE */
+    sec[0x1A] = 0x03; sec[0x1B] = 0x00;
+    /* size $1C..$1F = $DEADBEEF LE */
+    sec[0x1C] = 0xEF; sec[0x1D] = 0xBE; sec[0x1E] = 0xAD; sec[0x1F] = 0xDE;
+    fwrite(sec, 1, SD_BLOCK_SIZE, f);
+
     fclose(f);
     return 0;
 }
@@ -303,12 +331,9 @@ TEST(test_oricos_fat_init_validates_fat32_signature) {
         tests_failed++; sd_close(&sd); memory_cleanup(&mem); return;
     }
 
-    /* Boot sector lu dans FS_BUFFER ($015F60) — ASSERT signature présente. */
-    ASSERT_EQ((int)memory_read24(&mem, 0x015F60u + 0x52), 'F');
-    ASSERT_EQ((int)memory_read24(&mem, 0x015F60u + 0x53), 'A');
-    ASSERT_EQ((int)memory_read24(&mem, 0x015F60u + 0x54), 'T');
-    ASSERT_EQ((int)memory_read24(&mem, 0x015F60u + 0x55), '3');
-    ASSERT_EQ((int)memory_read24(&mem, 0x015F60u + 0x56), '2');
+    /* Note : FS_BUFFER ($015F60) écrasé par kernel_fat_open après
+     * kernel_fat_init. La validation de la signature passe par les
+     * champs parsés (FS_BPS, FS_SPC, ...) plutôt que le buffer brut. */
 
     /* FS_INIT_RESULT = $016160 doit être 0 (OK). */
     ASSERT_EQ((int)memory_read24(&mem, 0x016160), 0x00);
@@ -333,6 +358,20 @@ TEST(test_oricos_fat_init_validates_fat32_signature) {
     /* FS_FDS = FS_RSC + NFAT * FS_SPF = 32 + 2*64 = 160 = $00A0 LE */
     ASSERT_EQ((int)memory_read24(&mem, 0x01616F), 0xA0);
     ASSERT_EQ((int)memory_read24(&mem, 0x016170), 0x00);
+
+    /* Sprint 2.j.4 : kernel_fat_open("HELLO   BIN") doit avoir trouvé
+     * l'entry au bloc FDS (160). FS_OPEN_RESULT = $00 (OK). */
+    ASSERT_EQ((int)memory_read24(&mem, 0x01617B), 0x00);
+    /* FS_FOUND_CLUSTER = 3 LE (cluster_low=$0003, cluster_high=$0000). */
+    ASSERT_EQ((int)memory_read24(&mem, 0x016173), 0x03);
+    ASSERT_EQ((int)memory_read24(&mem, 0x016174), 0x00);
+    ASSERT_EQ((int)memory_read24(&mem, 0x016175), 0x00);
+    ASSERT_EQ((int)memory_read24(&mem, 0x016176), 0x00);
+    /* FS_FOUND_SIZE = $DEADBEEF LE = $EF $BE $AD $DE. */
+    ASSERT_EQ((int)memory_read24(&mem, 0x016177), 0xEF);
+    ASSERT_EQ((int)memory_read24(&mem, 0x016178), 0xBE);
+    ASSERT_EQ((int)memory_read24(&mem, 0x016179), 0xAD);
+    ASSERT_EQ((int)memory_read24(&mem, 0x01617A), 0xDE);
 
     sd_close(&sd);
     memory_cleanup(&mem);

@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - 2026-05-08
 
+### Test — OricOS Sprint 2.j.4 fat_open root dir lookup
+
+- `create_fat32_test_image` étendu : image 161 secteurs au lieu de 1.
+  Bloc FDS=160 contient root dir avec 1 entry "HELLO   BIN"
+  cluster=3, size=$DEADBEEF.
+- `test_oricos_fat_init_validates_fat32_signature` étendu : ASSERT
+  FS_OPEN_RESULT=0, FS_FOUND_CLUSTER=3, FS_FOUND_SIZE=$DEADBEEF
+  après boot kernel (qui appelle fat_open avec filename hardcoded).
+- 503 tests OK.
+
 ### Test — OricOS Sprint 2.j.3 parse complet boot sector
 
 - `test_oricos_fat_init_validates_fat32_signature` étendu : ASSERT
