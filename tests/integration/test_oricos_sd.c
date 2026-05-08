@@ -158,10 +158,31 @@ static int create_fat32_test_image(const char* path) {
     memcpy(&sec[0x52], "FAT32   ", 8);
     fwrite(sec, 1, SD_BLOCK_SIZE, f);
 
-    /* Blocs 1..(FDS-1) : zéros. */
+    /* Blocs 1..(FDS-1) : zéros, sauf le premier secteur de la FAT à LBA 32.
+     * v0.2 : on y écrit une vraie FAT FAT32 partielle pour valider
+     *         kernel_fat_next_cluster (chaîne de clusters). */
     memset(sec, 0, SD_BLOCK_SIZE);
     for (unsigned i = 1; i < FAT32_TEST_FDS; i++) {
-        fwrite(sec, 1, SD_BLOCK_SIZE, f);
+        if (i == 32) {
+            /* LBA 32 = premier secteur de la FAT (FS_RSC = 32). */
+            uint8_t fat[SD_BLOCK_SIZE];
+            memset(fat, 0, SD_BLOCK_SIZE);
+            /* FAT[0] = $0FFFFFF8 (media descriptor) */
+            fat[0]=0xF8; fat[1]=0xFF; fat[2]=0xFF; fat[3]=0x0F;
+            /* FAT[1] = $0FFFFFFF (reserved) */
+            fat[4]=0xFF; fat[5]=0xFF; fat[6]=0xFF; fat[7]=0x0F;
+            /* FAT[2] = $0FFFFFF8 (root cluster EOC) */
+            fat[8]=0xF8; fat[9]=0xFF; fat[10]=0xFF; fat[11]=0x0F;
+            /* FAT[3] = $0FFFFFF8 (HELLO.BIN, single cluster, EOC) */
+            fat[12]=0xF8; fat[13]=0xFF; fat[14]=0xFF; fat[15]=0x0F;
+            /* FAT[4] = $00000005 (BIG.BIN cluster 4 → 5) */
+            fat[16]=0x05; fat[17]=0x00; fat[18]=0x00; fat[19]=0x00;
+            /* FAT[5] = $0FFFFFF8 (BIG.BIN EOC) */
+            fat[20]=0xF8; fat[21]=0xFF; fat[22]=0xFF; fat[23]=0x0F;
+            fwrite(fat, 1, SD_BLOCK_SIZE, f);
+        } else {
+            fwrite(sec, 1, SD_BLOCK_SIZE, f);
+        }
     }
 
     /* Bloc FDS : root dir avec 1 entry "HELLO   BIN" cluster=3, size=$DEADBEEF. */
@@ -403,6 +424,13 @@ TEST(test_oricos_fat_init_validates_fat32_signature) {
      * 1 = $BBAC (Z du bundle SD). */
     ASSERT_EQ((int)memory_read24(&mem, 0x00BBAB), 'Z');
     ASSERT_EQ((int)memory_read24(&mem, 0x00BBAC), 'Z');
+
+    /* Sprint 2.j v0.2 : kernel_fat_next_cluster a lu FAT[4] = 5.
+     * FS_NEXT_CLUSTER = $01617C..$01617F, valeur attendue = $00000005. */
+    ASSERT_EQ((int)memory_read24(&mem, 0x01617C), 0x05);
+    ASSERT_EQ((int)memory_read24(&mem, 0x01617D), 0x00);
+    ASSERT_EQ((int)memory_read24(&mem, 0x01617E), 0x00);
+    ASSERT_EQ((int)memory_read24(&mem, 0x01617F), 0x00);
 
     sd_close(&sd);
     memory_cleanup(&mem);

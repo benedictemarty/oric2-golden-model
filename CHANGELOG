@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - 2026-05-08
 
+### Test — OricOS Sprint 2.j v0.2 cluster chain (kernel_fat_next_cluster)
+
+- `create_fat32_test_image` étendu : LBA 32 (= FS_RSC, premier secteur
+  de la FAT) contient désormais une vraie FAT32 partielle :
+  - FAT[0] = $0FFFFFF8 (media descriptor)
+  - FAT[1] = $0FFFFFFF (reserved)
+  - FAT[2] = $0FFFFFF8 (root cluster EOC)
+  - FAT[3] = $0FFFFFF8 (HELLO.BIN EOC, single cluster)
+  - FAT[4] = $00000005 (BIG.BIN cluster 4 → 5)
+  - FAT[5] = $0FFFFFF8 (BIG.BIN EOC)
+- `test_oricos_fat_init_validates_fat32_signature` étendu : ASSERT
+  que `kernel_fat_next_cluster(query=4)` retourne 5 dans
+  FS_NEXT_CLUSTER ($01617C..$01617F).
+- 503 tests OK (1 ASSERT supplémentaire, pas de nouveau test).
+
 ### Test — OricOS Sprint 2.j.5/6 app chargée depuis SD ✨
 
 - `create_fat32_test_image` étendu : 162 secteurs au lieu de 161.
