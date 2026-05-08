@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - 2026-05-09
 
+### Test — OricOS Sprint 3.b v0.1 kernel_hires2_clear ✨
+
+- `tests/integration/test_oricos_hires2.c` : boot OricOS → ASSERT
+  framebuffer Oric 2 rempli uniforme blue (color 4).
+- 3 niveaux de validation :
+  - Octets bruts : pattern `$92 $49 $24` aux 4 coins + dernier triple.
+  - Pixels via API : `hires_oric2_get_pixel = 4` sur 5 positions.
+  - ARGB scan complet : 100% des 48 000 pixels = `0x0000FF`.
+- Makefile target `test-oricos-hires2` ajouté à `make tests`.
+- 515 tests OK (514 → 515, +1).
+
 ### Sprint 3.a v0.2 — Intégration compositor + HIRES Oric 2 ✨
 
 #### Added
