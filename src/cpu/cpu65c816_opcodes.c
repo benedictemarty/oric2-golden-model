@@ -177,6 +177,16 @@ static uint32_t addr816_dp_indirect_long_y(cpu65c816_t* cpu) {
     return (addr816_dp_indirect_long(cpu) + cpu->Y) & 0xFFFFFFu;
 }
 
+/* (dp) : DP indirect 16-bit (bank = DBR). Lit 2 bytes en dp[$nn..$nn+1] */
+static uint32_t addr816_dp_indirect(cpu65c816_t* cpu) {
+    uint16_t zpg = (uint16_t)cpu816_fetch_byte(cpu);
+    uint16_t base = (uint16_t)(cpu->D + zpg);
+    uint8_t lo = memory_read24(cpu->memory, base);
+    uint8_t hi = memory_read24(cpu->memory, (uint16_t)(base + 1));
+    uint16_t addr16 = (uint16_t)((hi << 8) | lo);
+    return ((uint32_t)cpu->DBR << 16) | addr16;
+}
+
 /* Helpers de lecture/écriture 24-bit M-aware (1 ou 2 bytes selon M) */
 static inline uint16_t read_M_24(cpu65c816_t* cpu, uint32_t addr24) {
     if (M_is_8bit(cpu)) return memory_read24(cpu->memory, addr24);
@@ -562,6 +572,25 @@ int cpu816_execute_opcode_e(cpu65c816_t* cpu, uint8_t opcode) {
     case 0xD7: if (cpu->E) { (void)cpu816_fetch_byte(cpu); break; }                       /* CMP [dp],Y */
         op_cmp_M(cpu, a_get_M(cpu), read_M_24(cpu, addr816_dp_indirect_long_y(cpu))); extra += M_extra_cycle(cpu); break;
 
+    /* ─── PH-fix-dp-indirect : 8 opcodes (dp) DP indirect 16-bit ─── */
+    /* Pointer 16-bit en DP+dp/+1, addr finale en DBR:ptr (cf. WDC §A). */
+    case 0x12: if (cpu->E) { (void)cpu816_fetch_byte(cpu); break; }                       /* ORA (dp) */
+        v16 = a_get_M(cpu) | read_M_24(cpu, addr816_dp_indirect(cpu)); a_set_M(cpu, v16); update_nz_M(cpu, v16); extra += M_extra_cycle(cpu); break;
+    case 0x32: if (cpu->E) { (void)cpu816_fetch_byte(cpu); break; }                       /* AND (dp) */
+        v16 = a_get_M(cpu) & read_M_24(cpu, addr816_dp_indirect(cpu)); a_set_M(cpu, v16); update_nz_M(cpu, v16); extra += M_extra_cycle(cpu); break;
+    case 0x52: if (cpu->E) { (void)cpu816_fetch_byte(cpu); break; }                       /* EOR (dp) */
+        v16 = a_get_M(cpu) ^ read_M_24(cpu, addr816_dp_indirect(cpu)); a_set_M(cpu, v16); update_nz_M(cpu, v16); extra += M_extra_cycle(cpu); break;
+    case 0x72: if (cpu->E) { (void)cpu816_fetch_byte(cpu); break; }                       /* ADC (dp) */
+        op_adc_M(cpu, read_M_24(cpu, addr816_dp_indirect(cpu))); extra += M_extra_cycle(cpu); break;
+    case 0x92: if (cpu->E) { (void)cpu816_fetch_byte(cpu); break; }                       /* STA (dp) */
+        write_M_24(cpu, addr816_dp_indirect(cpu), a_get_M(cpu)); extra += M_extra_cycle(cpu); break;
+    case 0xB2: if (cpu->E) { (void)cpu816_fetch_byte(cpu); break; }                       /* LDA (dp) */
+        v16 = read_M_24(cpu, addr816_dp_indirect(cpu)); a_set_M(cpu, v16); update_nz_M(cpu, v16); extra += M_extra_cycle(cpu); break;
+    case 0xD2: if (cpu->E) { (void)cpu816_fetch_byte(cpu); break; }                       /* CMP (dp) */
+        op_cmp_M(cpu, a_get_M(cpu), read_M_24(cpu, addr816_dp_indirect(cpu))); extra += M_extra_cycle(cpu); break;
+    case 0xF2: if (cpu->E) { (void)cpu816_fetch_byte(cpu); break; }                       /* SBC (dp) */
+        op_sbc_M(cpu, read_M_24(cpu, addr816_dp_indirect(cpu))); extra += M_extra_cycle(cpu); break;
+
     /* ─── LDX (X-aware) ─── */
     case 0xA2: v16 = fetch_imm_X(cpu); x_set_X(cpu, v16); update_nz_X(cpu, v16); extra += X_extra_cycle(cpu); break;
     case 0xA6: v16 = read_X(cpu, addr816_zp(cpu)); x_set_X(cpu, v16); update_nz_X(cpu, v16); extra += X_extra_cycle(cpu); break;
@@ -836,7 +865,11 @@ int cpu816_execute_opcode_e(cpu65c816_t* cpu, uint8_t opcode) {
     case 0xA8: y_set_X(cpu, cpu->C); update_nz_X(cpu, y_get_X(cpu)); break;  /* TAY */
     case 0x98: a_set_M(cpu, cpu->Y); update_nz_M(cpu, a_get_M(cpu)); break;  /* TYA */
     case 0xBA: v16 = X_is_8bit(cpu) ? sp8(cpu) : cpu->S; x_set_X(cpu, v16); update_nz_X(cpu, v16); break; /* TSX */
-    case 0x9A: /* TXS — en mode E, S forcé en page 1 ($01xx). En mode N, S 16b. */
+    case 0x9A: /* TXS — WDC W65C816S Programming Manual §A.32 :
+                * Mode E : SH=$01, SL=XL.
+                * Mode N : S = X (16-bit). Note : en X=1, le high byte de
+                * cpu->X est déjà forcé à 0 par SEP #$10 (cf. case 0xE2),
+                * donc x_get_X et cpu->X sont équivalents en mode N. */
         if (cpu->E) set_sp8(cpu, (uint8_t)x_get_X(cpu));
         else        cpu->S = x_get_X(cpu);
         break;

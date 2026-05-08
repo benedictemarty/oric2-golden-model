@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - 2026-05-08
 
+### CPU 65C816 — bug fixes & opcodes manquants
+
+#### Added (PH-fix-dp-indirect)
+- **8 opcodes DP indirect 16-bit `(dp)` 65C816** ajoutés :
+  - `$12` ORA (dp), `$32` AND (dp), `$52` EOR (dp), `$72` ADC (dp),
+  - `$92` STA (dp), `$B2` LDA (dp), `$D2` CMP (dp), `$F2` SBC (dp).
+- Helper `addr816_dp_indirect` : pointer 16-bit en `D+dp`, addr finale
+  en `DBR:ptr` (mode N M/X-aware).
+- Avant fix, ces 8 slots étaient traités via le default case (table
+  6502 partagée, size=1, ADDR_IMPLICIT) → corruption décodage de
+  l'opérande quand utilisés par OricOS print_char.
+- 2 tests unitaires : `test_sta_dp_indirect_writes_DBR_bank`,
+  `test_lda_dp_indirect_reads_DBR_bank`.
+
+#### Clarification (PH-fix-txs faux positif)
+- Investigation du soi-disant bug TXS : conformément WDC §A.32, en mode N
+  + X=1, `SEP #$10` force le high byte de cpu->X à 0 ; donc `TXS` copie
+  `$00:XL` dans S — comportement **correct**. Le "bug" était dans OricOS
+  qui utilisait `ldx #$FF; txs` pour stack page 1, alors qu'il fallait
+  `lda #$01FF; tcs` (M=0). Code Phosphoric inchangé, commentaire ajouté
+  clarifiant la sémantique.
+- 2 tests unitaires de non-régression :
+  `test_txs_native_X0_copies_full_16bit`, `test_sep_x_truncates_x_and_y`.
+
+#### Tests
+- 498 tests OK (494 → +4 nouveaux).
+
 ### Oric 2 — Trampoline COP pour syscalls OricOS (ADR-13)
 
 #### Added

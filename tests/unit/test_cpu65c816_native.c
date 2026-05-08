@@ -475,6 +475,72 @@ TEST(test_phx_plx_16_bit_in_native) {
     ASSERT_EQ((int)cpu.X, 0xDEAD);
 }
 
+/* TXS sémantique 65C816 documentée : mode N + X=0 (16-bit) copie X
+ * complet 16-bit dans S. Mode N + X=1 (8-bit) : SEP #$10 a déjà forcé
+ * X high byte à 0, donc S = $00:XL. Pour stack en page 1 standard,
+ * utiliser TCS (transfer C 16-bit to S) au lieu de TXS+X=1. */
+TEST(test_txs_native_X0_copies_full_16bit) {
+    cpu65c816_t cpu; memory_t mem; boot(&cpu, &mem);
+    enter_native_M0_X0(&cpu, &mem);
+    cpu.X = 0xCAFE;
+    const uint8_t prog[] = { 0x9A }; /* TXS */
+    load(&mem, cpu.PC, prog, 1);
+    cpu816_step(&cpu);
+    ASSERT_EQ((int)cpu.S, 0xCAFE);
+}
+
+/* PH-fix-dp-indirect : opcode $92 STA (dp) — DP indirect 16-bit.
+ * Pointer 16-bit en DP+dp/+1, addr finale en DBR:ptr. Avant fix,
+ * ces 8 opcodes ($12/$32/$52/$72/$92/$B2/$D2/$F2) étaient traités
+ * comme NOP size=1 → corruption décodage opérande. */
+TEST(test_sta_dp_indirect_writes_DBR_bank) {
+    cpu65c816_t cpu; memory_t mem; boot(&cpu, &mem);
+    enter_native_M0_X0(&cpu, &mem);
+    /* SEP #$30 → M=1, X=1 (8-bit) */
+    const uint8_t sep[] = { 0xE2, 0x30 };
+    load(&mem, cpu.PC, sep, 2);
+    cpu816_step(&cpu);
+    /* Setup pointer 16-bit en DP+$08/$09 = $4000 (RAM bank DBR=0). */
+    memory_write24(&mem, 0x000008, 0x00);
+    memory_write24(&mem, 0x000009, 0x40);
+    /* LDA #$42 ; STA ($08) */
+    const uint8_t prog[] = { 0xA9, 0x42, 0x92, 0x08 };
+    load(&mem, cpu.PC, prog, 4);
+    cpu816_step(&cpu); /* LDA #$42 */
+    cpu816_step(&cpu); /* STA ($08) */
+    ASSERT_EQ((int)memory_read24(&mem, 0x004000), 0x42);
+}
+
+TEST(test_lda_dp_indirect_reads_DBR_bank) {
+    cpu65c816_t cpu; memory_t mem; boot(&cpu, &mem);
+    enter_native_M0_X0(&cpu, &mem);
+    const uint8_t sep[] = { 0xE2, 0x30 };
+    load(&mem, cpu.PC, sep, 2);
+    cpu816_step(&cpu);
+    /* Pointer en DP+$10/$11 = $5000 (RAM). Valeur cible $5000 = $99. */
+    memory_write24(&mem, 0x000010, 0x00);
+    memory_write24(&mem, 0x000011, 0x50);
+    memory_write24(&mem, 0x005000, 0x99);
+    const uint8_t prog[] = { 0xB2, 0x10 }; /* LDA ($10) */
+    load(&mem, cpu.PC, prog, 2);
+    cpu816_step(&cpu);
+    ASSERT_EQ((int)(cpu.C & 0xFF), 0x99);
+}
+
+/* SEP #$10 doit forcer high byte de X et Y à 0 (conformément WDC).
+ * Cf. cpu65c816_opcodes.c case 0xE2. */
+TEST(test_sep_x_truncates_x_and_y) {
+    cpu65c816_t cpu; memory_t mem; boot(&cpu, &mem);
+    enter_native_M0_X0(&cpu, &mem);
+    cpu.X = 0xDEAD;
+    cpu.Y = 0xBEEF;
+    const uint8_t prog[] = { 0xE2, 0x10 }; /* SEP #$10 → X=1 */
+    load(&mem, cpu.PC, prog, 2);
+    cpu816_step(&cpu);
+    ASSERT_EQ((int)cpu.X, 0x00AD); /* high byte forced to 0 */
+    ASSERT_EQ((int)cpu.Y, 0x00EF);
+}
+
 TEST(test_phx_in_emulation_is_nop) {
     cpu65c816_t cpu; memory_t mem; boot(&cpu, &mem);
     cpu.X = 0x42;
@@ -897,6 +963,10 @@ int main(void) {
     RUN(test_tax_truncates_when_x_8bit);
     RUN(test_tya_16_bit_in_native);
     RUN(test_phx_plx_16_bit_in_native);
+    RUN(test_txs_native_X0_copies_full_16bit);
+    RUN(test_sta_dp_indirect_writes_DBR_bank);
+    RUN(test_lda_dp_indirect_reads_DBR_bank);
+    RUN(test_sep_x_truncates_x_and_y);
     RUN(test_phx_in_emulation_is_nop);
 
     /* B1.7c */
