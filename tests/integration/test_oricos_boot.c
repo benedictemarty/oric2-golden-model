@@ -19,6 +19,7 @@
 #include <string.h>
 #include "cpu/cpu65c816.h"
 #include "memory/memory.h"
+#include "io/via6522.h"
 
 #define ORICOS_KERNEL_PATH  "../OricOS/build/kernel.bin"
 #define ORICOS_LOAD_BANK    1
@@ -115,6 +116,119 @@ static void install_reset_stub(memory_t* mem) {
 }
 
 /* ─── Tests ─────────────────────────────────────────────────────────── */
+
+/* ─── Full-system context for VIA-based test (Sprint 2.a) ────────────── */
+
+typedef struct {
+    cpu65c816_t* cpu;
+    via6522_t*   via;
+    int irq_callback_count;
+    int last_irq_state;
+} sched_ctx_t;
+
+static void via_irq_callback(bool state, void* userdata) {
+    sched_ctx_t* ctx = (sched_ctx_t*)userdata;
+    ctx->irq_callback_count++;
+    ctx->last_irq_state = state ? 1 : 0;
+    if (state) cpu816_irq_set(ctx->cpu, IRQF_VIA);
+    else       cpu816_irq_clear(ctx->cpu, IRQF_VIA);
+}
+
+static uint8_t io_read_callback(uint16_t addr, void* userdata) {
+    sched_ctx_t* ctx = (sched_ctx_t*)userdata;
+    /* $0300-$030F : VIA 6522 (mirroir $0300-$03FF avec mask 0x0F). */
+    if (addr >= 0x0300 && addr <= 0x03FF) {
+        return via_read(ctx->via, (uint8_t)(addr & 0x0F));
+    }
+    return 0xFF;
+}
+
+static void io_write_callback(uint16_t addr, uint8_t value, void* userdata) {
+    sched_ctx_t* ctx = (sched_ctx_t*)userdata;
+    if (addr >= 0x0300 && addr <= 0x03FF) {
+        via_write(ctx->via, (uint8_t)(addr & 0x0F), value);
+    }
+}
+
+TEST(test_oricos_sprint2a_via_t1_timer_drives_scheduler) {
+    cpu65c816_t cpu;
+    memory_t mem;
+    via6522_t via;
+    sched_ctx_t ctx = { &cpu, &via, 0, 0 };
+
+    memory_init(&mem);
+    memory_alloc_bank(&mem, 1);
+    memory_alloc_bank(&mem, 2);
+    memory_alloc_bank(&mem, 3);
+
+    int rc = load_oricos_kernel(&mem);
+    if (rc == -1) {
+        printf("SKIP (kernel.bin absent ; cd ../OricOS && make)        ");
+        memory_cleanup(&mem);
+        return;
+    }
+    ASSERT_EQ(rc, 0);
+
+    install_reset_stub(&mem);
+    install_nmi_trampoline(&mem);
+    install_irq_trampoline(&mem);
+
+    via_init(&via);
+    via_reset(&via);
+    via_set_irq_callback(&via, via_irq_callback, &ctx);
+    memory_set_io_callbacks(&mem, io_read_callback, io_write_callback, &ctx);
+
+    cpu816_init(&cpu, &mem);
+    cpu816_reset(&cpu);
+
+    /* Sprint 2.a : autonomie complète, plus aucune injection IRQ
+     * manuelle. Le kernel configure VIA T1 (ACR/T1L/IER) puis CLI.
+     * VIA T1 fire IRQ tous les ~512 cycles, scheduler kernel ack via
+     * lecture T1C-L et bascule task. STP au tick #10 → ~5120 cycles. */
+    int safety = 200000;
+    int cycle_total = 0;
+    while (safety-- > 0 && !cpu.stopped) {
+        int c = cpu816_step(&cpu);
+        if (c < 0) {
+            printf("FAIL\n    step error at %02X:%04X (cycles=%d)\n",
+                   cpu.PBR, cpu.PC, cycle_total);
+            tests_failed++;
+            memory_cleanup(&mem);
+            return;
+        }
+        cycle_total += c;
+        via_update(&via, c);
+    }
+
+    if (!cpu.stopped) {
+        printf("FAIL\n    cpu not stopped after %d cycles. tick=%d "
+               "A_ctr=%d B_ctr=%d PBR:PC=%02X:%04X\n"
+               "    VIA debug: irq_callback_count=%d last_state=%d "
+               "ifr=%02X ier=%02X t1_counter=%04X t1_running=%d acr=%02X\n",
+               cycle_total,
+               (int)memory_read24(&mem, 0x015400),
+               (int)memory_read24(&mem, 0x015440),
+               (int)memory_read24(&mem, 0x015444),
+               cpu.PBR, cpu.PC,
+               ctx.irq_callback_count, ctx.last_irq_state,
+               (unsigned)via.ifr, (unsigned)via.ier,
+               (unsigned)via.t1_counter, (int)via.t1_running,
+               (unsigned)via.acr);
+        tests_failed++; memory_cleanup(&mem); return;
+    }
+
+    /* Vérifications */
+    ASSERT_EQ((int)memory_read24(&mem, 0x015400), 10);
+    int a = (int)memory_read24(&mem, 0x015440);
+    int b = (int)memory_read24(&mem, 0x015444);
+    if (a == 0) { printf("FAIL\n    task A counter = 0\n"); tests_failed++; memory_cleanup(&mem); return; }
+    if (b == 0) { printf("FAIL\n    task B counter = 0\n"); tests_failed++; memory_cleanup(&mem); return; }
+
+    ASSERT_TRUE(!cpu.E);
+    ASSERT_EQ((int)cpu.PBR, 0x01);
+
+    memory_cleanup(&mem);
+}
 
 TEST(test_oricos_sprint1c_irq_driven_scheduler) {
     cpu65c816_t cpu;
@@ -225,6 +339,7 @@ int main(void) {
     printf("═══════════════════════════════════════════════════════\n\n");
 
     RUN(test_oricos_sprint1c_irq_driven_scheduler);
+    RUN(test_oricos_sprint2a_via_t1_timer_drives_scheduler);
 
     printf("\n═══════════════════════════════════════════════════════\n");
     printf("  Results: %d passed, %d failed\n", tests_passed, tests_failed);

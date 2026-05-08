@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.22.5-alpha] - 2026-05-08
+
+### Oric 2 — OricOS Sprint 2.a : VIA T1 timer full-system
+
+#### Added
+- **Test full-system `test_oricos_sprint2a_via_t1_timer_drives_scheduler`** :
+  - Instancie un `via6522_t` réel.
+  - Hook `via_set_irq_callback` → `cpu816_irq_set/clear(IRQF_VIA)`.
+  - Routes I/O `$0300-$03FF` via `memory_set_io_callbacks` → `via_read/write`.
+  - Tick `via_update(via, cycles)` après chaque `cpu816_step`.
+- Le kernel OricOS configure VIA T1 dans son boot (ACR/T1CL/T1CH/IER)
+  et ack T1 dans son IRQ handler (lecture T1C-L). VIA T1 fire IRQ
+  toutes les 512 cycles, scheduler kernel bascule entre task A et
+  task B. STP au tick #10 atteint en ~5120 cycles d'émulation.
+- **Plus aucune injection IRQ manuelle** : autonomie complète du
+  scheduler driven by VIA timer.
+
+#### Notes
+- Sprint 1 est entièrement complet maintenant (kernel core préemptif
+  autonome, piloté par hardware timer réel).
+- 494 tests passent (était 493, +1 Sprint 2.a).
+- Aucune régression sur Klaus B1.5, boot dual B1.6, paravirt,
+  compositor, oric2 mem.
+- Sprint 2 reste à compléter : 2.b bank allocator, 2.c console,
+  2.d FAT32 SD.
+
 ## [1.22.4-alpha] - 2026-05-08
 
 ### Oric 2 — OricOS Sprint 1.c : IRQ-driven scheduler

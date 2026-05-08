@@ -1,12 +1,17 @@
 VERSION_TRACKING - Phosphoric
 =====================================
 
-Current Version: 1.22.4-alpha
+Current Version: 1.22.5-alpha
 Release Date: 2026-05-08
-Status: Alpha (OricOS Sprint 1.c IRQ-driven scheduler, 493 tests pass)
+Status: Alpha (OricOS Sprint 2.a — VIA T1 autonome, 494 tests pass)
 
 Version History:
 ----------------
+- 1.22.5-alpha (2026-05-08): OricOS Sprint 2.a — VIA T1 timer drives scheduler (494 tests, +1)
+  * Add: test full-system avec via6522 + I/O routing + tick autonome
+  * Kernel : setup VIA T1 (ACR/T1CL/T1CH/IER) en mode continuous IRQ
+  * Plus d'injection manuelle, scheduler piloté par hardware timer
+  * Sprint 1 entièrement complet
 - 1.22.4-alpha (2026-05-08): OricOS Sprint 1.c — IRQ-driven scheduler (493 tests, =)
   * Update: scheduler relocaté NMI → IRQ handler bank 1 $5600
   * Add: trampoline IRQ bank 0 $0140 + vecteur $00FFEE

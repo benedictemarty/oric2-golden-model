@@ -164,7 +164,8 @@ TEST_PARAVIRT_SRCS = tests/integration/test_paravirt_demo.c \
 TEST_ORICOS_BOOT_SRCS = tests/integration/test_oricos_boot.c \
                        src/cpu/cpu6502.c src/cpu/opcodes.c src/cpu/addressing.c \
                        src/cpu/cpu65c816.c src/cpu/cpu65c816_opcodes.c \
-                       src/memory/memory.c src/memory/banking.c src/utils/logging.c
+                       src/memory/memory.c src/memory/banking.c \
+                       src/io/via6522.c src/utils/logging.c
 
 TEST_MEM_SRCS = tests/unit/test_memory.c src/memory/memory.c \
                 src/memory/banking.c src/utils/logging.c
