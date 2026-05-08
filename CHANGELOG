@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.22.4-alpha] - 2026-05-08
+
+### Oric 2 — OricOS Sprint 1.c : IRQ-driven scheduler
+
+#### Added
+- **Trampoline IRQ bank 0 $0140** : `JML $015600` vers le kernel IRQ
+  handler (relocaté du segment NMI à IRQ).
+- **Vecteur IRQ mode N $00FFEE → $0140** installé par le test.
+- **`tests/integration/test_oricos_boot.c`** mis à jour pour Sprint 1.c :
+  pattern d'injection IRQ `set / step / clear` (mime un timer
+  VIA T1 level-triggered) au lieu d'NMI direct. Vérifie le scheduler
+  asynchrone par interruption matérielle.
+
+#### Notes
+- Sprint 1.c est volontairement focalisé sur le **path IRQ**.
+  Le branchement réel VIA T1 → `cpu816_irq_set` (test full-system
+  avec via6522) est reporté à Sprint 2 (drivers).
+- 493 tests passent (inchangé), aucune régression.
+- Klaus, boot dual, paravirt, compositor, oric2 mem, OricOS verts.
+
 ## [1.22.3-alpha] - 2026-05-08
 
 ### Oric 2 — OricOS Sprint 1.b + corrections stack mode N

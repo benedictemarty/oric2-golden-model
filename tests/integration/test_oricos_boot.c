@@ -69,21 +69,31 @@ static int load_oricos_kernel(memory_t* mem) {
 }
 
 /**
- * @brief Installe le trampoline NMI bank 0 $0130 et le vecteur natif
- *        $00FFEA → $0130. Le trampoline JML vers le NMI handler kernel
- *        en bank 1 $5500.
+ * @brief Installe le trampoline NMI bank 0 $0130 + vecteur natif $00FFEA.
  */
 static void install_nmi_trampoline(memory_t* mem) {
-    /* bank 0 $0130 : JML $015500 ($5C $00 $55 $01) */
+    /* bank 0 $0130 : JML $015500 (kernel NMI handler) */
     memory_write24(mem, 0x000130, 0x5C);
     memory_write24(mem, 0x000131, 0x00);
     memory_write24(mem, 0x000132, 0x55);
     memory_write24(mem, 0x000133, 0x01);
-    /* Vecteur NMI mode N $00FFEA → $0130 (bank 0).
-     * Note : les vecteurs natifs partagent le bank 0 $C000-$FFFF qui
-     * mappe sur mem.rom dans Phosphoric. On écrit donc directement. */
-    mem->rom[0x3FEA] = 0x30; /* low */
-    mem->rom[0x3FEB] = 0x01; /* high */
+    mem->rom[0x3FEA] = 0x30;
+    mem->rom[0x3FEB] = 0x01;
+}
+
+/**
+ * @brief Installe le trampoline IRQ bank 0 $0140 + vecteur natif $00FFEE.
+ *        Le trampoline JML vers le IRQ handler kernel en bank 1 $5600.
+ */
+static void install_irq_trampoline(memory_t* mem) {
+    /* bank 0 $0140 : JML $015600 (kernel IRQ handler) */
+    memory_write24(mem, 0x000140, 0x5C);
+    memory_write24(mem, 0x000141, 0x00);
+    memory_write24(mem, 0x000142, 0x56);
+    memory_write24(mem, 0x000143, 0x01);
+    /* Vecteur IRQ mode N $00FFEE → $0140 */
+    mem->rom[0x3FEE] = 0x40;
+    mem->rom[0x3FEF] = 0x01;
 }
 
 /**
@@ -106,7 +116,7 @@ static void install_reset_stub(memory_t* mem) {
 
 /* ─── Tests ─────────────────────────────────────────────────────────── */
 
-TEST(test_oricos_sprint1b_scheduler_round_robin) {
+TEST(test_oricos_sprint1c_irq_driven_scheduler) {
     cpu65c816_t cpu;
     memory_t mem;
     memory_init(&mem);
@@ -123,22 +133,43 @@ TEST(test_oricos_sprint1b_scheduler_round_robin) {
     ASSERT_EQ(rc, 0);
 
     install_reset_stub(&mem);
-    install_nmi_trampoline(&mem);
+    install_nmi_trampoline(&mem);   /* NMI placeholder en kernel */
+    install_irq_trampoline(&mem);   /* IRQ → scheduler */
 
     cpu816_init(&cpu, &mem);
     cpu816_reset(&cpu);
 
-    /* Boucle : injection NMI périodique (~50 cycles) jusqu'à STP.
-     * Le kernel STP après TICK_GOAL=10 NMI traités. */
-    int nmi_injected = 0;
+    /* Sprint 1.c : injection IRQ (level-triggered) avec pattern
+     * set/step/clear pour mimer un timer (VIA T1) :
+     *   1. cpu816_irq_set(IRQF_VIA)
+     *   2. cpu816_step → CPU prend l'IRQ, set I=1, jump trampoline
+     *   3. cpu816_irq_clear → ack comme si on avait lu un registre VIA
+     *   4. handler tourne normalement, RTI → reprise tâche
+     *
+     * Le kernel STP après TICK_GOAL=10 IRQ traités. */
+    int irq_injected = 0;
     int safety = 200000;
     int last_inject = 0;
     int cycle_total = 0;
-    /* Le NMI étant non-maskable, on attend que le kernel ait fini son
-     * init avant d'injecter (sinon on réveille un scheduler sur des
-     * descripteurs non initialisés). Boot ~1000 cycles. */
     const int BOOT_GRACE_CYCLES = 1000;
     while (safety-- > 0 && !cpu.stopped) {
+        /* Inject : pattern set/step/clear */
+        if (irq_injected < 12
+            && cycle_total >= BOOT_GRACE_CYCLES
+            && (cycle_total - last_inject) >= 200) {
+            cpu816_irq_set(&cpu, IRQF_VIA);
+            int c1 = cpu816_step(&cpu);  /* prend l'IRQ */
+            if (c1 < 0) {
+                printf("FAIL\n    step (IRQ entry) error at %02X:%04X\n",
+                       cpu.PBR, cpu.PC);
+                tests_failed++; memory_cleanup(&mem); return;
+            }
+            cycle_total += c1;
+            cpu816_irq_clear(&cpu, IRQF_VIA);
+            irq_injected++;
+            last_inject = cycle_total;
+        }
+        if (cpu.stopped) break;
         int c = cpu816_step(&cpu);
         if (c < 0) {
             printf("FAIL\n    step error at %02X:%04X (cycles=%d)\n",
@@ -148,18 +179,11 @@ TEST(test_oricos_sprint1b_scheduler_round_robin) {
             return;
         }
         cycle_total += c;
-        if (cycle_total < BOOT_GRACE_CYCLES) continue;
-        /* Inject 1 NMI tous les ~200 cycles après la grâce de boot. */
-        if (nmi_injected < 12 && (cycle_total - last_inject) >= 200) {
-            cpu816_nmi(&cpu);
-            nmi_injected++;
-            last_inject = cycle_total;
-        }
     }
     if (!cpu.stopped) {
-        printf("FAIL\n    cpu not stopped after %d cycles. NMI inj=%d, "
+        printf("FAIL\n    cpu not stopped after %d cycles. IRQ inj=%d, "
                "tick=%d, A_ctr=%d, B_ctr=%d, PBR:PC=%02X:%04X\n",
-               cycle_total, nmi_injected,
+               cycle_total, irq_injected,
                (int)memory_read24(&mem, 0x015400),
                (int)memory_read24(&mem, 0x015440),
                (int)memory_read24(&mem, 0x015444),
@@ -200,7 +224,7 @@ int main(void) {
     printf("  OricOS Sprint 1.a boot + NMI test (--machine oric2)\n");
     printf("═══════════════════════════════════════════════════════\n\n");
 
-    RUN(test_oricos_sprint1b_scheduler_round_robin);
+    RUN(test_oricos_sprint1c_irq_driven_scheduler);
 
     printf("\n═══════════════════════════════════════════════════════\n");
     printf("  Results: %d passed, %d failed\n", tests_passed, tests_failed);
