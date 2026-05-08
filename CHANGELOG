@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - 2026-05-08
 
+### CI — test visuel golden frame OricOS (PH-CI-visual)
+
+#### Added
+- **`tests/integration/test_oricos_visual.c`** : nouveau test
+  d'intégration qui :
+  - Boot le kernel OricOS jusqu'à STP.
+  - Render le framebuffer via `video_render_frame(vid, mem.ram)`.
+  - Compare pixel-par-pixel à `tests/golden/oricos_boot.ppm`.
+  - FAIL au premier offset divergent avec coords (x, y, channel).
+- **`tests/golden/oricos_boot.ppm`** : golden frame 240×224 RGB888 PPM
+  générée via `oric1-emu --kernel ../OricOS/build/kernel.bin
+  --screenshot-at 80000:tests/golden/oricos_boot.ppm`.
+- **`make test-oricos-visual`** target.
+- Test gated : SKIP si `kernel.bin` ou golden absent.
+
+#### Why
+Prévient les bugs render qui passent à travers les tests basés sur
+dump mémoire. Cas H4 (2026-05-08) : la fonte char manquante en RAM
+($B400-$B7FF) causait un écran noir, mais les bytes ASCII en VRAM
+($BB80+) étaient corrects → tous les ASSERT passaient. 494 tests OK
+mais démo SDL2 noire.
+
+#### Validation
+- Test PASS sur frame golden actuelle.
+- Test FAIL détecté quand 1 byte du golden est corrompu (vérification
+  empirique).
+- 501 tests OK (500 → +1).
+
+---
+
+## [Unreleased] - 2026-05-08
+
 ### Debugger — extension 65C816 (PH-debug816)
 
 #### Added
