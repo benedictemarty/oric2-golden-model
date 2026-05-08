@@ -129,6 +129,30 @@ static void install_trampolines(memory_t* mem) {
 
 /* ─── Test ─────────────────────────────────────────────────────────── */
 
+/* Crée une image SD FAT32 minimale : un boot sector avec la signature
+ * "FAT32   " à offset $52. Reste rempli de zéros. Total 1 bloc. */
+static int create_fat32_test_image(const char* path) {
+    FILE* f = fopen(path, "wb");
+    if (!f) return -1;
+    uint8_t boot[SD_BLOCK_SIZE];
+    memset(boot, 0, SD_BLOCK_SIZE);
+    /* Champs FAT32 minimum (juste pour passage signature ; les autres
+     * sont 0 et seront utilisés par les Sprints 2.j.3+). */
+    boot[0x0B] = 0x00; boot[0x0C] = 0x02; /* bytes_per_sector = 512 LE */
+    boot[0x0D] = 0x01;                     /* sectors_per_cluster = 1 */
+    boot[0x0E] = 0x20; boot[0x0F] = 0x00; /* reserved sectors = 32 LE */
+    boot[0x10] = 0x02;                     /* num_fats = 2 */
+    /* sectors_per_fat (FAT32) à offset $24 */
+    boot[0x24] = 0x40; boot[0x25] = 0x00; boot[0x26] = 0x00; boot[0x27] = 0x00;
+    /* root_cluster (FAT32) à offset $2C */
+    boot[0x2C] = 0x02; boot[0x2D] = 0x00; boot[0x2E] = 0x00; boot[0x2F] = 0x00;
+    /* Signature "FAT32   " à offset $52 (8 bytes, espace-padded) */
+    memcpy(&boot[0x52], "FAT32   ", 8);
+    fwrite(boot, 1, SD_BLOCK_SIZE, f);
+    fclose(f);
+    return 0;
+}
+
 TEST(test_oricos_sd_read_block_via_kernel_boot) {
     /* Crée image SD test : pattern A..Z répété sur 512 octets. */
     FILE* fimg = fopen(SD_TEST_IMAGE, "wb");
@@ -216,6 +240,79 @@ TEST(test_oricos_sd_read_block_via_kernel_boot) {
         }
     }
 
+    /* Sprint 2.j.2 : kernel_fat_init a aussi été appelé (boot kernel).
+     * Image pattern A..Z n'a PAS la signature "FAT32" → init doit
+     * retourner $01 (BAD). Stocké à FS_INIT_RESULT = $016160. */
+    ASSERT_EQ((int)memory_read24(&mem, 0x016160), 0x01);
+
+    sd_close(&sd);
+    memory_cleanup(&mem);
+}
+
+/* Test 2 : image FAT32 minimale, kernel_fat_init doit retourner OK. */
+TEST(test_oricos_fat_init_validates_fat32_signature) {
+    const char* fat_path = "/tmp/oricos_fat32_test.bin";
+    if (create_fat32_test_image(fat_path) < 0) {
+        printf("FAIL\n    cannot create %s\n", fat_path);
+        tests_failed++;
+        return;
+    }
+
+    cpu65c816_t cpu;
+    memory_t mem;
+    via6522_t via;
+    sd_device_t sd;
+    ctx_t ctx = { &cpu, &via, &sd };
+
+    memory_init(&mem);
+    memory_alloc_bank(&mem, 1);
+    memory_alloc_bank(&mem, 2);
+    memory_alloc_bank(&mem, 3);
+
+    int rc = load_oricos_kernel(&mem);
+    if (rc == -1) {
+        printf("SKIP (kernel.bin absent)                              ");
+        memory_cleanup(&mem);
+        return;
+    }
+    ASSERT_EQ(rc, 0);
+
+    install_trampolines(&mem);
+    via_init(&via);
+    via_reset(&via);
+    via_set_irq_callback(&via, via_irq_callback, &ctx);
+    sd_init(&sd);
+    if (!sd_load_image(&sd, fat_path)) {
+        printf("FAIL\n    sd_load_image(%s) failed\n", fat_path);
+        tests_failed++;
+        memory_cleanup(&mem);
+        return;
+    }
+    memory_set_io_callbacks(&mem, io_read_callback, io_write_callback, &ctx);
+    cpu816_init(&cpu, &mem);
+    cpu816_reset(&cpu);
+
+    int safety = 500000;
+    while (safety-- > 0 && !cpu.stopped) {
+        int c = cpu816_step(&cpu);
+        if (c < 0) { tests_failed++; sd_close(&sd); memory_cleanup(&mem); return; }
+        via_update(&via, c);
+    }
+    if (!cpu.stopped) {
+        printf("FAIL\n    cpu not stopped\n");
+        tests_failed++; sd_close(&sd); memory_cleanup(&mem); return;
+    }
+
+    /* Boot sector lu dans FS_BUFFER ($015F60) — ASSERT signature présente. */
+    ASSERT_EQ((int)memory_read24(&mem, 0x015F60u + 0x52), 'F');
+    ASSERT_EQ((int)memory_read24(&mem, 0x015F60u + 0x53), 'A');
+    ASSERT_EQ((int)memory_read24(&mem, 0x015F60u + 0x54), 'T');
+    ASSERT_EQ((int)memory_read24(&mem, 0x015F60u + 0x55), '3');
+    ASSERT_EQ((int)memory_read24(&mem, 0x015F60u + 0x56), '2');
+
+    /* FS_INIT_RESULT = $016160 doit être 0 (OK). */
+    ASSERT_EQ((int)memory_read24(&mem, 0x016160), 0x00);
+
     sd_close(&sd);
     memory_cleanup(&mem);
 }
@@ -227,6 +324,7 @@ int main(void) {
     printf("═══════════════════════════════════════════════════════\n\n");
 
     RUN(test_oricos_sd_read_block_via_kernel_boot);
+    RUN(test_oricos_fat_init_validates_fat32_signature);
 
     printf("\n═══════════════════════════════════════════════════════\n");
     printf("  Results: %d passed, %d failed\n", tests_passed, tests_failed);

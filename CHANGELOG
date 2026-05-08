@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - 2026-05-08
 
+### Test — OricOS Sprint 2.j.2 fat_init signature FAT32
+
+- `tests/integration/test_oricos_sd.c` étendu avec `create_fat32_test_image`
+  (image SD avec boot sector FAT32 minimal : champs BPS=512, SPC=1,
+  reserved=32, num_fats=2, sectors_per_fat=64, root_cluster=2,
+  signature "FAT32   " à offset $52).
+- 2 tests fonctionnels : sd_read_block (image pattern A..Z) + fat_init
+  (image FAT32). 503 tests OK (+1 nouveau).
+
 ### Test — OricOS Sprint 2.j.1 driver SD fonctionnel
 
 #### Added
