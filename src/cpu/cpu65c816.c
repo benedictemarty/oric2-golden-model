@@ -79,9 +79,16 @@ void cpu816_reset(cpu65c816_t* cpu) {
  *   IRQ : $FFFE / $FFFF (partagé avec BRK, le bit B distingue)
  */
 static void handle_irq_or_nmi(cpu65c816_t* cpu, uint16_t vector) {
+    /* Mode natif : push PB en plus de PC et P (cf. WDC W65C816S §6).
+     * Le handler vit en bank 0 (PBR forcé à 0 par le hardware). */
+    if (!cpu->E) {
+        cpu816_push(cpu, cpu->PBR);
+        cpu->PBR = 0;
+    }
     cpu816_push_word(cpu, cpu->PC);
     cpu816_push(cpu, (uint8_t)((cpu->P & ~FLAG_BREAK) | FLAG_UNUSED));
     cpu->P |= FLAG_INTERRUPT;
+    if (!cpu->E) cpu->P &= (uint8_t)~FLAG_DECIMAL; /* mode N : D=0 sur interrupt */
     uint8_t lo = cpu816_mem_read(cpu, vector);
     uint8_t hi = cpu816_mem_read(cpu, (uint16_t)(vector + 1));
     cpu->PC = (uint16_t)(lo | (hi << 8));
@@ -100,15 +107,20 @@ int cpu816_step(cpu65c816_t* cpu) {
         return 2; /* Cycles bidons pour avancer le temps. */
     }
 
-    /* NMI prioritaire ; IRQ ignoré si I=1 (level-triggered). */
+    /* NMI prioritaire ; IRQ ignoré si I=1 (level-triggered).
+     * Vecteurs : mode E utilise $FFFA (NMI) / $FFFE (IRQ),
+     *            mode N utilise $FFEA (NMI) / $FFEE (IRQ).
+     * cf. WDC W65C816S datasheet §6. */
     if (cpu->nmi_pending) {
-        handle_irq_or_nmi(cpu, 0xFFFA);
+        uint16_t vec = cpu->E ? 0xFFFA : 0xFFEA;
+        handle_irq_or_nmi(cpu, vec);
         cpu->nmi_pending = false;
         cpu->cycles += 7;
         return 7;
     }
     if (cpu->irq != 0 && (cpu->P & FLAG_INTERRUPT) == 0) {
-        handle_irq_or_nmi(cpu, 0xFFFE);
+        uint16_t vec = cpu->E ? 0xFFFE : 0xFFEE;
+        handle_irq_or_nmi(cpu, vec);
         cpu->cycles += 7;
         return 7;
     }

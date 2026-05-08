@@ -1002,10 +1002,11 @@ int cpu816_execute_opcode_e(cpu65c816_t* cpu, uint8_t opcode) {
         cpu->PC = (uint16_t)(cpu816_pull_word(cpu) + 1);
         break;
 
-    /* ─── RTI ─── */
+    /* ─── RTI ─── (mode N pulls PBR en plus, cf. WDC datasheet) */
     case 0x40:
         cpu->P = (uint8_t)((cpu816_pull(cpu) & ~FLAG_BREAK) | FLAG_UNUSED);
         cpu->PC = cpu816_pull_word(cpu);
+        if (!cpu->E) cpu->PBR = cpu816_pull(cpu);
         break;
 
     /* ─── B1.7c — BRA / BRL : branches inconditionnelles 65C816 ─── */
@@ -1023,9 +1024,14 @@ int cpu816_execute_opcode_e(cpu65c816_t* cpu, uint8_t opcode) {
         break;
     }
 
-    /* ─── B1.7c — COP : software interrupt (BRK-like, vecteur dédié) ─── */
+    /* ─── B1.7c — COP : software interrupt (BRK-like, vecteur dédié)
+     *     Mode N : push PBR + clear PBR (handler en bank 0). */
     case 0x02: {
         cpu->PC = (uint16_t)(cpu->PC + 1); /* COP suivi d'un signature byte */
+        if (!cpu->E) {
+            cpu816_push(cpu, cpu->PBR);
+            cpu->PBR = 0;
+        }
         cpu816_push_word(cpu, cpu->PC);
         cpu816_push(cpu, (uint8_t)((cpu->P & ~FLAG_BREAK) | FLAG_UNUSED));
         setf(cpu, FLAG_INTERRUPT, true);
@@ -1057,13 +1063,22 @@ int cpu816_execute_opcode_e(cpu65c816_t* cpu, uint8_t opcode) {
     case 0x74: if (cpu->E) { (void)cpu816_fetch_byte(cpu); break; }
                write_M(cpu, addr816_zp_x(cpu), 0); extra += M_extra_cycle(cpu); break;
 
-    /* ─── BRK ─── */
+    /* ─── BRK ─── (mode N push PBR + clear PBR, vecteur $00FFE6 ; mode E vecteur $FFFE) */
     case 0x00:
         cpu->PC = (uint16_t)(cpu->PC + 1); /* BRK est suivi d'un signature byte */
+        if (!cpu->E) {
+            cpu816_push(cpu, cpu->PBR);
+            cpu->PBR = 0;
+        }
         cpu816_push_word(cpu, cpu->PC);
         cpu816_push(cpu, (uint8_t)(cpu->P | FLAG_BREAK | FLAG_UNUSED));
         setf(cpu, FLAG_INTERRUPT, true);
-        cpu->PC = (uint16_t)(cpu816_mem_read(cpu, 0xFFFE) | (cpu816_mem_read(cpu, 0xFFFF) << 8));
+        if (!cpu->E) setf(cpu, FLAG_DECIMAL, false);
+        {
+            uint16_t brk_vec = cpu->E ? 0xFFFE : 0xFFE6;
+            cpu->PC = (uint16_t)(cpu816_mem_read(cpu, brk_vec)
+                                | (cpu816_mem_read(cpu, (uint16_t)(brk_vec + 1)) << 8));
+        }
         break;
 
     /* ─── Flag instructions (déjà testées en B1.3) ─── */

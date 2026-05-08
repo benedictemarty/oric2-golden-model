@@ -5,6 +5,39 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.22.2-alpha] - 2026-05-08
+
+### Oric 2 — OricOS Sprint 1.a + corrections natives interrupts
+
+#### Fixed (interrupts mode N — corrections compat WDC)
+- **`handle_irq_or_nmi`** (`cpu65c816.c`) : en mode N, push PBR avant
+  PC+P et **clear PBR à 0** (les handlers vivent en bank 0). Force
+  aussi D=0 sur entrée d'interrupt (datasheet WDC §6).
+- Sélection vecteur correcte : NMI mode N = $FFEA (avant : $FFFA),
+  IRQ mode N = $FFEE (avant : $FFFE). Mode E reste $FFFA / $FFFE.
+- **RTI `$40`** : en mode N, pull PBR en plus de PC+P.
+- **BRK `$00`** : en mode N, push PBR + clear PBR + use vecteur $FFE6
+  (au lieu de $FFFE en mode E). Force D=0.
+- **COP `$02`** : en mode N, push PBR + clear PBR.
+
+Sans ces corrections, le retour d'interrupt ne restaure pas le PBR
+et le handler tourne dans le mauvais bank. Les tests B1.5 (Klaus) et
+B1.6 (boot dual) restent verts car ils n'utilisent que le mode E.
+
+#### Added
+- **`tests/integration/test_oricos_boot.c`** mis à jour pour Sprint 1.a :
+  charge OricOS v0.2, installe trampoline NMI bank 0 $0130 (JML $015500)
+  et vecteur natif $00FFEA → $0130, injecte 5 NMI et vérifie le tick
+  counter == 5 en bank 1 $015400.
+- Démontre le routage complet bank 0 → bank 1 mode N pour NMI :
+  test inject → vector $00FFEA fetched → trampoline $0130 →
+  JML $015500 → kernel_nmi_handler → RTI → main_loop → STP.
+
+#### Notes
+- 493 tests passent (inchangé), aucune régression.
+- Toutes les suites (Klaus, boot dual, paravirt, oric2 mem, compositor,
+  oricos boot) restent vertes.
+
 ## [1.22.1-alpha] - 2026-05-08
 
 ### Oric 2 — Premier test d'intégration OricOS

@@ -1,12 +1,16 @@
 VERSION_TRACKING - Phosphoric
 =====================================
 
-Current Version: 1.22.1-alpha
+Current Version: 1.22.2-alpha
 Release Date: 2026-05-08
-Status: Alpha (Oric 2 + OricOS Sprint 0 boot integré, 493 tests pass)
+Status: Alpha (Oric 2 + OricOS Sprint 1.a NMI handler, 493 tests pass)
 
 Version History:
 ----------------
+- 1.22.2-alpha (2026-05-08): OricOS Sprint 1.a + interrupts natives (493 tests, =)
+  * Fix: handle_irq_or_nmi/RTI/BRK/COP push/pull PBR en mode N
+  * Fix: vecteurs NMI/IRQ corrects $FFEA/$FFEE en mode N (vs $FFFA/$FFFE en E)
+  * Update: test_oricos_boot pour Sprint 1.a (NMI handler bank 1 + 5 ticks)
 - 1.22.1-alpha (2026-05-08): OricOS Sprint 0 boot test (493 tests, +1)
   * Add: test_oricos_boot — charge kernel.bin OricOS, vérifie sentinel
   * Validation end-to-end : OricOS → Phosphoric --machine oric2

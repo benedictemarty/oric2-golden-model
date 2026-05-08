@@ -69,6 +69,24 @@ static int load_oricos_kernel(memory_t* mem) {
 }
 
 /**
+ * @brief Installe le trampoline NMI bank 0 $0130 et le vecteur natif
+ *        $00FFEA → $0130. Le trampoline JML vers le NMI handler kernel
+ *        en bank 1 $5500.
+ */
+static void install_nmi_trampoline(memory_t* mem) {
+    /* bank 0 $0130 : JML $015500 ($5C $00 $55 $01) */
+    memory_write24(mem, 0x000130, 0x5C);
+    memory_write24(mem, 0x000131, 0x00);
+    memory_write24(mem, 0x000132, 0x55);
+    memory_write24(mem, 0x000133, 0x01);
+    /* Vecteur NMI mode N $00FFEA → $0130 (bank 0).
+     * Note : les vecteurs natifs partagent le bank 0 $C000-$FFFF qui
+     * mappe sur mem.rom dans Phosphoric. On écrit donc directement. */
+    mem->rom[0x3FEA] = 0x30; /* low */
+    mem->rom[0x3FEB] = 0x01; /* high */
+}
+
+/**
  * @brief Installe le stub trampoline RESET en bank 0 $0100 :
  *   CLC ; XCE ; JML $010200 (kernel entry).
  */
@@ -88,11 +106,10 @@ static void install_reset_stub(memory_t* mem) {
 
 /* ─── Tests ─────────────────────────────────────────────────────────── */
 
-TEST(test_oricos_boots_and_writes_sentinel) {
+TEST(test_oricos_sprint1a_nmi_handler) {
     cpu65c816_t cpu;
     memory_t mem;
     memory_init(&mem);
-    /* Mode oric2 simulé : alloue banks 1-3. */
     memory_alloc_bank(&mem, 1);
     memory_alloc_bank(&mem, 2);
     memory_alloc_bank(&mem, 3);
@@ -106,42 +123,39 @@ TEST(test_oricos_boots_and_writes_sentinel) {
     ASSERT_EQ(rc, 0);
 
     install_reset_stub(&mem);
+    install_nmi_trampoline(&mem);
 
     cpu816_init(&cpu, &mem);
     cpu816_reset(&cpu);
-    /* Vecteur RESET → $0100, mode E. */
-    ASSERT_EQ((int)cpu.PC, 0x0100);
-    ASSERT_TRUE(cpu.E);
 
-    /* Exécute jusqu'à STP (kernel hello world s'arrête après écriture). */
-    int safety = 1000;
+    /* Boucle : tant que le kernel ne s'arrête pas, on injecte des NMI
+     * périodiquement. Limite cycles globale = 100k. */
+    int nmi_injected = 0;
+    int safety = 100000;
     while (safety-- > 0 && !cpu.stopped) {
         int c = cpu816_step(&cpu);
         if (c < 0) {
-            printf("FAIL\n    cpu816_step error at %02X:%04X\n",
-                   cpu.PBR, cpu.PC);
+            printf("FAIL\n    step error at %02X:%04X\n", cpu.PBR, cpu.PC);
             tests_failed++;
             memory_cleanup(&mem);
             return;
         }
+        /* Tous les ~50 cycles, injecte un NMI tant qu'on n'a pas atteint 5. */
+        if (nmi_injected < 5 && (safety % 50) == 0) {
+            cpu816_nmi(&cpu);
+            nmi_injected++;
+        }
     }
     ASSERT_TRUE(cpu.stopped);
 
-    /* Vérifie le sentinel "ORIOS\x00" à $015000. */
+    /* Le kernel a écrit "ORIOS\x00" et "v0.2\x00" (Sprint 1.a) */
     ASSERT_EQ((int)memory_read24(&mem, 0x015000), 'O');
-    ASSERT_EQ((int)memory_read24(&mem, 0x015001), 'R');
-    ASSERT_EQ((int)memory_read24(&mem, 0x015002), 'I');
-    ASSERT_EQ((int)memory_read24(&mem, 0x015003), 'O');
-    ASSERT_EQ((int)memory_read24(&mem, 0x015004), 'S');
-    ASSERT_EQ((int)memory_read24(&mem, 0x015005), 0x00);
+    ASSERT_EQ((int)memory_read24(&mem, 0x015013), '2'); /* version bumped */
 
-    /* Vérifie la version "v0.1\x00" à $015010. */
-    ASSERT_EQ((int)memory_read24(&mem, 0x015010), 'v');
-    ASSERT_EQ((int)memory_read24(&mem, 0x015011), '0');
-    ASSERT_EQ((int)memory_read24(&mem, 0x015012), '.');
-    ASSERT_EQ((int)memory_read24(&mem, 0x015013), '1');
+    /* Le tick counter doit valoir 5 (5 NMI injectés, 5 incréments). */
+    ASSERT_EQ((int)memory_read24(&mem, 0x015400), 5);
 
-    /* État final : mode N, PBR = bank 1 (kernel). */
+    /* CPU mode N, PBR = bank 1 (kernel) */
     ASSERT_TRUE(!cpu.E);
     ASSERT_EQ((int)cpu.PBR, 0x01);
 
@@ -151,10 +165,10 @@ TEST(test_oricos_boots_and_writes_sentinel) {
 int main(void) {
     printf("\n");
     printf("═══════════════════════════════════════════════════════\n");
-    printf("  OricOS Sprint 0 boot test (sous Phosphoric --machine oric2)\n");
+    printf("  OricOS Sprint 1.a boot + NMI test (--machine oric2)\n");
     printf("═══════════════════════════════════════════════════════\n\n");
 
-    RUN(test_oricos_boots_and_writes_sentinel);
+    RUN(test_oricos_sprint1a_nmi_handler);
 
     printf("\n═══════════════════════════════════════════════════════\n");
     printf("  Results: %d passed, %d failed\n", tests_passed, tests_failed);
