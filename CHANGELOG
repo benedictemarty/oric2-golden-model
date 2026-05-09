@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - 2026-05-09
 
+### Test — OricOS Sprint 3.c v0.1 + PPM dump XVGA ✨
+
+- `tests/integration/test_oricos_window.c` étendu : ajoute export
+  PPM XVGA 1024×768×16-color après ASSERTs.
+- Helper `export_xvga_ppm(vram, base, path)` :
+  - Itère 1024×768 pixels via `read_pixel_4bpp`.
+  - Mappe color 0..15 vers RGB via palette VGA-IBM (cf. ADR-20).
+  - Écrit PPM P6 binary 2.36 MB.
+- Path : `/tmp/oricos_window_xvga.ppm`.
+- Permet **visualisation directe** de la fenêtre OricOS dessinée par
+  le pipeline GPU complet, en attendant l'intégration SDL2 main loop.
+- 540 tests OK.
+
 ### Test — OricOS Sprint 3.c v0.1 window manager ✨
 
 - `tests/integration/test_oricos_window.c` : valide

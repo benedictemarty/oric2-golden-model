@@ -131,6 +131,46 @@ static int read_pixel_4bpp(vram_device_t* vram, uint32_t base, int x, int y) {
     return (int)((b >> 4) & 0x0F);          /* pixel gauche */
 }
 
+/* Palette VGA-IBM 16 couleurs (cf. ADR-20). */
+static const uint8_t vga_palette_rgb[16][3] = {
+    {  0,   0,   0}, /*  0 black     */
+    {  0,   0, 170}, /*  1 blue      */
+    {  0, 170,   0}, /*  2 green     */
+    {  0, 170, 170}, /*  3 cyan      */
+    {170,   0,   0}, /*  4 red       */
+    {170,   0, 170}, /*  5 magenta   */
+    {170,  85,   0}, /*  6 brown     */
+    {170, 170, 170}, /*  7 lightgray */
+    { 85,  85,  85}, /*  8 darkgray  */
+    { 85,  85, 255}, /*  9 lightblue */
+    { 85, 255,  85}, /* 10 lightgreen */
+    { 85, 255, 255}, /* 11 lightcyan */
+    {255,  85,  85}, /* 12 lightred  */
+    {255,  85, 255}, /* 13 lightmagenta */
+    {255, 255,  85}, /* 14 yellow    */
+    {255, 255, 255}, /* 15 white     */
+};
+
+/* Export framebuffer XVGA 1024×768×4bpp depuis SDRAM[base] vers PPM P6.
+ * Image rendue avec palette VGA-IBM (ADR-20). Permet visualisation
+ * directe de ce qu'OricOS a dessiné (la "vraie" démo, pas seulement
+ * les ASSERTs byte par byte). */
+static int export_xvga_ppm(vram_device_t* vram, uint32_t base, const char* path) {
+    FILE* f = fopen(path, "wb");
+    if (!f) return -1;
+    fprintf(f, "P6\n1024 768\n255\n");
+    for (int y = 0; y < 768; y++) {
+        for (int x = 0; x < 1024; x++) {
+            int color = read_pixel_4bpp(vram, base, x, y) & 0x0F;
+            if (fwrite(vga_palette_rgb[color], 1, 3, f) != 3) {
+                fclose(f); return -1;
+            }
+        }
+    }
+    fclose(f);
+    return 0;
+}
+
 /* ─── Test ─────────────────────────────────────────────────────────── */
 
 TEST(test_oricos_window_draw) {
@@ -213,6 +253,14 @@ TEST(test_oricos_window_draw) {
 
     /* GPU sans erreur. */
     ASSERT_EQ(gpu.err, 0);
+
+    /* ─ Export PPM pour visualisation : 1024×768 16-color VGA ─ */
+    const char* ppm_path = "/tmp/oricos_window_xvga.ppm";
+    int rc_ppm = export_xvga_ppm(&vram, base, ppm_path);
+    if (rc_ppm == 0) {
+        printf("\n  → PPM 1024x768 16-color VGA exporté : %s\n", ppm_path);
+        printf("    Ouvre avec : feh, eog, gimp, viewnior, display, etc.\n");
+    }
 
     gpu_cleanup(&gpu);
     vram_cleanup(&vram);
