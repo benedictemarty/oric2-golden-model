@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - 2026-05-09
 
+### Test — OricOS Sprint GPU-3 kernel API gfx_* ✨
+
+- `tests/integration/test_oricos_gpu.c` : valide `kernel_gfx_clear`
+  + `kernel_gfx_fill_rect` via boot kernel (CLEAR 32 KiB blue +
+  FILL_RECT 8×4 white).
+- io_callback étendu : ajoute routing $0340-$034F (GPU device) en plus
+  de VIA, SD, VRAM.
+- ASSERTs post-STP :
+  - 32 KiB SDRAM[$004000..$00BFFF] = pattern $44 (blue color 4).
+  - Rect 4 coins (x=4, y=2, w=8, h=4) = $FF (white color 15).
+  - Hors rect frontières = $44 (avant/après/dessus/dessous).
+- Makefile target `test-oricos-gpu` ajouté à `make tests`.
+- 534 tests OK (533 → 534, +1).
+
 ### Sprint GPU-1 — gpu_device v0.1 (CLEAR + FILL_RECT) ✨
 
 #### Added
