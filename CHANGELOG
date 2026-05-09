@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - 2026-05-09
 
+### Phase 0 programme état-de-l'art — décisions architecture Phosphoric
+
+#### Ratified
+- **ADR-18** Retrait du 6502 dans Phosphoric : retrait net post-validation (DEC-1 actée).
+  - Modalité : pas de flag `LEGACY_6502`, suppression effective post-validation.
+  - Critère go/no-go bloquant : 541 tests verts à `CPU_KIND_65C816` par défaut + bench ≤ 5 % + boot interactif ROM 1.0/1.1.
+  - Plan d'exécution Phase 1 (4 étapes PH-2.a..d) :
+    - 1.A : décrochage types partagés (`memory_t`, `cpu_irq_source_t`, `cpu_flags_t`, `IRQF_*`) vers `include/cpu/cpu_types.h` neutre.
+    - 1.B : campagne validation 65C816 mode E (bascule défaut, migration `test_klaus_dormann.c`, `test_oric_boot_dual.c`, `test_paravirt_demo.c`, audit shifts/rotations zp/abs M=0).
+    - 1.C : suppression `src/cpu/cpu6502.c`, `opcodes.c`, `addressing.c`, `include/cpu/cpu6502.h`, `cpu_core_vtable_6502`, `CPU_KIND_6502`, `tests/unit/test_cpu.c`, réécriture `test_cpu_core.c` → `test_cpu816_core.c`.
+    - 1.D : traçage CHANGELOG, BACKLOG, MADR.
+  - Impact estimé : ~2 K LOC supprimées, surface maintenance ÷ ~2.
+
+#### Cible CI Phase 2
+- GitHub Actions matrix Linux + macOS + Windows MSYS2.
+- Sanitizers (ASan/UBSan) + coverage gcovr ≥ 80 % + fuzzing AFL++ sur `cpu65c816_step`.
+- Pre-commit hooks clang-format, clang-tidy.
+- Repo source : `github.com:benedictemarty/oric2-golden-model.git` (origin) + mirror Gitea.
+
+#### Documentation
+- Cf. `../docs/adr/0018-retrait-6502.md` et `../CLAUDE.md` §2.
+
+#### Aucun changement de code en Phase 0
+- Pas de modification de `src/` ni de `tests/`. 541 tests OK conservés.
+- Modifications Phosphoric Phase 0 limitées à ce CHANGELOG.
+
+---
+
 ### Test — OricOS Sprint 3.c v0.4 démo 3e fenêtre ✨
 
 - `tests/integration/test_oricos_window.c` étendu : 6 ASSERTs pour
