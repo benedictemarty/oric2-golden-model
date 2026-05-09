@@ -245,11 +245,29 @@ TEST(test_oricos_window_draw) {
     ASSERT_EQ(read_pixel_4bpp(&vram, base, 30, 18),  7);  /* début body (juste sous titlebar) */
     ASSERT_EQ(read_pixel_4bpp(&vram, base, 90, 60),  7);  /* fin body (avant frame bot) */
 
-    /* ── Hors fenêtre : color 0 (black) du CLEAR initial ── */
+    /* ── Hors fenêtre 1 : color 0 (black) du CLEAR initial ── */
     ASSERT_EQ(read_pixel_4bpp(&vram, base, 10, 10),  0);  /* à gauche fenêtre */
     ASSERT_EQ(read_pixel_4bpp(&vram, base, 100, 10), 0);  /* à droite fenêtre */
     ASSERT_EQ(read_pixel_4bpp(&vram, base, 50, 5),   0);  /* au-dessus fenêtre */
-    ASSERT_EQ(read_pixel_4bpp(&vram, base, 50, 80),  0);  /* sous fenêtre */
+    /* (50, 80) = top-frame de window 2 maintenant, plus du noir. */
+
+    /* ── Sprint 3.c v0.2 : window 2 clonée via BLIT à (50, 80) ──
+     * BLIT(src=window1, dst=window2_pos, 80×60). Puis FILL_RECT
+     * repaint titlebar window 2 en green (color 2) pour distinction.
+     * window 2 zone : (50..129, 80..139). */
+    /* Frame window 2 : 4 coins en color 0 (black). */
+    ASSERT_EQ(read_pixel_4bpp(&vram, base, 50, 80),   0);  /* top-left */
+    ASSERT_EQ(read_pixel_4bpp(&vram, base, 129, 80),  0);  /* top-right */
+    ASSERT_EQ(read_pixel_4bpp(&vram, base, 50, 139),  0);  /* bot-left */
+    ASSERT_EQ(read_pixel_4bpp(&vram, base, 129, 139), 0);  /* bot-right */
+    /* Title bar window 2 = green (color 2) après repaint. */
+    ASSERT_EQ(read_pixel_4bpp(&vram, base, 80, 84),   2);  /* milieu titlebar */
+    ASSERT_EQ(read_pixel_4bpp(&vram, base, 60, 81),   2);
+    ASSERT_EQ(read_pixel_4bpp(&vram, base, 100, 87),  2);
+    /* Body window 2 = lgray (color 7) du BLIT (intact après FILL_RECT). */
+    ASSERT_EQ(read_pixel_4bpp(&vram, base, 80, 100),  7);  /* milieu body */
+    ASSERT_EQ(read_pixel_4bpp(&vram, base, 60, 88),   7);
+    ASSERT_EQ(read_pixel_4bpp(&vram, base, 100, 130), 7);
 
     /* GPU sans erreur. */
     ASSERT_EQ(gpu.err, 0);

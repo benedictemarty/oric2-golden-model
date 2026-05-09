@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - 2026-05-09
 
+### Test — OricOS Sprint 3.c v0.2 multi-fenêtre via BLIT ✨
+
+- `tests/integration/test_oricos_window.c` étendu : valide 2e fenêtre
+  clonée via BLIT + repaint titlebar green.
+- 10 ASSERTs supplémentaires (4 coins frame + 3 titlebar green +
+  3 body lgray du BLIT).
+- PPM dump XVGA montre maintenant **2 fenêtres distinctes** :
+  - Window 1 (20, 10) titlebar blue.
+  - Window 2 (50, 80) titlebar green.
+- 540 tests OK.
+
 ### Test — OricOS Sprint 3.c v0.1 + PPM dump XVGA ✨
 
 - `tests/integration/test_oricos_window.c` étendu : ajoute export
