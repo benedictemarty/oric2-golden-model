@@ -162,15 +162,16 @@ TEST(test_oricos_live_alloc_demo) {
     }
     ASSERT_TRUE(cpu.stopped);
 
-    /* BANK_LIVE_DEMO @ $01:5468..$01:546B :
-     *   +0 = 0x81 (1ère alloc bump, bank 129)
-     *   +1 = 0x82 (2ème alloc bump, bank 130)
-     *   +2 = 0x83 (3ème alloc bump, bank 131)
-     *   +3 = 0x82 (alloc après free 0x82 → LIFO pop) */
-    ASSERT_EQ((int)memory_read24(&mem, 0x015468), 0x81);
-    ASSERT_EQ((int)memory_read24(&mem, 0x015469), 0x82);
-    ASSERT_EQ((int)memory_read24(&mem, 0x01546A), 0x83);
-    ASSERT_EQ((int)memory_read24(&mem, 0x01546B), 0x82);
+    /* BANK_LIVE_DEMO @ $01:5468..$01:546B (ADR-20 : banks 128-131
+     * réservés framebuffer SVGA, pool live démarre à bank 132 = $84) :
+     *   +0 = 0x84 (1ère alloc bump, bank 132)
+     *   +1 = 0x85 (2ème alloc bump, bank 133)
+     *   +2 = 0x86 (3ème alloc bump, bank 134)
+     *   +3 = 0x85 (alloc après free 0x85 → LIFO pop) */
+    ASSERT_EQ((int)memory_read24(&mem, 0x015468), 0x84);
+    ASSERT_EQ((int)memory_read24(&mem, 0x015469), 0x85);
+    ASSERT_EQ((int)memory_read24(&mem, 0x01546A), 0x86);
+    ASSERT_EQ((int)memory_read24(&mem, 0x01546B), 0x85);
 
     memory_cleanup(&mem);
 }
