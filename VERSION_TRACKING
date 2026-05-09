@@ -1,12 +1,28 @@
 VERSION_TRACKING - Phosphoric
 =====================================
 
-Current Version: 1.22.12-alpha
+Current Version: 1.22.13-alpha
 Release Date: 2026-05-09
-Status: Alpha (Phase 1 PH-2.b — validation 65C816 mode E par défaut PASS, 540 tests, GO 1.C)
+Status: Alpha (Phase 1 PH-2.c.1 — retrait vtable 6502 + dispatch CLI rétro-compat, 535 tests pass)
 
 Version History:
 ----------------
+- 1.22.13-alpha (2026-05-09): ADR-18 étape 1.C (partie 1) — retrait vtable 6502
+  * cpu_core.h : retrait CPU_KIND_6502 enum value, extern cpu_core_vtable_6502.
+    Bascule include cpu6502.h → cpu_types.h (types neutres uniquement).
+  * cpu_core.c : retrait des 6 adaptateurs v6502_* + table cpu_core_vtable_6502.
+    cpu_core_kind_from_string("6502") → log_warning + redirige CPU_KIND_65C816
+    (rétro-compat CLI --cpu 6502, mode E reproduit 6502 strict bit-à-bit).
+    cpu_core_vtable_for ne gère plus que CPU_KIND_65C816.
+  * test_cpu_core.c réécrit : 5 tests (sélecteurs vtable 65c816 + rétro-compat
+    "6502" → 65c816 + invalides + non-null methods). Tests "matches_direct"
+    (comparaison vtable ↔ appel direct 6502) retirés (8 tests).
+  * Note dette : src/cpu/cpu6502.c, opcodes.c, addressing.c restent présents.
+    Bloc inter-dépendant non-trivial : cpu65c816_opcodes.c → opcode_table
+    (défini dans opcodes.c) → cpu_set_flag (cpu6502.c) → addressing.c.
+    Suppression effective + extraction opcode_table neutre prévue PH-2.c.2.
+  * 535 tests pass (= -5 vs 540 : 8 tests "matches_direct" 6502 retirés,
+    3 nouveaux tests 65c816, net -5).
 - 1.22.12-alpha (2026-05-09): ADR-18 étape 1.B — campagne validation 65C816 mode E PASS
   * Bascule défaut emu.cpu_kind = CPU_KIND_65C816 dans src/main.c
     (était CPU_KIND_6502 depuis B1.1).

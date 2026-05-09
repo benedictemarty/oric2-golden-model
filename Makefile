@@ -131,6 +131,12 @@ TEST_CPU_CORE_SRCS = tests/unit/test_cpu_core.c src/cpu/cpu_core.c \
                      src/cpu/cpu6502.c src/cpu/opcodes.c src/cpu/addressing.c \
                      src/cpu/cpu65c816.c src/cpu/cpu65c816_opcodes.c \
                      src/memory/memory.c src/memory/banking.c src/utils/logging.c
+# Note PH-2.c.1 (ADR-18) : test_cpu_core lui-même n'utilise plus le cœur 6502,
+# mais cpu65c816_opcodes.c référence `opcode_table[256]` défini dans opcodes.c
+# (6502), qui à son tour référence cpu_set_flag défini dans cpu6502.c, qui
+# utilise les modes d'adressage de addressing.c. Bloc inter-dépendant 6502 ↔
+# 65C816 à découpler en PH-2.c.2 (extraction de la métadonnée opcode_table
+# partagée vers un fichier neutre src/cpu/opcode_metadata.c).
 
 TEST_CPU816_SRCS = tests/unit/test_cpu65c816.c src/cpu/cpu65c816.c \
                    src/cpu/cpu65c816_opcodes.c src/cpu/opcodes.c \

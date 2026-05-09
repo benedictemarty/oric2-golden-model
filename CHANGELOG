@@ -5,6 +5,59 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.22.13-alpha] - 2026-05-09
+
+### Phase 1 PH-2.c.1 — Retrait vtable 6502 (ADR-18 étape 1.C, partie 1)
+
+#### Removed
+- `include/cpu/cpu_core.h` :
+  - `CPU_KIND_6502` enum value.
+  - `extern const cpu_core_vtable_t cpu_core_vtable_6502;`.
+  - `#include "cpu/cpu6502.h"` remplacé par `#include "cpu/cpu_types.h"` +
+    `<stdbool.h>` (types neutres uniquement, pas de couplage cœur 6502).
+- `src/cpu/cpu_core.c` :
+  - Adaptateurs `v6502_reset/step/execute_cycles/nmi/irq_set/irq_clear`.
+  - Table `cpu_core_vtable_6502`.
+  - Branche `case CPU_KIND_6502:` dans `cpu_core_vtable_for`.
+- `tests/unit/test_cpu_core.c` (réécrit) :
+  - 8 tests `vtable_*_matches_direct` (comparaison vtable ↔ appel direct 6502).
+  - Setup utilisant `cpu6502_t a, b` retiré.
+
+#### Added / Changed
+- `cpu_core_kind_from_string("6502")` : log warning + redirige vers
+  `CPU_KIND_65C816` (rétro-compat CLI `--cpu 6502`, mode E reproduit 6502
+  strict bit-à-bit, prouvé PH-2.b).
+- `test_cpu_core.c` : 5 tests minimaux des sélecteurs et de la vtable 65C816.
+- `Makefile` `TEST_CPU_CORE_SRCS` : commentaire dette PH-2.c.2 sur le bloc
+  inter-dépendant 6502 ↔ 65C816 (`opcode_table`, `cpu_set_flag`, addressing).
+- `EMU_VERSION` 1.22.12-alpha → 1.22.13-alpha.
+
+#### Note dette PH-2.c.2
+
+Investigation : `src/cpu/cpu6502.c`, `opcodes.c`, `addressing.c` ne peuvent
+pas être supprimés isolément. Chaîne de dépendance :
+
+  cpu65c816_opcodes.c → opcode_table[256] (opcodes.c)
+                     → cpu_set_flag (cpu6502.c)
+                     → modes d'adressage (addressing.c)
+
+Suppression effective requiert d'abord refactor PH-2.c.2 :
+1. Extraction `opcode_table[256]` (métadonnées cycles/size) vers
+   `src/cpu/opcode_metadata.c` neutre.
+2. Inlining ou portage `cpu_set_flag` 6502-spécifique.
+3. Refactor `emulator_t.cpu` (cpu6502_t → cpu65c816_t, 69 accès `emu->cpu.X`).
+4. Migration tests `test_klaus_dormann.c`, `test_oric_boot_dual.c`,
+   `test_paravirt_demo.c` vers `cpu65c816_t` mode E.
+5. Suppression effective des 3 fichiers cœur + `include/cpu/cpu6502.h` +
+   `tests/unit/test_cpu.c`.
+
+#### Validation
+- `make SDL2=1` → OK.
+- `make tests` → **535 OK** (= -5 vs 540 : 10 → 5 tests dans test_cpu_core ;
+  8 retirés `matches_direct`, 3 nouveaux 65c816, net -5).
+
+---
+
 ## [1.22.12-alpha] - 2026-05-09
 
 ### Phase 1 PH-2.b — Campagne validation 65C816 mode E par défaut (ADR-18 étape 1.B) ✅
