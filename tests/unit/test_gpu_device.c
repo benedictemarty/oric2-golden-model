@@ -218,6 +218,193 @@ TEST(test_unknown_opcode_sets_err) {
     gpu_cleanup(&gpu);
 }
 
+/* ─── BLIT : copie 1 ligne ────────────────────────────────────────── */
+
+TEST(test_blit_single_row) {
+    gpu_device_t gpu;
+    vram_device_t vram;
+    gpu_init(&gpu);
+    ASSERT_TRUE(vram_init(&vram));
+
+    /* Source : 4 bytes à $001000. Destination : 4 bytes à $002000 = 0. */
+    vram_poke(&vram, 0x001000, 0x11);
+    vram_poke(&vram, 0x001001, 0x22);
+    vram_poke(&vram, 0x001002, 0x33);
+    vram_poke(&vram, 0x001003, 0x44);
+
+    /* BLIT(src=$001000, dst=$002000, byte_w=4, byte_h=1). */
+    gpu_write(&gpu, NULL, NULL, GPU_REG_ARG1_LO,  0x00);
+    gpu_write(&gpu, NULL, NULL, GPU_REG_ARG1_MID, 0x10);
+    gpu_write(&gpu, NULL, NULL, GPU_REG_ARG1_HI,  0x00);
+    gpu_write(&gpu, NULL, NULL, GPU_REG_ARG2_LO,  0x00);
+    gpu_write(&gpu, NULL, NULL, GPU_REG_ARG2_MID, 0x20);
+    gpu_write(&gpu, NULL, NULL, GPU_REG_ARG2_HI,  0x00);
+    gpu_write(&gpu, NULL, NULL, GPU_REG_ARG3_LO,  0x04);  /* byte_w=4 */
+    gpu_write(&gpu, NULL, NULL, GPU_REG_ARG3_MID, 0x01);  /* byte_h=1 */
+    gpu_write(&gpu, NULL, NULL, GPU_REG_CMD_OP,   GPU_OP_BLIT);
+    gpu_write(&gpu, &vram, NULL, GPU_REG_TRIGGER, 0x01);
+
+    ASSERT_EQ((int)vram_peek(&vram, 0x002000), 0x11);
+    ASSERT_EQ((int)vram_peek(&vram, 0x002001), 0x22);
+    ASSERT_EQ((int)vram_peek(&vram, 0x002002), 0x33);
+    ASSERT_EQ((int)vram_peek(&vram, 0x002003), 0x44);
+    /* Hors range : reste à 0. */
+    ASSERT_EQ((int)vram_peek(&vram, 0x002004), 0x00);
+    /* Source intacte. */
+    ASSERT_EQ((int)vram_peek(&vram, 0x001000), 0x11);
+    ASSERT_EQ((int)vram_peek(&vram, 0x001003), 0x44);
+
+    vram_cleanup(&vram);
+    gpu_cleanup(&gpu);
+}
+
+/* ─── BLIT : rectangle multi-ligne via BPL=512 ────────────────────── */
+
+TEST(test_blit_rect_multi_line) {
+    gpu_device_t gpu;
+    vram_device_t vram;
+    gpu_init(&gpu);
+    ASSERT_TRUE(vram_init(&vram));
+
+    /* Pré-remplir source à $004000 : 2 bytes × 3 lignes (BPL=512).
+     * ligne 0 : $A1 $A2 (offset 0..1)
+     * ligne 1 : $B1 $B2 (offset 512..513)
+     * ligne 2 : $C1 $C2 (offset 1024..1025) */
+    vram_poke(&vram, 0x004000 + 0,    0xA1);
+    vram_poke(&vram, 0x004000 + 1,    0xA2);
+    vram_poke(&vram, 0x004000 + 512,  0xB1);
+    vram_poke(&vram, 0x004000 + 513,  0xB2);
+    vram_poke(&vram, 0x004000 + 1024, 0xC1);
+    vram_poke(&vram, 0x004000 + 1025, 0xC2);
+
+    /* BLIT(src=$004000, dst=$008000, byte_w=2, byte_h=3). */
+    gpu_write(&gpu, NULL, NULL, GPU_REG_ARG1_LO,  0x00);
+    gpu_write(&gpu, NULL, NULL, GPU_REG_ARG1_MID, 0x40);
+    gpu_write(&gpu, NULL, NULL, GPU_REG_ARG1_HI,  0x00);
+    gpu_write(&gpu, NULL, NULL, GPU_REG_ARG2_LO,  0x00);
+    gpu_write(&gpu, NULL, NULL, GPU_REG_ARG2_MID, 0x80);
+    gpu_write(&gpu, NULL, NULL, GPU_REG_ARG2_HI,  0x00);
+    gpu_write(&gpu, NULL, NULL, GPU_REG_ARG3_LO,  0x02);  /* byte_w=2 */
+    gpu_write(&gpu, NULL, NULL, GPU_REG_ARG3_MID, 0x03);  /* byte_h=3 */
+    gpu_write(&gpu, NULL, NULL, GPU_REG_CMD_OP,   GPU_OP_BLIT);
+    gpu_write(&gpu, &vram, NULL, GPU_REG_TRIGGER, 0x01);
+
+    /* Destination : 3 lignes copiées avec BPL=512. */
+    ASSERT_EQ((int)vram_peek(&vram, 0x008000 + 0),    0xA1);
+    ASSERT_EQ((int)vram_peek(&vram, 0x008000 + 1),    0xA2);
+    ASSERT_EQ((int)vram_peek(&vram, 0x008000 + 512),  0xB1);
+    ASSERT_EQ((int)vram_peek(&vram, 0x008000 + 513),  0xB2);
+    ASSERT_EQ((int)vram_peek(&vram, 0x008000 + 1024), 0xC1);
+    ASSERT_EQ((int)vram_peek(&vram, 0x008000 + 1025), 0xC2);
+    /* Hors rect : 0. */
+    ASSERT_EQ((int)vram_peek(&vram, 0x008000 + 2),    0x00);
+    ASSERT_EQ((int)vram_peek(&vram, 0x008000 + 514),  0x00);
+    ASSERT_EQ((int)vram_peek(&vram, 0x008000 + 1536), 0x00);  /* ligne 3 hors h=3 */
+
+    vram_cleanup(&vram);
+    gpu_cleanup(&gpu);
+}
+
+/* ─── LINE Bresenham : ligne horizontale ─────────────────────────── */
+
+TEST(test_line_horizontal) {
+    gpu_device_t gpu;
+    vram_device_t vram;
+    gpu_init(&gpu);
+    ASSERT_TRUE(vram_init(&vram));
+
+    /* LINE(base=0, (0,0)→(5,0), color=7=lightgray).
+     * Pixels 0..5 ligne 0 = byte 0 (pixels 0,1) + byte 1 (pixels 2,3) +
+     * byte 2 (pixels 4,5). Tous = 0x77. */
+    gpu_write(&gpu, NULL, NULL, GPU_REG_ARG1_LO,  0x00);
+    gpu_write(&gpu, NULL, NULL, GPU_REG_ARG1_MID, 0x00);
+    gpu_write(&gpu, NULL, NULL, GPU_REG_ARG1_HI,  0x00);
+    gpu_write(&gpu, NULL, NULL, GPU_REG_ARG2_LO,  0x00);  /* x1=0 */
+    gpu_write(&gpu, NULL, NULL, GPU_REG_ARG2_MID, 0x00);  /* y1=0 */
+    gpu_write(&gpu, NULL, NULL, GPU_REG_ARG3_LO,  0x05);  /* x2=5 */
+    gpu_write(&gpu, NULL, NULL, GPU_REG_ARG3_MID, 0x00);  /* y2=0 */
+    gpu_write(&gpu, NULL, NULL, GPU_REG_ARG4_LO,  0x07);
+    gpu_write(&gpu, NULL, NULL, GPU_REG_CMD_OP,   GPU_OP_LINE);
+    gpu_write(&gpu, &vram, NULL, GPU_REG_TRIGGER, 0x01);
+
+    ASSERT_EQ((int)vram_peek(&vram, 0), 0x77);
+    ASSERT_EQ((int)vram_peek(&vram, 1), 0x77);
+    ASSERT_EQ((int)vram_peek(&vram, 2), 0x77);
+    /* Byte 3 : pixel 6 hors range, pas touché. */
+    ASSERT_EQ((int)vram_peek(&vram, 3), 0x00);
+
+    vram_cleanup(&vram);
+    gpu_cleanup(&gpu);
+}
+
+/* ─── LINE : ligne verticale ──────────────────────────────────────── */
+
+TEST(test_line_vertical) {
+    gpu_device_t gpu;
+    vram_device_t vram;
+    gpu_init(&gpu);
+    ASSERT_TRUE(vram_init(&vram));
+
+    /* LINE(base=0, (0,0)→(0,3), color=1=blue).
+     * Pixel 0 (byte 0 high nibble = 0x10) sur lignes 0..3.
+     * BPL=512. */
+    gpu_write(&gpu, NULL, NULL, GPU_REG_ARG1_LO,  0x00);
+    gpu_write(&gpu, NULL, NULL, GPU_REG_ARG1_MID, 0x00);
+    gpu_write(&gpu, NULL, NULL, GPU_REG_ARG1_HI,  0x00);
+    gpu_write(&gpu, NULL, NULL, GPU_REG_ARG2_LO,  0x00);  /* x1=0 */
+    gpu_write(&gpu, NULL, NULL, GPU_REG_ARG2_MID, 0x00);  /* y1=0 */
+    gpu_write(&gpu, NULL, NULL, GPU_REG_ARG3_LO,  0x00);  /* x2=0 */
+    gpu_write(&gpu, NULL, NULL, GPU_REG_ARG3_MID, 0x03);  /* y2=3 */
+    gpu_write(&gpu, NULL, NULL, GPU_REG_ARG4_LO,  0x01);
+    gpu_write(&gpu, NULL, NULL, GPU_REG_CMD_OP,   GPU_OP_LINE);
+    gpu_write(&gpu, &vram, NULL, GPU_REG_TRIGGER, 0x01);
+
+    /* (0,0) byte 0 : 0x10. Pixel 1 (byte 0 low) intact = 0. */
+    ASSERT_EQ((int)vram_peek(&vram, 0),         0x10);
+    ASSERT_EQ((int)vram_peek(&vram, 512),       0x10);  /* (0,1) */
+    ASSERT_EQ((int)vram_peek(&vram, 1024),      0x10);  /* (0,2) */
+    ASSERT_EQ((int)vram_peek(&vram, 1536),      0x10);  /* (0,3) */
+    /* (0,4) hors range. */
+    ASSERT_EQ((int)vram_peek(&vram, 2048),      0x00);
+
+    vram_cleanup(&vram);
+    gpu_cleanup(&gpu);
+}
+
+/* ─── LINE : diagonale ─────────────────────────────────────────────── */
+
+TEST(test_line_diagonal) {
+    gpu_device_t gpu;
+    vram_device_t vram;
+    gpu_init(&gpu);
+    ASSERT_TRUE(vram_init(&vram));
+
+    /* LINE(base=0, (0,0)→(3,3), color=15=white).
+     * Pixels (0,0), (1,1), (2,2), (3,3). */
+    gpu_write(&gpu, NULL, NULL, GPU_REG_ARG1_LO,  0x00);
+    gpu_write(&gpu, NULL, NULL, GPU_REG_ARG1_MID, 0x00);
+    gpu_write(&gpu, NULL, NULL, GPU_REG_ARG1_HI,  0x00);
+    gpu_write(&gpu, NULL, NULL, GPU_REG_ARG2_LO,  0x00);
+    gpu_write(&gpu, NULL, NULL, GPU_REG_ARG2_MID, 0x00);
+    gpu_write(&gpu, NULL, NULL, GPU_REG_ARG3_LO,  0x03);
+    gpu_write(&gpu, NULL, NULL, GPU_REG_ARG3_MID, 0x03);
+    gpu_write(&gpu, NULL, NULL, GPU_REG_ARG4_LO,  0x0F);
+    gpu_write(&gpu, NULL, NULL, GPU_REG_CMD_OP,   GPU_OP_LINE);
+    gpu_write(&gpu, &vram, NULL, GPU_REG_TRIGGER, 0x01);
+
+    /* (0,0) : byte 0 high = 0xF0. */
+    ASSERT_EQ((int)vram_peek(&vram, 0),          0xF0);
+    /* (1,1) : ligne 1, byte 0 low = 0x0F. */
+    ASSERT_EQ((int)vram_peek(&vram, 512),        0x0F);
+    /* (2,2) : ligne 2, byte 1 high = 0xF0. */
+    ASSERT_EQ((int)vram_peek(&vram, 1024 + 1),   0xF0);
+    /* (3,3) : ligne 3, byte 1 low = 0x0F. */
+    ASSERT_EQ((int)vram_peek(&vram, 1536 + 1),   0x0F);
+
+    vram_cleanup(&vram);
+    gpu_cleanup(&gpu);
+}
+
 /* ─── CLEAR taille XVGA framebuffer complet ──────────────────────── */
 
 TEST(test_clear_xvga_full_framebuffer) {
@@ -261,6 +448,11 @@ int main(void) {
     RUN(test_fill_rect_aligned);
     RUN(test_fill_rect_pixel_left_right);
     RUN(test_unknown_opcode_sets_err);
+    RUN(test_blit_single_row);
+    RUN(test_blit_rect_multi_line);
+    RUN(test_line_horizontal);
+    RUN(test_line_vertical);
+    RUN(test_line_diagonal);
     RUN(test_clear_xvga_full_framebuffer);
 
     printf("\n═══════════════════════════════════════════════════════\n");

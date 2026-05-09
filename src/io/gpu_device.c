@@ -6,6 +6,7 @@
 #include "io/gpu_device.h"
 #include "utils/logging.h"
 
+#include <stdlib.h>
 #include <string.h>
 
 void gpu_init(gpu_device_t* gpu) {
@@ -97,6 +98,78 @@ static void gpu_exec_fill_rect(gpu_device_t* gpu, vram_device_t* vram) {
     }
 }
 
+/* BLIT v0.1 : copie un bloc rectangulaire SDRAM → SDRAM.
+ * ARG1 = src_addr 24-bit, ARG2 = dst_addr 24-bit.
+ * ARG3.LO = byte_w (octets/ligne, 1..255), ARG3.MID = byte_h (lignes).
+ * ARG4 = flags (unused v0.1).
+ *
+ * v0.1 limites :
+ * - src et dst doivent être byte-alignés (= x pair en 4bpp).
+ * - Pas de gestion d'overlap (src/dst doivent être disjoints).
+ * - Pas de transparency / ROP (flags ignorés).
+ * - BPL hardcodé GPU_XVGA_BPL=512 pour src et dst.
+ * v0.2 : alignement pixel-arbitraire, overlap gauche-vers-droite, transparency. */
+static void gpu_exec_blit(gpu_device_t* gpu, vram_device_t* vram) {
+    if (!vram) return;
+    uint32_t src = gpu->arg1 & 0xFFFFFFu;
+    uint32_t dst = gpu->arg2 & 0xFFFFFFu;
+    int byte_w = (int)( gpu->arg3        & 0xFFu);
+    int byte_h = (int)((gpu->arg3 >> 8)  & 0xFFu);
+    int bpl = (int)GPU_XVGA_BPL;
+
+    for (int y = 0; y < byte_h; y++) {
+        uint32_t soff = src + (uint32_t)(y * bpl);
+        uint32_t doff = dst + (uint32_t)(y * bpl);
+        for (int x = 0; x < byte_w; x++) {
+            uint8_t b = vram_peek(vram, soff + (uint32_t)x);
+            vram_poke(vram, doff + (uint32_t)x, b);
+        }
+    }
+}
+
+/* Helper : set pixel 4bpp à (x, y) dans framebuffer base SDRAM. */
+static void gpu_set_pixel(vram_device_t* vram, uint32_t base, int x, int y,
+                          uint8_t color) {
+    uint32_t byte_off = base + (uint32_t)(y * (int)GPU_XVGA_BPL + x / 2);
+    uint8_t b = vram_peek(vram, byte_off);
+    if (x & 1) {
+        b = (uint8_t)((b & 0xF0u) | (color & 0x0Fu));
+    } else {
+        b = (uint8_t)((b & 0x0Fu) | (color << 4));
+    }
+    vram_poke(vram, byte_off, b);
+}
+
+/* LINE v0.1 : tracé Bresenham 4bpp.
+ * ARG1 = base SDRAM framebuffer.
+ * ARG2.LO/MID = (x1, y1) 8-bit chacun.
+ * ARG3.LO/MID = (x2, y2) 8-bit chacun.
+ * ARG4.LO = color (4-bit). */
+static void gpu_exec_line(gpu_device_t* gpu, vram_device_t* vram) {
+    if (!vram) return;
+    uint32_t base = gpu->arg1 & 0xFFFFFFu;
+    int x1 = (int)( gpu->arg2        & 0xFFu);
+    int y1 = (int)((gpu->arg2 >> 8)  & 0xFFu);
+    int x2 = (int)( gpu->arg3        & 0xFFu);
+    int y2 = (int)((gpu->arg3 >> 8)  & 0xFFu);
+    uint8_t color = (uint8_t)(gpu->arg4 & 0x0Fu);
+
+    /* Bresenham line algorithm. */
+    int dx = abs(x2 - x1);
+    int dy = -abs(y2 - y1);
+    int sx = (x1 < x2) ? 1 : -1;
+    int sy = (y1 < y2) ? 1 : -1;
+    int err = dx + dy;
+    int x = x1, y = y1;
+    for (;;) {
+        gpu_set_pixel(vram, base, x, y, color);
+        if (x == x2 && y == y2) break;
+        int e2 = 2 * err;
+        if (e2 >= dy) { err += dy; x += sx; }
+        if (e2 <= dx) { err += dx; y += sy; }
+    }
+}
+
 /* Dispatch trigger. */
 static void gpu_dispatch(gpu_device_t* gpu, vram_device_t* vram, memory_t* mem) {
     (void)mem;  /* unused v0.1 (toutes ops ciblent SDRAM) */
@@ -109,6 +182,12 @@ static void gpu_dispatch(gpu_device_t* gpu, vram_device_t* vram, memory_t* mem) 
             break;
         case GPU_OP_FILL_RECT:
             gpu_exec_fill_rect(gpu, vram);
+            break;
+        case GPU_OP_BLIT:
+            gpu_exec_blit(gpu, vram);
+            break;
+        case GPU_OP_LINE:
+            gpu_exec_line(gpu, vram);
             break;
         default:
             gpu->err = true;  /* opcode inconnu */
