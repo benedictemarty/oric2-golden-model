@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - 2026-05-09
 
+### Test — OricOS Sprint 3.c v0.1 window manager ✨
+
+- `tests/integration/test_oricos_window.c` : valide
+  `kernel_window_draw` via boot kernel.
+- Setup test : VIA + SD + VRAM + GPU + io_callback complet.
+- Helper `read_pixel_4bpp(vram, base, x, y)` : extrait le pixel 4bpp
+  (gauche/droit selon parité x) pour assertion sémantique.
+- ASSERTs sur 4 coins du cadre + 4 milieux bords (color 0 frame),
+  3 pixels titlebar interior (color 1), 3 pixels body interior
+  (color 7), 4 pixels hors fenêtre (color 0 du CLEAR initial).
+- Makefile target `test-oricos-window` ajouté à `make tests`.
+- 540 tests OK (539 → 540, +1).
+
 ### Test — OricOS Sprint GPU-3 v0.2 kernel_gfx_blit + line ✨
 
 - `tests/integration/test_oricos_gpu.c` étendu : valide kernel_gfx_blit
