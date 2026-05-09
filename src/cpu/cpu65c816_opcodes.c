@@ -729,9 +729,16 @@ int cpu816_execute_opcode_e(cpu65c816_t* cpu, uint8_t opcode) {
 
     /* ─── ASL ─── */
     case 0x0A:
-        setf(cpu, FLAG_CARRY, (a8(cpu) & 0x80) != 0);
-        set_a8(cpu, (uint8_t)(a8(cpu) << 1));
-        update_nz(cpu, a8(cpu));
+        if (M_is_8bit(cpu)) {
+            setf(cpu, FLAG_CARRY, (a8(cpu) & 0x80) != 0);
+            set_a8(cpu, (uint8_t)(a8(cpu) << 1));
+            update_nz(cpu, a8(cpu));
+        } else {
+            /* M=0 : ASL A 16-bit complet (cpu->C) — fix Sprint 3.b debug. */
+            setf(cpu, FLAG_CARRY, (cpu->C & 0x8000) != 0);
+            cpu->C = (uint16_t)(cpu->C << 1);
+            update_nz_M(cpu, cpu->C);
+        }
         break;
     case 0x06: addr = addr816_zp(cpu); val = cpu816_mem_read(cpu, addr);
         setf(cpu, FLAG_CARRY, (val & 0x80) != 0); result = (uint8_t)(val << 1);
@@ -748,9 +755,15 @@ int cpu816_execute_opcode_e(cpu65c816_t* cpu, uint8_t opcode) {
 
     /* ─── LSR ─── */
     case 0x4A:
-        setf(cpu, FLAG_CARRY, (a8(cpu) & 0x01) != 0);
-        set_a8(cpu, (uint8_t)(a8(cpu) >> 1));
-        update_nz(cpu, a8(cpu));
+        if (M_is_8bit(cpu)) {
+            setf(cpu, FLAG_CARRY, (a8(cpu) & 0x01) != 0);
+            set_a8(cpu, (uint8_t)(a8(cpu) >> 1));
+            update_nz(cpu, a8(cpu));
+        } else {
+            setf(cpu, FLAG_CARRY, (cpu->C & 0x0001) != 0);
+            cpu->C = (uint16_t)(cpu->C >> 1);
+            update_nz_M(cpu, cpu->C);
+        }
         break;
     case 0x46: addr = addr816_zp(cpu); val = cpu816_mem_read(cpu, addr);
         setf(cpu, FLAG_CARRY, (val & 0x01) != 0); result = (uint8_t)(val >> 1);
@@ -766,13 +779,19 @@ int cpu816_execute_opcode_e(cpu65c816_t* cpu, uint8_t opcode) {
         cpu816_mem_write(cpu, addr, result); update_nz(cpu, result); break;
 
     /* ─── ROL ─── */
-    case 0x2A: {
-        uint8_t c = flag(cpu, FLAG_CARRY) ? 1 : 0;
-        setf(cpu, FLAG_CARRY, (a8(cpu) & 0x80) != 0);
-        set_a8(cpu, (uint8_t)((a8(cpu) << 1) | c));
-        update_nz(cpu, a8(cpu));
+    case 0x2A:
+        if (M_is_8bit(cpu)) {
+            uint8_t c = flag(cpu, FLAG_CARRY) ? 1 : 0;
+            setf(cpu, FLAG_CARRY, (a8(cpu) & 0x80) != 0);
+            set_a8(cpu, (uint8_t)((a8(cpu) << 1) | c));
+            update_nz(cpu, a8(cpu));
+        } else {
+            uint16_t c = flag(cpu, FLAG_CARRY) ? 1 : 0;
+            setf(cpu, FLAG_CARRY, (cpu->C & 0x8000) != 0);
+            cpu->C = (uint16_t)((cpu->C << 1) | c);
+            update_nz_M(cpu, cpu->C);
+        }
         break;
-    }
     case 0x26: addr = addr816_zp(cpu); val = cpu816_mem_read(cpu, addr); {
         uint8_t c = flag(cpu, FLAG_CARRY) ? 1 : 0;
         setf(cpu, FLAG_CARRY, (val & 0x80) != 0);
@@ -799,13 +818,19 @@ int cpu816_execute_opcode_e(cpu65c816_t* cpu, uint8_t opcode) {
     } break;
 
     /* ─── ROR ─── */
-    case 0x6A: {
-        uint8_t c = flag(cpu, FLAG_CARRY) ? 0x80 : 0;
-        setf(cpu, FLAG_CARRY, (a8(cpu) & 0x01) != 0);
-        set_a8(cpu, (uint8_t)((a8(cpu) >> 1) | c));
-        update_nz(cpu, a8(cpu));
+    case 0x6A:
+        if (M_is_8bit(cpu)) {
+            uint8_t c = flag(cpu, FLAG_CARRY) ? 0x80 : 0;
+            setf(cpu, FLAG_CARRY, (a8(cpu) & 0x01) != 0);
+            set_a8(cpu, (uint8_t)((a8(cpu) >> 1) | c));
+            update_nz(cpu, a8(cpu));
+        } else {
+            uint16_t c = flag(cpu, FLAG_CARRY) ? 0x8000 : 0;
+            setf(cpu, FLAG_CARRY, (cpu->C & 0x0001) != 0);
+            cpu->C = (uint16_t)((cpu->C >> 1) | c);
+            update_nz_M(cpu, cpu->C);
+        }
         break;
-    }
     case 0x66: addr = addr816_zp(cpu); val = cpu816_mem_read(cpu, addr); {
         uint8_t c = flag(cpu, FLAG_CARRY) ? 0x80 : 0;
         setf(cpu, FLAG_CARRY, (val & 0x01) != 0);

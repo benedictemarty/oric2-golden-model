@@ -7,6 +7,64 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - 2026-05-09
 
+### Fix CPU 65C816 — ASL/LSR/ROL/ROR A en mode M=0 16-bit ✨
+
+#### Bug
+Les opcodes Accumulator-mode des shifts/rotations 65C816 :
+- `0x0A` ASL A
+- `0x4A` LSR A
+- `0x2A` ROL A
+- `0x6A` ROR A
+
+ne propageaient PAS le carry low → high byte en mode M=0 (registres
+16-bit). Ils utilisaient toujours `a8(cpu)` (8-bit) et `set_a8`,
+même quand M=0.
+
+Conséquence : un programme effectuant `lda #$003C; asl asl asl` en
+mode M=0 obtenait `$00E0` au lieu de `$01E0` (bit 7 du low byte
+n'était pas propagé en bit 8 du high byte).
+
+#### Découverte
+Sprint 3.b v0.2 d'OricOS (kernel_fill_rect_aligned) calculait `y * 90`
+via shifts 16-bit. Le résultat erroné `$0318` au lieu de `$1518`
+(pour y=60) a permis d'isoler la racine via sentinels asm.
+
+#### Fix
+Branchement explicite M=8bit/M=16bit dans les 4 cas Accumulator :
+```c
+case 0x0A:  // ASL A
+    if (M_is_8bit(cpu)) {
+        // ancien code 8-bit (inchangé)
+    } else {
+        setf(cpu, FLAG_CARRY, (cpu->C & 0x8000) != 0);
+        cpu->C = (uint16_t)(cpu->C << 1);
+        update_nz_M(cpu, cpu->C);
+    }
+```
+Idem pour LSR (carry depuis bit 0), ROL (avec input carry vers bit 0),
+ROR (avec input carry vers bit 15).
+
+#### Validation
+- Sprint 3.b v0.2 fill_rect_aligned dessine maintenant le rectangle
+  au bon endroit ($80:1536 pour y=60, gx=10).
+- 515 tests OK (pas de régression sur autres opcodes).
+
+#### Dette technique restante
+- Versions zp/abs/abs_x des shifts (`$06`, `$16`, `$0E`, `$1E` etc.)
+  manipulent uint8_t en mémoire — possible bug similaire si on shifte
+  une valeur 16-bit en mémoire en M=0. Pas encore exercé par OricOS.
+  À auditer ultérieurement.
+
+### Test — OricOS Sprint 3.b v0.2 kernel_fill_rect_aligned ✨
+
+- `test_oricos_hires2_clear_and_rect` : boot OricOS exécute clear(blue)
+  + fill_rect(gx=10, gxc=10, y=60, yc=80, red).
+- ASSERT 6400 pixels red + 41600 pixels blue + 0 autres.
+- ASSERT 4 coins framebuffer = blue, 4 coins + centre rectangle = red,
+  frontières strictes (1 pixel offset = blue).
+- Démo SDL2 attendue : background blue + rectangle red 80×80 au centre
+  (mode HIRES Oric 2 quand intégré au compositor SDL).
+
 ### Test — OricOS Sprint 3.b v0.1 kernel_hires2_clear ✨
 
 - `tests/integration/test_oricos_hires2.c` : boot OricOS → ASSERT

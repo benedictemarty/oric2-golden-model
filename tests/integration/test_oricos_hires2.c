@@ -22,6 +22,7 @@
 #define ORICOS_LOAD_OFFSET  0x0200u
 
 #define BLUE_RGB            0x0000FFu
+#define RED_RGB             0xFF0000u
 
 static int tests_passed = 0;
 static int tests_failed = 0;
@@ -117,7 +118,7 @@ static void io_write_callback(uint16_t addr, uint8_t value, void* userdata) {
 
 /* ─── Test ─────────────────────────────────────────────────────────── */
 
-TEST(test_oricos_hires2_clear_fills_blue) {
+TEST(test_oricos_hires2_clear_and_rect) {
     cpu65c816_t cpu;
     memory_t mem;
     via6522_t via;
@@ -159,37 +160,46 @@ TEST(test_oricos_hires2_clear_fills_blue) {
     }
     ASSERT_TRUE(cpu.stopped);
 
-    /* ── Vérif niveau octets : pattern color 4 = $92 $49 $24 répété ── */
-    /* 4 coins (bank 128 offset 0, 87, 89, 17910, 17997 selon position). */
-    ASSERT_EQ(memory_read24(&mem, 0x800000), 0x92);
-    ASSERT_EQ(memory_read24(&mem, 0x800001), 0x49);
-    ASSERT_EQ(memory_read24(&mem, 0x800002), 0x24);
-    /* Dernier triple : offset 17997-17999 */
-    ASSERT_EQ(memory_read24(&mem, 0x800000 + 17997), 0x92);
-    ASSERT_EQ(memory_read24(&mem, 0x800000 + 17998), 0x49);
-    ASSERT_EQ(memory_read24(&mem, 0x800000 + 17999), 0x24);
-    /* L'octet à offset 18000 doit rester à 0 (hors framebuffer). */
-    ASSERT_EQ(memory_read24(&mem, 0x800000 + 18000), 0x00);
+    /* Boot kernel exécute :
+     *   1. kernel_hires2_clear(blue) → tout bank 128 = pattern $92 $49 $24
+     *   2. kernel_fill_rect_aligned(gx=10, gxc=10, y=60, yc=80, red)
+     *      → rectangle red 80×80 pixels en (80, 60).
+     * Vérif :
+     *   - 4 coins du framebuffer = blue (hors rectangle).
+     *   - 4 coins + centre du rectangle = red.
+     *   - juste hors rectangle (1 pixel offset) = blue.
+     *   - comptage : 6400 pixels red + 41600 pixels blue, 0 autres. */
 
-    /* ── Vérif niveau pixels : tous bleus (color 4) via API hires_oric2 ── */
     ASSERT_EQ(hires_oric2_get_pixel(&mem, HIRES2_BANK_DEFAULT, 0, 0), 4);
     ASSERT_EQ(hires_oric2_get_pixel(&mem, HIRES2_BANK_DEFAULT, 239, 0), 4);
     ASSERT_EQ(hires_oric2_get_pixel(&mem, HIRES2_BANK_DEFAULT, 0, 199), 4);
     ASSERT_EQ(hires_oric2_get_pixel(&mem, HIRES2_BANK_DEFAULT, 239, 199), 4);
-    ASSERT_EQ(hires_oric2_get_pixel(&mem, HIRES2_BANK_DEFAULT, 120, 100), 4);
 
-    /* ── Vérif niveau ARGB : tout pixel = bleu (0x0000FF) ── */
+    /* Coins + centre du rectangle red. */
+    ASSERT_EQ(hires_oric2_get_pixel(&mem, HIRES2_BANK_DEFAULT, 80, 60), 1);
+    ASSERT_EQ(hires_oric2_get_pixel(&mem, HIRES2_BANK_DEFAULT, 159, 60), 1);
+    ASSERT_EQ(hires_oric2_get_pixel(&mem, HIRES2_BANK_DEFAULT, 80, 139), 1);
+    ASSERT_EQ(hires_oric2_get_pixel(&mem, HIRES2_BANK_DEFAULT, 159, 139), 1);
+    ASSERT_EQ(hires_oric2_get_pixel(&mem, HIRES2_BANK_DEFAULT, 120, 100), 1);
+
+    /* Frontières strictes : 1 pixel hors rect = blue. */
+    ASSERT_EQ(hires_oric2_get_pixel(&mem, HIRES2_BANK_DEFAULT, 79, 60), 4);
+    ASSERT_EQ(hires_oric2_get_pixel(&mem, HIRES2_BANK_DEFAULT, 160, 60), 4);
+    ASSERT_EQ(hires_oric2_get_pixel(&mem, HIRES2_BANK_DEFAULT, 80, 59), 4);
+    ASSERT_EQ(hires_oric2_get_pixel(&mem, HIRES2_BANK_DEFAULT, 80, 140), 4);
+
+    /* Comptage ARGB : 6400 red + 41600 blue, 0 autres. */
     static uint32_t fb[HIRES2_W * HIRES2_H];
     hires_oric2_render_argb(&mem, HIRES2_BANK_DEFAULT, fb);
-    ASSERT_EQ(fb[0], BLUE_RGB);
-    ASSERT_EQ(fb[HIRES2_W - 1], BLUE_RGB);
-    ASSERT_EQ(fb[HIRES2_W * HIRES2_H - 1], BLUE_RGB);
-    /* Pas de pixel ≠ blue dans tout le framebuffer. */
-    int wrong_count = 0;
+    int red_count = 0, blue_count = 0, other_count = 0;
     for (int i = 0; i < HIRES2_W * HIRES2_H; i++) {
-        if (fb[i] != BLUE_RGB) wrong_count++;
+        if (fb[i] == RED_RGB) red_count++;
+        else if (fb[i] == BLUE_RGB) blue_count++;
+        else other_count++;
     }
-    ASSERT_EQ(wrong_count, 0);
+    ASSERT_EQ(red_count, 80 * 80);
+    ASSERT_EQ(blue_count, HIRES2_W * HIRES2_H - 80 * 80);
+    ASSERT_EQ(other_count, 0);
 
     memory_cleanup(&mem);
 }
@@ -200,7 +210,7 @@ int main(void) {
     printf("  OricOS HIRES Oric 2 framebuffer test (Sprint 3.b)\n");
     printf("═══════════════════════════════════════════════════════\n\n");
 
-    RUN(test_oricos_hires2_clear_fills_blue);
+    RUN(test_oricos_hires2_clear_and_rect);
 
     printf("\n═══════════════════════════════════════════════════════\n");
     printf("  Results: %d passed, %d failed\n", tests_passed, tests_failed);
