@@ -236,8 +236,10 @@ TEST(test_oricos_window_draw) {
     ASSERT_EQ(read_pixel_4bpp(&vram, base, 99, 30),  0);  /* milieu right edge */
 
     /* ── Title bar interior : color 1 (blue) ── */
+    /* Note : "OS" écrit par TEXT v0.3 occupe x=24..39, y=11..18.
+     *         Les ASSERTs ici sont volontairement HORS de cette zone. */
     ASSERT_EQ(read_pixel_4bpp(&vram, base, 50, 14),  1);  /* milieu titlebar */
-    ASSERT_EQ(read_pixel_4bpp(&vram, base, 30, 11),  1);
+    ASSERT_EQ(read_pixel_4bpp(&vram, base, 60, 11),  1);  /* hors zone "OS" */
     ASSERT_EQ(read_pixel_4bpp(&vram, base, 90, 17),  1);  /* dernière ligne titlebar */
 
     /* ── Body interior : color 7 (lightgray) ── */
@@ -268,6 +270,22 @@ TEST(test_oricos_window_draw) {
     ASSERT_EQ(read_pixel_4bpp(&vram, base, 80, 100),  7);  /* milieu body */
     ASSERT_EQ(read_pixel_4bpp(&vram, base, 60, 88),   7);
     ASSERT_EQ(read_pixel_4bpp(&vram, base, 100, 130), 7);
+
+    /* ── Sprint GPU-3 v0.3 : "OS" écrit dans titlebar window 1 ──
+     * Bitmap 'O' row 0 = $7E = 01111110.
+     * À x=24, y=11 (titlebar window 1) :
+     *   - x=24 (bit 7 = 0) → pixel inchangé (blue=1).
+     *   - x=25..30 (bits 6..1 = 1) → color 15 (white).
+     *   - x=31 (bit 0 = 0) → pixel inchangé (blue=1).
+     * Byte (24/2, 11) = byte 12 ligne 11 = pixels (24, 25)
+     *   = (1 << 4) | (15) = $1F (blue gauche + white droit). */
+    ASSERT_EQ((int)read_pixel_4bpp(&vram, base, 25, 11), 15);  /* 'O' top */
+    ASSERT_EQ((int)read_pixel_4bpp(&vram, base, 30, 11), 15);  /* 'O' top */
+    ASSERT_EQ((int)read_pixel_4bpp(&vram, base, 24, 11),  1);  /* hors 'O' */
+    ASSERT_EQ((int)read_pixel_4bpp(&vram, base, 31, 11),  1);  /* hors 'O' */
+    /* 'S' row 0 = $7E aussi (= 01111110). À x=32+0..7. */
+    ASSERT_EQ((int)read_pixel_4bpp(&vram, base, 33, 11), 15);  /* 'S' top */
+    ASSERT_EQ((int)read_pixel_4bpp(&vram, base, 38, 11), 15);  /* 'S' top */
 
     /* GPU sans erreur. */
     ASSERT_EQ(gpu.err, 0);

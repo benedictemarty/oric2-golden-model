@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - 2026-05-09
 
+### Test — OricOS Sprint GPU-3 v0.3 + démo "OS" titlebar ✨✨
+
+- `tests/integration/test_oricos_window.c` étendu : valide
+  kernel_gfx_text via boot kernel.
+- ASSERTs supplémentaires sur les pixels du texte "OS" :
+  - (25,11) et (30,11) du 'O' = white (15).
+  - (33,11) et (38,11) du 'S' = white.
+  - (24,11) et (31,11) frontières du 'O' = blue (1, titlebar intacte).
+- ASSERT précédent (30,11) déplacé à (60,11) car zone "OS" couvre
+  x=24..39.
+- 541 tests OK (inchangé, ASSERTs ajoutés au test existant).
+
 ### Sprint GPU-2 v0.3 — TEXT (5e commande, ADR-21 complet) ✨
 
 #### Added
