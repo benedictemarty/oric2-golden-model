@@ -1434,19 +1434,18 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    /* B1.1 (Oric 2): sélection du cœur CPU. Défaut = 6502 ; 65c816 réservé
-     * pour B1.2+. cpu_kind doit être positionné avant emulator_init qui
-     * résout la vtable. */
-    emu.cpu_kind = CPU_KIND_6502;
+    /* PH-2.b (ADR-18 étape 1.B, 2026-05-09) : défaut basculé sur 65C816.
+     * Le mode E (E=1, par défaut au reset) reproduit le comportement 6502
+     * strict (cycle-exact, ADR-11 hybride). 6502 reste accessible via
+     * --cpu 6502 jusqu'à étape 1.C où il sera supprimé.
+     * cpu_kind doit être positionné avant emulator_init qui résout la vtable. */
+    emu.cpu_kind = CPU_KIND_65C816;
     if (cpu_arg) {
         cpu_kind_t k;
         if (!cpu_core_kind_from_string(cpu_arg, &k)) {
             fprintf(stderr, "Invalid --cpu value: %s (expected: 6502 | 65c816)\n", cpu_arg);
             return 1;
         }
-        /* B1.4 : 65C816 mode E (émulation) opérationnel. Mode N (E=0) reste
-         * non exécutable (jalon B1.7+) — toute tentative de bascule via XCE
-         * sera trappée à l'exécution avec log_error. */
         emu.cpu_kind = k;
     }
 

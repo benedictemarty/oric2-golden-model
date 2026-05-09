@@ -1,12 +1,26 @@
 VERSION_TRACKING - Phosphoric
 =====================================
 
-Current Version: 1.22.11-alpha
+Current Version: 1.22.12-alpha
 Release Date: 2026-05-09
-Status: Alpha (Phase 1 PH-cleanup-zombie — retrait kernel_hires2_* legacy, 540 tests pass)
+Status: Alpha (Phase 1 PH-2.b — validation 65C816 mode E par défaut PASS, 540 tests, GO 1.C)
 
 Version History:
 ----------------
+- 1.22.12-alpha (2026-05-09): ADR-18 étape 1.B — campagne validation 65C816 mode E PASS
+  * Bascule défaut emu.cpu_kind = CPU_KIND_65C816 dans src/main.c
+    (était CPU_KIND_6502 depuis B1.1).
+  * Critères go/no-go (CLAUDE.md §7 + ADR-18 plan d'exécution) :
+    - 540 tests verts à --cpu 65c816 par défaut : ✓
+    - Bench performance overhead 65C816 mode E vs 6502 (5 runs × 20M cycles) :
+        ROM 1.0 : 0.318s vs 0.304s = +4.6 % (≤ 5 % requis) ✓
+        ROM 1.1 : 0.316s vs 0.302s = +4.6 % (≤ 5 % requis) ✓
+    - Diff PPM bit-à-bit 65C816 mode E vs 6502 sur 20M cycles boot :
+        ROM 1.0 (basic10.rom)  : identique ✓
+        ROM 1.1 (basic11b.rom) : identique ✓
+  * GO pour étape 1.C (suppression effective cpu6502.c, opcodes.c,
+    addressing.c, vtable 6502, test_cpu.c, etc.).
+  * --cpu 6502 reste accepté en CLI jusqu'à étape 1.C.
 - 1.22.11-alpha (2026-05-09): PH-cleanup-zombie — retrait kernel_hires2_* legacy
   * Suppression côté OricOS kernel.s :
     - kernel_hires2_clear (62 lignes asm + pattern_table 18 lignes).

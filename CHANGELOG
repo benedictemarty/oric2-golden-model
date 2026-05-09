@@ -5,6 +5,50 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.22.12-alpha] - 2026-05-09
+
+### Phase 1 PH-2.b — Campagne validation 65C816 mode E par défaut (ADR-18 étape 1.B) ✅
+
+#### Changed
+- `src/main.c` : défaut `emu.cpu_kind = CPU_KIND_65C816` (était `CPU_KIND_6502`).
+  Le mode E (E=1, par défaut au reset) reproduit le comportement 6502 strict
+  (cycle-exact, ADR-11 hybride : bug JMP indirect, opcodes illégaux NMOS = NOP,
+  $EB alias SBC#).
+- `EMU_VERSION` 1.22.11-alpha → 1.22.12-alpha.
+
+#### Validation — critères go/no-go (CLAUDE.md §7 + ADR-18)
+
+**Suite tests** :
+- `make tests` : 540 OK (idem PH-cleanup-zombie). Aucune régression.
+
+**Bench performance** (5 runs × 20M cycles, /usr/bin/time) :
+
+| ROM | 65C816 mode E | 6502 | Overhead |
+|-----|---------------|------|----------|
+| 1.0 | 0.318s        | 0.304s | +4.6 %   |
+| 1.1 | 0.316s        | 0.302s | +4.6 %   |
+
+Tolérance ≤ 5 % requise (contrainte dure CLAUDE.md §7) : **PASS** ✓.
+
+**Diff PPM bit-à-bit** (boot 20M cycles, screenshot final) :
+- ROM 1.0 (basic10.rom) : `cmp` identique 65C816 mode E vs 6502 ✓.
+- ROM 1.1 (basic11b.rom) : `cmp` identique ✓.
+
+#### Conséquences
+
+- **GO** pour étape 1.C (suppression effective cpu6502.c, opcodes.c,
+  addressing.c, cpu_core_vtable_6502, CPU_KIND_6502, test_cpu.c, réécriture
+  test_cpu_core.c).
+- `--cpu 6502` reste accepté en CLI jusqu'à étape 1.C.
+
+#### Note
+
+- Audit shifts/rotations zp/abs M=0 (mode N) listé en BACKLOG dette technique :
+  pas exercé par cette campagne (mode E uniquement). À auditer avant usage
+  massif d'arithmétique 16-bit avec shifts mémoire.
+
+---
+
 ## [1.22.11-alpha] - 2026-05-09
 
 ### Phase 1 PH-cleanup-zombie — Retrait kernel_hires2_* legacy
