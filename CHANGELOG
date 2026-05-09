@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - 2026-05-09
 
+### Test — OricOS Sprint VRAM-3 pool LIVE allocator ✨
+
+- `tests/integration/test_oricos_live_alloc.c` : valide
+  `kernel_alloc_live_bank` / `kernel_free_live_bank` via boot kernel.
+- ASSERT BANK_LIVE_DEMO ($01:5468..$01:546B) = $81 $82 $83 $82
+  (3 alloc + 1 free + 1 alloc retourne $82 par LIFO).
+- 526 tests OK (525 → 526, +1).
+
 ### Test — OricOS Sprint VRAM-2 kernel API vram_* ✨
 
 - `tests/integration/test_oricos_vram.c` : valide kernel_vram_*
