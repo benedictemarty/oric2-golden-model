@@ -36,7 +36,7 @@
 #include "utils/profiler.h"
 #include "network/cast_server.h"
 
-#define EMU_VERSION "1.22.9-alpha"
+#define EMU_VERSION "1.22.10-alpha"
 
 /**
  * @brief ORIC machine model

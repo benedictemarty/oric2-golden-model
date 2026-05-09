@@ -12,39 +12,10 @@
 #ifndef CPU6502_H
 #define CPU6502_H
 
-#include <stdint.h>
-#include <stdbool.h>
-#include <stddef.h>
-
-/* Forward declaration for memory subsystem (avoids circular include) */
-typedef struct memory_s memory_t;
-
-/**
- * @brief CPU status flags (Processor Status Register)
- */
-typedef enum {
-    FLAG_CARRY     = 0x01,  /**< Carry flag (C) */
-    FLAG_ZERO      = 0x02,  /**< Zero flag (Z) */
-    FLAG_INTERRUPT = 0x04,  /**< Interrupt disable (I) */
-    FLAG_DECIMAL   = 0x08,  /**< Decimal mode (D) */
-    FLAG_BREAK     = 0x10,  /**< Break command (B) */
-    FLAG_UNUSED    = 0x20,  /**< Unused (always 1) */
-    FLAG_OVERFLOW  = 0x40,  /**< Overflow flag (V) */
-    FLAG_NEGATIVE  = 0x80   /**< Negative flag (N) */
-} cpu_flags_t;
-
-/**
- * @brief IRQ source flags (bitfield for level-triggered IRQ model)
- *
- * The real 6502 IRQ line is level-triggered: the CPU takes an interrupt
- * whenever IRQ is asserted AND the I flag is clear. Multiple sources
- * can assert IRQ simultaneously. Each source sets/clears its own bit.
- */
-typedef enum {
-    IRQF_VIA    = 0x01,  /**< VIA 6522 IRQ (T1 timer, CB1/CB2, etc.) */
-    IRQF_DISK   = 0x02,  /**< Microdisc FDC INTRQ */
-    IRQF_SERIAL = 0x04   /**< ACIA 6551 serial IRQ */
-} cpu_irq_source_t;
+#include "cpu/cpu_types.h"
+/* memory_t, cpu_flags_t (FLAG_*), cpu_irq_source_t (IRQF_*) sont définis
+ * dans cpu_types.h depuis ADR-18 étape 1.A (2026-05-09). Conservés via
+ * include pour rétro-compat des consommateurs historiques de cpu6502.h. */
 
 /**
  * @brief CPU state structure

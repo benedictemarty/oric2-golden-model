@@ -5,6 +5,39 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.22.10-alpha] - 2026-05-09
+
+### Phase 1 PH-2.a — Décrochage des types CPU partagés (ADR-18 étape 1.A)
+
+#### Added
+- `include/cpu/cpu_types.h` neutre, créé pour porter les types partagés
+  entre les cœurs 6502 et 65C816 :
+  - Forward declaration `memory_t`.
+  - `cpu_flags_t` (FLAG_CARRY, FLAG_ZERO, FLAG_INTERRUPT, FLAG_DECIMAL,
+    FLAG_BREAK, FLAG_UNUSED, FLAG_OVERFLOW, FLAG_NEGATIVE).
+  - `cpu_irq_source_t` (IRQF_VIA, IRQF_DISK, IRQF_SERIAL).
+
+#### Changed
+- `include/cpu/cpu6502.h` : les définitions `memory_t`, `cpu_flags_t`,
+  `cpu_irq_source_t` sont retirées et fournies via `#include "cpu/cpu_types.h"`.
+- `EMU_VERSION` 1.22.9-alpha → 1.22.10-alpha.
+
+#### Notes
+- Étape additive pure : les consommateurs historiques de `cpu6502.h`
+  (debugger, trace, profiler, emulator.h, cpu_core.h, cpu65c816.h, tests)
+  restent fonctionnels sans modification grâce à l'include transitif.
+- La migration effective des consommateurs vers `cpu_types.h` direct sera
+  réalisée en étape 1.C (suppression du cœur 6502, post go/no-go 1.B).
+- Critère validation : `make tests` 541 → 541 (aucune régression).
+- Build SDL2 OK. Diagnostics clangd "file not found" sur `cpu_types.h`
+  visible dans certains LSP IDE — faux positif (path config IDE absent),
+  le build Makefile + tests passent. Sera résolu en Phase 2 (compile_commands.json).
+
+#### Validation
+- 541 tests OK.
+
+---
+
 ## [Unreleased] - 2026-05-09
 
 ### Phase 0 programme état-de-l'art — décisions architecture Phosphoric

@@ -1,12 +1,20 @@
 VERSION_TRACKING - Phosphoric
 =====================================
 
-Current Version: 1.22.9-alpha
+Current Version: 1.22.10-alpha
 Release Date: 2026-05-09
-Status: Alpha (OricOS Sprint 3.c v0.4 — 3 fenêtres + drag, 541 tests pass)
+Status: Alpha (Phase 1 PH-2.a — décrochage types CPU vers cpu_types.h, 541 tests pass)
 
 Version History:
 ----------------
+- 1.22.10-alpha (2026-05-09): ADR-18 étape 1.A — décrochage types CPU partagés
+  * Création include/cpu/cpu_types.h neutre : memory_t (forward decl),
+    cpu_flags_t (FLAG_*), cpu_irq_source_t (IRQF_*).
+  * cpu6502.h inclut désormais cpu_types.h pour fournir ces types.
+    Préserve rétro-compat des consommateurs (pas de modification requise
+    en dehors de cpu6502.h en étape 1.A — additif pur).
+  * Préparation suppression cœur 6502 en étape 1.C.
+  * 541 tests, = (aucune régression, aucun nouveau test).
 - 1.22.9-alpha (2026-05-09): OricOS Sprint 3.c v0.4 — 3e fenêtre démo
   * Boot kernel ajoute window 3 (140, 100, 80×60) avec couleurs distinctes
     (frame=lightred, title=yellow, body=lightcyan) pour démontrer la palette
