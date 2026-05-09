@@ -170,6 +170,43 @@ static void gpu_exec_line(gpu_device_t* gpu, vram_device_t* vram) {
     }
 }
 
+/* TEXT v0.1 : rendu fonte 8×8 mono à color_fg.
+ * Args :
+ *   ARG1 = base SDRAM framebuffer (24-bit).
+ *   ARG2 = font_addr 24-bit (= 256 chars × 8 bytes/char en SDRAM).
+ *   ARG3 = string_addr 24-bit (null-terminated, max 255 chars).
+ *   ARG4.LO = x (8-bit), ARG4.MID = y (8-bit), ARG4.HI = color_fg (4b).
+ *
+ * Pixels OFF dans le bitmap = laissés intacts (pas de color_bg).
+ * BPL hardcodé GPU_XVGA_BPL=512.
+ *
+ * v0.2 reportés : color_bg, fonte taille variable, length 16-bit. */
+static void gpu_exec_text(gpu_device_t* gpu, vram_device_t* vram) {
+    if (!vram) return;
+    uint32_t base = gpu->arg1 & 0xFFFFFFu;
+    uint32_t font = gpu->arg2 & 0xFFFFFFu;
+    uint32_t str  = gpu->arg3 & 0xFFFFFFu;
+    int x_start = (int)( gpu->arg4        & 0xFFu);
+    int y_start = (int)((gpu->arg4 >> 8)  & 0xFFu);
+    uint8_t color = (uint8_t)((gpu->arg4 >> 16) & 0x0Fu);
+
+    for (int ci = 0; ci < 256; ci++) {
+        uint8_t c = vram_peek(vram, str + (uint32_t)ci);
+        if (c == 0u) break;  /* null-terminated */
+        uint32_t char_addr = font + (uint32_t)c * 8u;
+        int char_x = x_start + ci * 8;
+        for (int row = 0; row < 8; row++) {
+            uint8_t bits = vram_peek(vram, char_addr + (uint32_t)row);
+            for (int col = 0; col < 8; col++) {
+                if (bits & (uint8_t)(0x80u >> col)) {
+                    gpu_set_pixel(vram, base, char_x + col, y_start + row,
+                                  color);
+                }
+            }
+        }
+    }
+}
+
 /* Dispatch trigger. */
 static void gpu_dispatch(gpu_device_t* gpu, vram_device_t* vram, memory_t* mem) {
     (void)mem;  /* unused v0.1 (toutes ops ciblent SDRAM) */
@@ -188,6 +225,9 @@ static void gpu_dispatch(gpu_device_t* gpu, vram_device_t* vram, memory_t* mem) 
             break;
         case GPU_OP_LINE:
             gpu_exec_line(gpu, vram);
+            break;
+        case GPU_OP_TEXT:
+            gpu_exec_text(gpu, vram);
             break;
         default:
             gpu->err = true;  /* opcode inconnu */

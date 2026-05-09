@@ -405,6 +405,65 @@ TEST(test_line_diagonal) {
     gpu_cleanup(&gpu);
 }
 
+/* ─── TEXT : rendu fonte 8×8 ──────────────────────────────────────── */
+
+TEST(test_text_basic_char) {
+    gpu_device_t gpu;
+    vram_device_t vram;
+    gpu_init(&gpu);
+    ASSERT_TRUE(vram_init(&vram));
+
+    /* Pré-charger fonte mini en SDRAM[$001000].
+     * Char 'A' (= $41) bitmap 8×8 simple :
+     *   row 0 : 00111100 (0x3C) — center 4 pixels lit
+     *   rows 1..7 : 0
+     * Donc 'A' allume juste pixels (2..5) sur row 0. */
+    uint32_t font = 0x001000;
+    uint32_t a_addr = font + 0x41 * 8;
+    vram_poke(&vram, a_addr + 0, 0x3C);
+    /* rows 1..7 restent à 0. */
+
+    /* Pré-charger string "A\0" en SDRAM[$002000]. */
+    vram_poke(&vram, 0x002000, 'A');
+    vram_poke(&vram, 0x002001, 0x00);
+
+    /* TEXT(base=0, font=$001000, string=$002000, x=0, y=0, color=15). */
+    gpu_write(&gpu, NULL, NULL, GPU_REG_ARG1_LO,  0x00);
+    gpu_write(&gpu, NULL, NULL, GPU_REG_ARG1_MID, 0x00);
+    gpu_write(&gpu, NULL, NULL, GPU_REG_ARG1_HI,  0x00);
+    gpu_write(&gpu, NULL, NULL, GPU_REG_ARG2_LO,  0x00);
+    gpu_write(&gpu, NULL, NULL, GPU_REG_ARG2_MID, 0x10);
+    gpu_write(&gpu, NULL, NULL, GPU_REG_ARG2_HI,  0x00);
+    gpu_write(&gpu, NULL, NULL, GPU_REG_ARG3_LO,  0x00);
+    gpu_write(&gpu, NULL, NULL, GPU_REG_ARG3_MID, 0x20);
+    gpu_write(&gpu, NULL, NULL, GPU_REG_ARG3_HI,  0x00);
+    gpu_write(&gpu, NULL, NULL, GPU_REG_ARG4_LO,  0x00);  /* x=0 */
+    gpu_write(&gpu, NULL, NULL, GPU_REG_ARG4_MID, 0x00);  /* y=0 */
+    gpu_write(&gpu, NULL, NULL, GPU_REG_ARG4_HI,  0x0F);  /* color=15 */
+    gpu_write(&gpu, NULL, NULL, GPU_REG_CMD_OP,   GPU_OP_TEXT);
+    gpu_write(&gpu, &vram, NULL, GPU_REG_TRIGGER, 0x01);
+
+    /* Row 0, pixels 2..5 doivent être white (color=15).
+     * Pixel (0, 0) → bit 7 de bitmap row 0 = 0 → pas écrit (laissé à 0).
+     * Pixel (2, 0) → bit 5 = 1 → color 15.
+     * Pixel (5, 0) → bit 2 = 1 → color 15.
+     * Pixel (6, 0) → bit 1 = 0 → pas écrit. */
+    /* Byte 0 row 0 = pixels 0,1 → byte 0x00 (aucun écrit).
+     * Byte 1 row 0 = pixels 2,3 → byte 0xFF (les 2 écrits color 15).
+     * Byte 2 row 0 = pixels 4,5 → byte 0xFF.
+     * Byte 3 row 0 = pixels 6,7 → byte 0x00 (aucun écrit). */
+    ASSERT_EQ((int)vram_peek(&vram, 0), 0x00);
+    ASSERT_EQ((int)vram_peek(&vram, 1), 0xFF);
+    ASSERT_EQ((int)vram_peek(&vram, 2), 0xFF);
+    ASSERT_EQ((int)vram_peek(&vram, 3), 0x00);
+    /* Row 1 (BPL=512 + 0..3) : tous 0 (bitmap row 1 = 0x00). */
+    ASSERT_EQ((int)vram_peek(&vram, 512 + 0), 0x00);
+    ASSERT_EQ((int)vram_peek(&vram, 512 + 1), 0x00);
+
+    vram_cleanup(&vram);
+    gpu_cleanup(&gpu);
+}
+
 /* ─── CLEAR taille XVGA framebuffer complet ──────────────────────── */
 
 TEST(test_clear_xvga_full_framebuffer) {
@@ -453,6 +512,7 @@ int main(void) {
     RUN(test_line_horizontal);
     RUN(test_line_vertical);
     RUN(test_line_diagonal);
+    RUN(test_text_basic_char);
     RUN(test_clear_xvga_full_framebuffer);
 
     printf("\n═══════════════════════════════════════════════════════\n");

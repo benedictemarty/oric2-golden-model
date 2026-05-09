@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - 2026-05-09
 
+### Sprint GPU-2 v0.3 — TEXT (5e commande, ADR-21 complet) ✨
+
+#### Added
+- **`GPU_OP_TEXT ($05)`** : rendu fonte 8×8 mono couleur.
+  - ARG1 = base SDRAM framebuffer.
+  - ARG2 = font_addr 24-bit (256 chars × 8 bytes = 2 KiB).
+  - ARG3 = string_addr 24-bit (null-terminated, max 255 chars).
+  - ARG4.LO = x, ARG4.MID = y, ARG4.HI = color_fg (4-bit).
+- Pixels OFF du bitmap = laissés intacts (pas de color_bg en v0.1).
+- Réutilise helper `gpu_set_pixel` pour mask 4bpp gauche/droit.
+
+#### Test unitaire
+- `test_text_basic_char` : pré-charge bitmap simple 'A' (row 0 = 0x3C),
+  string "A\\0" en SDRAM, trigger TEXT(0, 0, color=15). Vérifie row 0
+  bytes 0..3 = ($00, $FF, $FF, $00) = pixels (0,1)=0, (2,3)=15,
+  (4,5)=15, (6,7)=0. Row 1 entièrement 0.
+
+#### ADR-21 complet (5/5 commandes)
+| Opcode | Nom | Status |
+|--------|-----|--------|
+| $01 | CLEAR | ✅ v0.1 |
+| $02 | FILL_RECT | ✅ v0.1 |
+| $03 | BLIT | ✅ v0.1 (byte-aligned, no overlap) |
+| $04 | LINE | ✅ v0.1 (Bresenham 8-bit coords) |
+| **$05** | **TEXT** | **✅ v0.1 (fonte 8×8 mono)** |
+
+#### Validation
+- 541 tests OK (540 → 541, +1).
+
+#### Reportés v0.4
+- color_bg pour TEXT (background pixels colorés).
+- Fonte taille variable (4×6, 16×16…).
+- length 16-bit (vs 255 chars max actuel).
+
 ### Test — OricOS Sprint 3.c v0.2 multi-fenêtre via BLIT ✨
 
 - `tests/integration/test_oricos_window.c` étendu : valide 2e fenêtre
