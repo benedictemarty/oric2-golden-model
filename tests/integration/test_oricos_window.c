@@ -253,23 +253,21 @@ TEST(test_oricos_window_draw) {
     ASSERT_EQ(read_pixel_4bpp(&vram, base, 50, 5),   0);  /* au-dessus fenêtre */
     /* (50, 80) = top-frame de window 2 maintenant, plus du noir. */
 
-    /* ── Sprint 3.c v0.2 : window 2 clonée via BLIT à (50, 80) ──
-     * BLIT(src=window1, dst=window2_pos, 80×60). Puis FILL_RECT
-     * repaint titlebar window 2 en green (color 2) pour distinction.
-     * window 2 zone : (50..129, 80..139). */
-    /* Frame window 2 : 4 coins en color 0 (black). */
-    ASSERT_EQ(read_pixel_4bpp(&vram, base, 50, 80),   0);  /* top-left */
-    ASSERT_EQ(read_pixel_4bpp(&vram, base, 129, 80),  0);  /* top-right */
-    ASSERT_EQ(read_pixel_4bpp(&vram, base, 50, 139),  0);  /* bot-left */
-    ASSERT_EQ(read_pixel_4bpp(&vram, base, 129, 139), 0);  /* bot-right */
-    /* Title bar window 2 = green (color 2) après repaint. */
-    ASSERT_EQ(read_pixel_4bpp(&vram, base, 80, 84),   2);  /* milieu titlebar */
-    ASSERT_EQ(read_pixel_4bpp(&vram, base, 60, 81),   2);
-    ASSERT_EQ(read_pixel_4bpp(&vram, base, 100, 87),  2);
-    /* Body window 2 = lgray (color 7) du BLIT (intact après FILL_RECT). */
-    ASSERT_EQ(read_pixel_4bpp(&vram, base, 80, 100),  7);  /* milieu body */
-    ASSERT_EQ(read_pixel_4bpp(&vram, base, 60, 88),   7);
-    ASSERT_EQ(read_pixel_4bpp(&vram, base, 100, 130), 7);
+    /* Sprint 3.c v0.3 : window 2 a été MOVED de (50, 80) à (300, 300).
+     * Ancienne position effacée (color 0), nouvelle position contient
+     * le pattern fenêtre. */
+    /* Ancienne pos (50, 80) effacée par FILL_RECT(color=0) post-BLIT. */
+    ASSERT_EQ(read_pixel_4bpp(&vram, base, 50, 80),   0);
+    ASSERT_EQ(read_pixel_4bpp(&vram, base, 80, 100),  0);  /* ex-milieu body */
+    ASSERT_EQ(read_pixel_4bpp(&vram, base, 100, 130), 0);  /* ex-fin body */
+    /* Nouvelle pos (300, 300) : pattern fenêtre via BLIT du clone. */
+    ASSERT_EQ(read_pixel_4bpp(&vram, base, 300, 300), 0);  /* frame top-left */
+    ASSERT_EQ(read_pixel_4bpp(&vram, base, 379, 300), 0);  /* frame top-right */
+    ASSERT_EQ(read_pixel_4bpp(&vram, base, 300, 359), 0);  /* frame bot-left */
+    ASSERT_EQ(read_pixel_4bpp(&vram, base, 379, 359), 0);  /* frame bot-right */
+    ASSERT_EQ(read_pixel_4bpp(&vram, base, 330, 304), 2);  /* titlebar green */
+    ASSERT_EQ(read_pixel_4bpp(&vram, base, 330, 320), 7);  /* body lgray */
+    ASSERT_EQ(read_pixel_4bpp(&vram, base, 350, 350), 7);  /* fin body */
 
     /* ── Sprint GPU-3 v0.3 : "OS" écrit dans titlebar window 1 ──
      * Bitmap 'O' row 0 = $7E = 01111110.

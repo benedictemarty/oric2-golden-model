@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - 2026-05-09
 
+### Test — OricOS Sprint 3.c v0.3 true drag ✨✨
+
+- `tests/integration/test_oricos_window.c` étendu : valide vrai drag
+  via BLIT + FILL_RECT clear original.
+- ASSERTs supplémentaires :
+  - Anciennes pos (50, 80), (80, 100), (100, 130) = 0 (effacées).
+  - Nouvelles pos (300, 300) coins = 0 (frame), (330, 304) = 2
+    (titlebar green), (330, 320) = 7 (body lgray), (350, 350) = 7.
+- ASSERTs anciennes v0.2 (titlebar window 2 à (80, 84) etc.) retirées
+  (ne valent plus depuis le drag).
+- 541 tests OK.
+
 ### Test — OricOS Sprint GPU-3 v0.3 + démo "OS" titlebar ✨✨
 
 - `tests/integration/test_oricos_window.c` étendu : valide
