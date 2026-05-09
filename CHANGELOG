@@ -7,6 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - 2026-05-09
 
+### Sprint VRAM-1 — vram_device (ADR-19) ✨
+
+#### Added
+- **`include/io/vram_device.h`** + **`src/io/vram_device.c`** :
+  émulation de la VRAM cold SDRAM (16 MiB v1, extensible 32 MiB v2)
+  accessible via I/O ports `$0330-$033C` (cf. ADR-19 + MEMORY_MAP §9).
+- API : `vram_init`, `vram_cleanup`, `vram_read`, `vram_write`,
+  `vram_peek`, `vram_poke`.
+- Modèle de programmation :
+  - Set `VRAM_ADDR_LO/MID/HI` (24-bit).
+  - Lire/écrire `VRAM_DATA` → auto-increment ADDR.
+  - Pour DMA : set `DMA_SRC`, `DMA_DST`, `DMA_LEN`, puis trigger via
+    `DMA_CTRL` bit 0. Bit 1 = direction (0=SDRAM→bank, 1=bank→SDRAM).
+- DMA synchrone v0.1 (busy=0 immédiat). Capacité max par burst : 64 KiB.
+- LEN=0 → 65536 octets (max burst).
+
+#### Tests unitaires (9 tests)
+- `test_init_alloc_buffer` : 16 MiB calloc, registres à zéro.
+- `test_addr_register_round_trip` : write/read $0330-$0332.
+- `test_data_write_read_auto_increment` : 4 bytes consécutifs avec
+  auto-inc ADDR + relecture.
+- `test_addr_wraps_at_16mib` : wrap-around à $FFFFFF → $000000.
+- `test_dma_sdram_to_bank` : DMA SDRAM[$001000] → bank $80:0200, 16B.
+- `test_dma_bank_to_sdram` : DMA bank $80:0200 → SDRAM[$002000], 16B.
+- `test_dma_len_zero_means_64k` : burst 65 536 octets.
+- `test_dma_registers_round_trip` : read/write SRC/DST/LEN.
+- `test_peek_poke_direct` : helpers test infrastructure.
+
+#### Validation
+- 524 tests OK (515 → 524, +9 nouveaux).
+- Aucune régression sur les autres tests Phosphoric.
+
+#### Reportés v0.2
+- DMA asynchrone : busy bit + cycles côté CPU + IRQ optionnel.
+- Extension à 32 MiB (bit additionnel dans DMA_CTRL ?).
+- Tests d'intégration boot kernel (Sprint VRAM-2 OricOS).
+
 ### Fix CPU 65C816 — ASL/LSR/ROL/ROR A en mode M=0 16-bit ✨
 
 #### Bug
