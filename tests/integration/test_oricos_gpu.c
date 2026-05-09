@@ -215,6 +215,32 @@ TEST(test_oricos_gpu_clear_then_fill_rect) {
     ASSERT_EQ((int)vram_peek(&vram, 0x004000 + 1*512 + 2), 0x44); /* ligne 1 hors rect */
     ASSERT_EQ((int)vram_peek(&vram, 0x004000 + 6*512 + 2), 0x44); /* ligne 6 hors rect */
 
+    /* ── BLIT(src=$004000, dst=$008000, byte_w=10, byte_h=8) ──
+     * Copie lignes 0..7 du fb test vers lignes 32..39. Le rect (ligne
+     * 2..5 byte 2..5) est copié vers ligne 34..37 byte 2..5. */
+    /* Rect copié à dst : ligne 32+2 byte 2 = $FF. */
+    ASSERT_EQ((int)vram_peek(&vram, 0x008000 + 2*512 + 2), 0xFF);
+    ASSERT_EQ((int)vram_peek(&vram, 0x008000 + 5*512 + 5), 0xFF);
+    /* Hors rect mais dans BLIT range : $44 (blue clear). */
+    ASSERT_EQ((int)vram_peek(&vram, 0x008000 + 0),         0x44);
+    ASSERT_EQ((int)vram_peek(&vram, 0x008000 + 7*512 + 9), 0x44);
+    /* Hors BLIT range (byte 10..) : reste à $44 car CLEAR initial avait
+     * rempli 32 KiB depuis $004000 (dst $008000 est dans cette zone). */
+    ASSERT_EQ((int)vram_peek(&vram, 0x008000 + 10),        0x44);
+
+    /* ── LINE((40, 20)→(40, 25), color=2=green) sur fb test ──
+     * Pixel x=40 pair → byte = 40/2 = 20 (offset within line).
+     * y=20..25, BPL=512.
+     * x=40 pair → pixel gauche, mask 0xF0. Color 2 → bits 0010 (= 0x20).
+     * Avant : ligne 20 byte 20 = $44 (clear blue, hors rect).
+     * Après : (0x44 & 0x0F) | (0x20) = $24. */
+    ASSERT_EQ((int)vram_peek(&vram, 0x004000 + 20*512 + 20), 0x24);
+    ASSERT_EQ((int)vram_peek(&vram, 0x004000 + 22*512 + 20), 0x24);
+    ASSERT_EQ((int)vram_peek(&vram, 0x004000 + 25*512 + 20), 0x24);
+    /* Hors LINE : reste blue $44. */
+    ASSERT_EQ((int)vram_peek(&vram, 0x004000 + 19*512 + 20), 0x44);
+    ASSERT_EQ((int)vram_peek(&vram, 0x004000 + 26*512 + 20), 0x44);
+
     /* GPU status : pas d'erreur. */
     ASSERT_EQ(gpu.err, 0);
 

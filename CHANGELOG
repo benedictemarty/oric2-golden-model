@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - 2026-05-09
 
+### Test — OricOS Sprint GPU-3 v0.2 kernel_gfx_blit + line ✨
+
+- `tests/integration/test_oricos_gpu.c` étendu : valide kernel_gfx_blit
+  + kernel_gfx_line via boot kernel.
+- ASSERTs supplémentaires :
+  - BLIT : rect copié à dst correct (lignes 34..37 byte 2..5 = $FF).
+  - BLIT hors range : reste à $44 (clear initial).
+  - LINE : 3 pixels x=40 sur lignes 20, 22, 25 = $24 (mix blue+green).
+  - LINE hors range : reste à $44.
+- 539 tests OK (inchangé mais couverture étendue).
+
 ### Sprint GPU-2 partiel — BLIT + LINE (ADR-21) ✨
 
 #### Added (gpu_device.c extension)
