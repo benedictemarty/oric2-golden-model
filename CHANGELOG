@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - 2026-05-09
 
+### Test — OricOS Sprint 3.c v0.4 démo 3e fenêtre ✨
+
+- `tests/integration/test_oricos_window.c` étendu : 6 ASSERTs pour
+  window 3 colorful à (140, 100), 80×60.
+- Couleurs distinctes : frame=12=lightred, title=14=yellow,
+  body=11=lightcyan — démontre la palette VGA-IBM 16 couleurs.
+- PPM finale 1024×768 montre 3 fenêtres + drag.
+- Position choisie pour rester dans range 8-bit ZP args
+  (x+w-1=219 ≤ 255, y+h-1=159 ≤ 255).
+- 541 tests OK.
+
 ### Test — OricOS Sprint 3.c v0.3 true drag ✨✨
 
 - `tests/integration/test_oricos_window.c` étendu : valide vrai drag

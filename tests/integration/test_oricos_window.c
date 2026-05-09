@@ -285,6 +285,16 @@ TEST(test_oricos_window_draw) {
     ASSERT_EQ((int)read_pixel_4bpp(&vram, base, 33, 11), 15);  /* 'S' top */
     ASSERT_EQ((int)read_pixel_4bpp(&vram, base, 38, 11), 15);  /* 'S' top */
 
+    /* ── Sprint 3.c v0.4 : window 3 colorful à (140, 100) ──
+     * Frame=12=lightred, title=14=yellow, body=11=lightcyan.
+     * Dims 80×60 → x_end=219, y_end=159 (8-bit safe). */
+    ASSERT_EQ(read_pixel_4bpp(&vram, base, 140, 100), 12);  /* frame TL */
+    ASSERT_EQ(read_pixel_4bpp(&vram, base, 219, 100), 12);  /* frame TR */
+    ASSERT_EQ(read_pixel_4bpp(&vram, base, 140, 159), 12);  /* frame BL */
+    ASSERT_EQ(read_pixel_4bpp(&vram, base, 219, 159), 12);  /* frame BR */
+    ASSERT_EQ(read_pixel_4bpp(&vram, base, 180, 104), 14);  /* titlebar yellow */
+    ASSERT_EQ(read_pixel_4bpp(&vram, base, 180, 130), 11);  /* body lcyan */
+
     /* GPU sans erreur. */
     ASSERT_EQ(gpu.err, 0);
 

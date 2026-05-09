@@ -1,12 +1,21 @@
 VERSION_TRACKING - Phosphoric
 =====================================
 
-Current Version: 1.22.8-alpha
-Release Date: 2026-05-08
-Status: Alpha (Démo OricOS visible via --kernel, 494 tests pass)
+Current Version: 1.22.9-alpha
+Release Date: 2026-05-09
+Status: Alpha (OricOS Sprint 3.c v0.4 — 3 fenêtres + drag, 541 tests pass)
 
 Version History:
 ----------------
+- 1.22.9-alpha (2026-05-09): OricOS Sprint 3.c v0.4 — 3e fenêtre démo
+  * Boot kernel ajoute window 3 (140, 100, 80×60) avec couleurs distinctes
+    (frame=lightred, title=yellow, body=lightcyan) pour démontrer la palette
+    VGA-IBM 16 couleurs.
+  * test_oricos_window_draw : 6 ASSERTs supplémentaires pour window 3.
+  * PPM finale 1024×768 montre 3 fenêtres simultanées + drag window 2.
+  * Note v0.1 : kernel_window_draw limité à x+w-1 ≤ 255 et y+h-1 ≤ 255
+    (ZP args 8-bit) — extension 16-bit prévue v0.5.
+  * 541 tests, =.
 - 1.22.8-alpha (2026-05-08): Démo OricOS visible (--kernel)
   * Add CLI --kernel FILE : charge kernel.bin OricOS, force machine oric2 + cpu_kind 65C816,
     skippe ROM Oric 1, installe trampolines RESET/IRQ/NMI bank 0 + vecteurs natifs E/N.
