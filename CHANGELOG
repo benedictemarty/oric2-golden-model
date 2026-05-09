@@ -7,6 +7,60 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - 2026-05-09
 
+### Sprint GPU-1 — gpu_device v0.1 (CLEAR + FILL_RECT) ✨
+
+#### Added
+- **`include/io/gpu_device.h`** + **`src/io/gpu_device.c`** :
+  émulation du GPU Blitter HW Oric 2 (cf. ADR-21).
+- API : `gpu_init`, `gpu_cleanup`, `gpu_read`, `gpu_write`.
+- Ports I/O `$0340-$034F` :
+  - $0340 : CMD_OP
+  - $0341-$0343 : ARG1 (24-bit)
+  - $0344-$0346 : ARG2 (24-bit)
+  - $0347-$0349 : ARG3 (24-bit)
+  - $034A-$034C : ARG4 (24-bit)
+  - $034D : STATUS (busy/err/done)
+  - $034E : TRIGGER (W : exec command)
+  - $034F : INT_CTRL
+
+#### Commandes v0.1 implémentées
+- **`$01 CLEAR`** : remplit `size` octets en SDRAM[base] avec pattern
+  `(color << 4) | color` (= 2 pixels même couleur par byte).
+  Args : ARG1=base 24-bit, ARG2=size 24-bit, ARG3.LO=color (0..15).
+- **`$02 FILL_RECT`** : dessine un rectangle 4bpp dans framebuffer
+  SDRAM. Args : ARG1=base, ARG2.LO=x (8b), ARG2.MID=y (8b),
+  ARG3.LO=w (8b), ARG3.MID=h (8b), ARG4.LO=color (4b). BPL hardcodé
+  GPU_XVGA_BPL=512 (XVGA 1024×768×4bpp ADR-20 v3).
+
+#### Comportement v0.1
+- Synchrone : busy=0 immédiat après exec.
+- Mask intra-octet correct pour FILL_RECT (pixel gauche bits[7:4],
+  pixel droit bits[3:0]).
+- Opcode inconnu → err=true, status bit 6 (ERR) set.
+
+#### Tests unitaires (7 tests)
+- `test_init_state` : registres à zéro, status idle (DONE).
+- `test_arg_registers_round_trip` : write/read ARG1-4 + CMD_OP.
+- `test_clear_fills_sdram` : CLEAR(base, size, color) → pattern $44
+  pour color=4 sur 256 octets.
+- `test_fill_rect_aligned` : rectangle 4×2 pixels color=7 → 4 octets
+  $77 (2 par ligne).
+- `test_fill_rect_pixel_left_right` : valide masks intra-octet
+  ($AB → $A3 pour pixel droit, $CD → $3D pour pixel gauche).
+- `test_unknown_opcode_sets_err` : opcode $FF → err=true + bit 6 STATUS.
+- `test_clear_xvga_full_framebuffer` : CLEAR full XVGA framebuffer
+  (393 216 octets, color=15) → 4 coins blanc + byte juste après = 0.
+
+#### Validation
+- 533 tests OK (526 → 533, +7).
+- Aucune régression sur les autres tests Phosphoric.
+
+#### Reportés v0.2
+- Commandes BLIT, LINE, TEXT (cf. ADR-21).
+- DMA asynchrone : busy bit progressif + IRQ optionnelle.
+- BPL configurable via registre dédié (pour autres résolutions).
+- x/y/w/h 16-bit (limite v0.1 = 255 chacun).
+
 ### Test — OricOS Sprint VRAM-3 pool LIVE allocator ✨
 
 - `tests/integration/test_oricos_live_alloc.c` : valide

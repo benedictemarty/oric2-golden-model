@@ -98,7 +98,7 @@ BINDIR = $(PREFIX)/bin
 DATADIR = $(PREFIX)/share/phosphoric
 DOCDIR = $(PREFIX)/share/doc/phosphoric
 
-.PHONY: all clean tools tests test-cpu test-cpu-core test-cpu65c816 test-cpu65c816-e test-cpu65c816-n test-klaus test-boot-dual test-paravirt test-oricos-boot test-oricos-visual test-oricos-sd test-oricos-hires2 test-oricos-vram test-oricos-live-alloc test-memory test-oric2-memory test-compositor test-compositor-hires-oric2 test-vram-device test-io test-storage test-system test-rom test-video test-hires-oric2 test-audio test-debugger test-cast test-savestate test-atmos test-joystick test-printer test-mcp40 test-renderer test-trace test-profiler test-rominfo test-serial test-keyboard valgrind static-analysis coverage coverage-report install uninstall help
+.PHONY: all clean tools tests test-cpu test-cpu-core test-cpu65c816 test-cpu65c816-e test-cpu65c816-n test-klaus test-boot-dual test-paravirt test-oricos-boot test-oricos-visual test-oricos-sd test-oricos-hires2 test-oricos-vram test-oricos-live-alloc test-memory test-oric2-memory test-compositor test-compositor-hires-oric2 test-vram-device test-gpu-device test-io test-storage test-system test-rom test-video test-hires-oric2 test-audio test-debugger test-cast test-savestate test-atmos test-joystick test-printer test-mcp40 test-renderer test-trace test-profiler test-rominfo test-serial test-keyboard valgrind static-analysis coverage coverage-report install uninstall help
 
 all: $(TARGET)
 
@@ -312,6 +312,15 @@ test-vram-device: $(TEST_VRAM_SRCS)
 	@$(CC) $(CFLAGS) $(TEST_VRAM_SRCS) $(LDFLAGS) -o test_vram_device
 	@./test_vram_device
 
+TEST_GPU_SRCS = tests/unit/test_gpu_device.c src/io/gpu_device.c \
+                src/io/vram_device.c \
+                src/memory/memory.c src/memory/banking.c \
+                src/utils/logging.c
+
+test-gpu-device: $(TEST_GPU_SRCS)
+	@$(CC) $(CFLAGS) $(TEST_GPU_SRCS) $(LDFLAGS) -o test_gpu_device
+	@./test_gpu_device
+
 TEST_ORICOS_VRAM_SRCS = tests/integration/test_oricos_vram.c \
                        src/cpu/cpu6502.c src/cpu/opcodes.c src/cpu/addressing.c \
                        src/cpu/cpu65c816.c src/cpu/cpu65c816_opcodes.c \
@@ -462,7 +471,7 @@ test-coverage: $(TEST_COVERAGE_SRCS)
 	@$(CC) $(CFLAGS) $(TEST_COVERAGE_SRCS) $(LDFLAGS) -o test_coverage
 	@./test_coverage
 
-tests: test-cpu test-cpu-core test-cpu65c816 test-cpu65c816-e test-cpu65c816-n test-klaus test-boot-dual test-paravirt test-oricos-boot test-oricos-visual test-oricos-sd test-oricos-hires2 test-oricos-vram test-oricos-live-alloc test-memory test-oric2-memory test-compositor test-compositor-hires-oric2 test-vram-device test-io test-storage test-system test-video test-hires-oric2 test-audio test-debugger test-savestate test-atmos test-joystick test-printer test-mcp40 test-renderer test-trace test-profiler test-rominfo test-serial test-keyboard test-coverage
+tests: test-cpu test-cpu-core test-cpu65c816 test-cpu65c816-e test-cpu65c816-n test-klaus test-boot-dual test-paravirt test-oricos-boot test-oricos-visual test-oricos-sd test-oricos-hires2 test-oricos-vram test-oricos-live-alloc test-memory test-oric2-memory test-compositor test-compositor-hires-oric2 test-vram-device test-gpu-device test-io test-storage test-system test-video test-hires-oric2 test-audio test-debugger test-savestate test-atmos test-joystick test-printer test-mcp40 test-renderer test-trace test-profiler test-rominfo test-serial test-keyboard test-coverage
 	@echo ""
 	@echo "═══════════════════════════════════════════════════════"
 	@echo "  All test suites completed!"
