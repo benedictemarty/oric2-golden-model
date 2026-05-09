@@ -1,8 +1,8 @@
 # Phosphoric
 
-A cycle-accurate ORIC-1 / Atmos emulator written in C11.
+A cycle-accurate **ORIC-1 / Atmos emulator** written in C11 — and the **golden model** of the [Oric 2](https://github.com/benedictemarty/oric2) project.
 
-**Version: 1.14.3-alpha** | **286 tests, 100% pass** | **Zero memory leaks**
+**Version: 1.22.9-alpha** | **541 tests, 100% pass** | **Zero memory leaks** | [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 ```
  ____  _                      _                _
@@ -12,6 +12,15 @@ A cycle-accurate ORIC-1 / Atmos emulator written in C11.
 |_|   |_| |_|\___/|___/ .__/|_| |_|\___/|_|  |_|\___|
                        |_|
 ```
+
+## Two roles, one codebase
+
+| Role | What it does | Where |
+|---|---|---|
+| **Faithful Oric 1 / Atmos emulator** | Boots BASIC 1.0 / 1.1 ROMs, runs original software bit-for-bit. Multiplatform (Linux/macOS/Windows). | This README's *Features* section. |
+| **Oric 2 golden model** | Cycle-exact reference implementation of the Oric 2 hybrid machine (WDC 65C816, double ULA compositor, GPU blitter, 16 MiB SDRAM, FAT32 SD). The future ULX3S HDL must converge to this behavior. | See [`oric2/CLAUDE.md`](https://github.com/benedictemarty/oric2/blob/main/CLAUDE.md) and [`docs/CONTRACT_HDL.md`](https://github.com/benedictemarty/oric2/blob/main/docs/CONTRACT_HDL.md). |
+
+Phosphoric ships both modes from the same source tree. The `--machine oric1` (default) and `--machine oric2` switches route to the appropriate hardware model. The Oric 2 mode is what the OricOS kernel and apps target.
 
 ## Quick Start
 
@@ -391,21 +400,29 @@ Le comportement de Phosphoric s'appuie largement sur l'étude de ces émulateurs
 
 ## Repository
 
+The source lives under two names that point to the same tree:
+
 ```bash
-git clone https://git.nagominosato.fr:6775/chipinette/Phosphoric.git
-cd Phosphoric
-make SDL2=1
+# GitHub (public, primary) — under the Oric 2 golden model name
+git clone https://github.com/benedictemarty/oric2-golden-model.git Phosphoric
+
+# Gitea (mirror)
+git clone https://git.nagominosato.fr:6775/chipinette/oric2-golden-model.git
 ```
+
+In the [Oric 2 workspace layout](https://github.com/benedictemarty/oric2), this repo is checked out as `Phosphoric/` alongside `OricOS/` and the spec files (`CLAUDE.md`, `BACKLOG.md`, `docs/`).
 
 ## License
 
-This project is licensed under the [MIT License](LICENSE).
+This project is licensed under the [MIT License](LICENSE) — © 2026 chipinette.
 
 ## Contact
 
-- **Maintainer**: bmarty
+- **Maintainer**: [@benedictemarty](https://github.com/benedictemarty) (bmarty)
 - **Email**: bmarty@mailo.com
+- **Issues**: https://github.com/benedictemarty/oric2-golden-model/issues
+- **Oric 2 hub**: https://github.com/benedictemarty/oric2
 
 ---
 
-Phosphoric v1.14.3-alpha | 286 tests | ORIC-1 + Atmos | Post-CLOAD Rechain + CSAVE + Memory Dump + Documentation + ROM Analysis + CPU Profiler + CPU Trace + Display Scaling + MCP-40 Plotter + Printer + Joystick | 2026-03-16
+Phosphoric v1.22.9-alpha | 541 tests, 0 leaks | ORIC-1 + Atmos faithful emulator + Oric 2 golden model | Last release: 2026-05-09
