@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - 2026-05-09
 
+### Test — OricOS Sprint VRAM-2 kernel API vram_* ✨
+
+- `tests/integration/test_oricos_vram.c` : valide kernel_vram_*
+  helpers via boot kernel.
+- Pré-charge SDRAM[$002000] = "ABCD" via vram_poke avant boot.
+- io_callback route $0300-$030F (VIA), $0320-$0327 (SD),
+  $0330-$033F (VRAM).
+- ASSERTs après STP :
+  - vram[$001000..$001003] = "VRAM" (write_block)
+  - mem[$04:0500..$04:0503] = "ABCD" (read_block)
+  - vram[$003000..$003003] = "ABCD" (dma bank → SDRAM)
+- Makefile target `test-oricos-vram` ajouté à `make tests`.
+- 525 tests OK (524 → 525, +1).
+
 ### Sprint VRAM-1 — vram_device (ADR-19) ✨
 
 #### Added
