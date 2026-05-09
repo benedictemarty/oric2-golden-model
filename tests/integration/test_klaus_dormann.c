@@ -1,8 +1,11 @@
 /**
  * @file test_klaus_dormann.c
- * @brief Klaus Dormann 6502 functional test sur les deux cœurs (B1.5)
+ * @brief Klaus Dormann 6502 functional test sur le 65C816 mode E
  * @author bmarty <bmarty@mailo.com>
- * @date 2026-05-07
+ * @date 2026-05-07 (révisé 2026-05-09 — PH-2.c.2 sub-3, ADR-18 étape 1.C :
+ *       suppression du test sur le cœur 6502 historique. Le test sur 65C816
+ *       mode E reste — c'est le canari de régression mode E pour la compat
+ *       Oric 1 stricte ADR-10).
  *
  * Charge le binaire pré-construit `6502_functional_test.bin` (64KB) du
  * repo Klaus2m5/6502_65C02_functional_tests dans la mémoire de Phosphoric,
@@ -23,7 +26,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "cpu/cpu6502.h"
 #include "cpu/cpu65c816.h"
 #include "memory/memory.h"
 
@@ -89,27 +91,6 @@ static int load_klaus_bin(memory_t* mem) {
  * Cela rate quelques cas de boucles courtes mais reste correct pour les
  * traps Klaus qui sont des `jmp *` exécutés indéfiniment.
  */
-static uint16_t run_until_stall_6502(cpu6502_t* cpu) {
-    uint16_t prev_sample = 0xFFFF;
-    int stall_count = 0;
-    uint64_t cycles_done = 0;
-
-    while (cycles_done < KLAUS_MAX_CYCLES) {
-        for (int i = 0; i < 65536; i++) {
-            int c = cpu_step(cpu);
-            if (c <= 0) return cpu->PC;
-            cycles_done += (uint64_t)c;
-        }
-        if (cpu->PC == prev_sample) {
-            if (++stall_count >= 2) return cpu->PC;
-        } else {
-            stall_count = 0;
-            prev_sample = cpu->PC;
-        }
-    }
-    return 0xFFFF; /* timeout */
-}
-
 static uint16_t run_until_stall_816(cpu65c816_t* cpu) {
     uint16_t prev_sample = 0xFFFF;
     int stall_count = 0;
@@ -132,32 +113,6 @@ static uint16_t run_until_stall_816(cpu65c816_t* cpu) {
 }
 
 /* ─── Tests ─────────────────────────────────────────────────────────── */
-
-TEST(test_klaus_passes_on_6502_core) {
-    memory_t mem;
-    cpu6502_t cpu;
-    memory_init(&mem);
-    int rc = load_klaus_bin(&mem);
-    if (rc == -1) {
-        printf("SKIP (bin absent)            "); /* aligne le PASS final */
-        return;
-    }
-    ASSERT_TRUE(rc == 0);
-
-    cpu_init(&cpu, &mem);
-    cpu_reset(&cpu);
-    /* Klaus place un `res_trap` sur le vecteur RESET (anti-reset spurieux).
-     * L'entry point réel du test est $0400. */
-    cpu.PC = KLAUS_RESET_VECTOR;
-
-    uint16_t end_pc = run_until_stall_6502(&cpu);
-    if (end_pc != KLAUS_SUCCESS_PC) {
-        printf("FAIL\n    Klaus 6502 trap at PC=$%04X (expected $%04X), cycles=%llu\n",
-               end_pc, KLAUS_SUCCESS_PC, (unsigned long long)cpu.cycles);
-        tests_failed++;
-        return;
-    }
-}
 
 TEST(test_klaus_passes_on_65c816_core_e_mode) {
     memory_t mem;
@@ -188,10 +143,9 @@ TEST(test_klaus_passes_on_65c816_core_e_mode) {
 int main(void) {
     printf("\n");
     printf("═══════════════════════════════════════════════════════\n");
-    printf("  Klaus Dormann 6502 Functional Test (B1.5)\n");
+    printf("  Klaus Dormann Functional Test (65C816 mode E)\n");
     printf("═══════════════════════════════════════════════════════\n\n");
 
-    RUN(test_klaus_passes_on_6502_core);
     RUN(test_klaus_passes_on_65c816_core_e_mode);
 
     printf("\n═══════════════════════════════════════════════════════\n");

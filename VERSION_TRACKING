@@ -1,12 +1,29 @@
 VERSION_TRACKING - Phosphoric
 =====================================
 
-Current Version: 1.22.15-alpha
+Current Version: 1.22.16-alpha
 Release Date: 2026-05-09
-Status: Alpha (Phase 1 PH-2.c.2 sub-2 — cpu65c816 découplé du cœur 6502, 535 tests)
+Status: Alpha (Phase 1 PH-2.c.2 sub-3 — migration tests Oric 1 vers 65C816 mode E, 530 tests)
 
 Version History:
 ----------------
+- 1.22.16-alpha (2026-05-09): ADR-18 étape 1.C sub-3 — migration tests Oric 1
+  * test_klaus_dormann.c : retrait test_klaus_passes_on_6502_core ;
+    conservation test_klaus_passes_on_65c816_core_e_mode (canari régression
+    mode E, ADR-10 compat Oric 1 stricte). Suite Klaus reste exigeante
+    (~96M cycles).
+  * test_oric_boot_dual.c : SUPPRIMÉ (4 tests retirés) — ce fichier comparait
+    explicitement les 2 cœurs ; perd son sens post-suppression 6502.
+    Couverture régression mode E : test_klaus + test_cpu65c816_e_mode.c
+    (711 LOC) + diff PPM bit-à-bit PH-2.b sur boot ROM 1.0/1.1.
+  * test_paravirt_demo.c : Makefile uniquement (retrait deps cpu6502.c,
+    opcodes.c, addressing.c — vérifié grep, n'utilise que cpu65c816_t).
+  * Makefile :
+    - TEST_KLAUS_SRCS, TEST_PARAVIRT_SRCS : retrait deps 6502.
+    - TEST_BOOT_DUAL_SRCS, target test-boot-dual : SUPPRIMÉS.
+    - .PHONY: et tests: : retrait test-boot-dual.
+  * EMU_VERSION 1.22.15-alpha → 1.22.16-alpha.
+  * 530 tests pass (= -5 vs 535 : 1 klaus 6502 + 4 oric_boot_dual retirés).
 - 1.22.15-alpha (2026-05-09): ADR-18 étape 1.C sub-2 — cpu65c816 découplé du 6502
   * cpu65c816.h : include cpu/cpu6502.h → cpu/cpu_types.h (memory_t,
     cpu_irq_source_t, cpu_flags_t neutres uniquement).
