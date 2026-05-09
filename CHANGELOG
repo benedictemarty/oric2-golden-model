@@ -5,6 +5,49 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.22.11-alpha] - 2026-05-09
+
+### Phase 1 PH-cleanup-zombie — Retrait kernel_hires2_* legacy
+
+#### Removed
+- Côté Phosphoric :
+  - `tests/integration/test_oricos_hires2.c` supprimé (1 test, 20 ASSERTs).
+  - `Makefile` : cibles `test-oricos-hires2` + `TEST_ORICOS_HIRES2_SRCS`,
+    retrait de `tests:` global et `.PHONY`.
+- Côté OricOS (`kernel.s`) :
+  - `kernel_hires2_clear` (~62 lignes asm).
+  - `kernel_fill_rect_aligned` (~134 lignes asm).
+  - `pattern_table` (8 entrées × 3 octets).
+  - 14 constantes ZP `HIRES2_*` (BANK, FB_SIZE, BPL, GX_*, Y_*, RECT_COL,
+    PAT_PTR, FB_PTR, PB0/1/2).
+  - Appels `jsr kernel_hires2_clear` et `jsr kernel_fill_rect_aligned`
+    dans boot kernel.
+
+#### Justification
+- ADR-19 v2 avait acté la VRAM SDRAM unifiée. Bank `$80` (ex-VRAM live
+  Sprint VRAM-3) est devenue RAM normale, **plus visible côté compositor**.
+- `kernel_hires2_*` continuait d'écrire en bank `$80` mais les pixels
+  n'étaient plus rasterisés.
+- Rendu desktop XVGA passe désormais exclusivement par **GPU blitter
+  (ADR-21)** via `kernel_gfx_*` (Sprint GPU-3 v0.3).
+
+#### Conservé
+- `src/video/hires_oric2.c` (Phosphoric, ADR-12) : ULA guest 240×200
+  attribute-based, toujours active pour compat Oric 1 stricte (ADR-10).
+- `tests/integration/test_compositor_hires_oric2.c` : teste le compositor
+  + ULA guest, indépendant du kernel asm.
+
+#### Validation
+- Build OricOS `make` → `kernel.bin` 57344 bytes (réduit vs précédent).
+- Build Phosphoric `make SDL2=1` → OK.
+- `make tests` → **540 tests OK** (= -1 vs 541 précédent, retrait
+  test_oricos_hires2 attendu).
+
+#### Changed
+- `EMU_VERSION` 1.22.10-alpha → 1.22.11-alpha.
+
+---
+
 ## [1.22.10-alpha] - 2026-05-09
 
 ### Phase 1 PH-2.a — Décrochage des types CPU partagés (ADR-18 étape 1.A)

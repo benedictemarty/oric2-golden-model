@@ -1,12 +1,29 @@
 VERSION_TRACKING - Phosphoric
 =====================================
 
-Current Version: 1.22.10-alpha
+Current Version: 1.22.11-alpha
 Release Date: 2026-05-09
-Status: Alpha (Phase 1 PH-2.a — décrochage types CPU vers cpu_types.h, 541 tests pass)
+Status: Alpha (Phase 1 PH-cleanup-zombie — retrait kernel_hires2_* legacy, 540 tests pass)
 
 Version History:
 ----------------
+- 1.22.11-alpha (2026-05-09): PH-cleanup-zombie — retrait kernel_hires2_* legacy
+  * Suppression côté OricOS kernel.s :
+    - kernel_hires2_clear (62 lignes asm + pattern_table 18 lignes).
+    - kernel_fill_rect_aligned (134 lignes asm).
+    - 14 constantes ZP HIRES2_* (BANK, FB_SIZE, BPL, GX_*, Y_*, RECT_COL,
+      PAT_PTR, FB_PTR, PB0/1/2).
+    - Appels boot kernel (jsr kernel_hires2_clear, jsr kernel_fill_rect_aligned).
+  * Suppression côté Phosphoric :
+    - tests/integration/test_oricos_hires2.c (1 test, 20 ASSERTs).
+    - Cibles Makefile test-oricos-hires2 + TEST_ORICOS_HIRES2_SRCS.
+  * Justification : ADR-19 v2 (VRAM SDRAM unifiée) avait rendu bank $80
+    (ex-VRAM live) invisible côté compositor. Code mort visuellement,
+    encombrant kernel.s. Rendu desktop XVGA passe désormais par GPU
+    blitter (ADR-21) via kernel_gfx_* (Sprint GPU-3 v0.3).
+  * Conservé : src/video/hires_oric2.c (Phosphoric, ADR-12 ULA guest
+    240×200 attribute-based — toujours active pour compat Oric 1).
+  * 540 tests pass (= -1 test test_oricos_hires2 vs 541 précédent).
 - 1.22.10-alpha (2026-05-09): ADR-18 étape 1.A — décrochage types CPU partagés
   * Création include/cpu/cpu_types.h neutre : memory_t (forward decl),
     cpu_flags_t (FLAG_*), cpu_irq_source_t (IRQF_*).
