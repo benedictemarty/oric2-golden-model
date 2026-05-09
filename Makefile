@@ -37,7 +37,7 @@ endif
 # Source files
 SOURCES = src/main.c \
           src/cpu/cpu6502.c \
-          src/cpu/opcodes.c \
+          src/cpu/opcode_metadata.c src/cpu/opcodes.c \
           src/cpu/addressing.c \
           src/cpu/cpu65c816.c \
           src/cpu/cpu65c816_opcodes.c \
@@ -123,12 +123,12 @@ tap2sedoric: tools/tap2sedoric.c $(TOOL_OBJECTS) src/storage/sedoric.o
 #  TESTS
 # ═══════════════════════════════════════════════════════════════
 
-TEST_CPU_SRCS = tests/unit/test_cpu.c src/cpu/cpu6502.c src/cpu/opcodes.c \
+TEST_CPU_SRCS = tests/unit/test_cpu.c src/cpu/cpu6502.c src/cpu/opcode_metadata.c src/cpu/opcodes.c \
                 src/cpu/addressing.c src/memory/memory.c src/memory/banking.c \
                 src/utils/logging.c
 
 TEST_CPU_CORE_SRCS = tests/unit/test_cpu_core.c src/cpu/cpu_core.c \
-                     src/cpu/cpu6502.c src/cpu/opcodes.c src/cpu/addressing.c \
+                     src/cpu/cpu6502.c src/cpu/opcode_metadata.c src/cpu/opcodes.c src/cpu/addressing.c \
                      src/cpu/cpu65c816.c src/cpu/cpu65c816_opcodes.c \
                      src/memory/memory.c src/memory/banking.c src/utils/logging.c
 # Note PH-2.c.1 (ADR-18) : test_cpu_core lui-même n'utilise plus le cœur 6502,
@@ -139,43 +139,43 @@ TEST_CPU_CORE_SRCS = tests/unit/test_cpu_core.c src/cpu/cpu_core.c \
 # partagée vers un fichier neutre src/cpu/opcode_metadata.c).
 
 TEST_CPU816_SRCS = tests/unit/test_cpu65c816.c src/cpu/cpu65c816.c \
-                   src/cpu/cpu65c816_opcodes.c src/cpu/opcodes.c \
+                   src/cpu/cpu65c816_opcodes.c src/cpu/opcode_metadata.c src/cpu/opcodes.c \
                    src/cpu/cpu6502.c src/cpu/addressing.c \
                    src/memory/memory.c src/memory/banking.c src/utils/logging.c
 
 TEST_CPU816_E_SRCS = tests/unit/test_cpu65c816_e_mode.c src/cpu/cpu65c816.c \
-                     src/cpu/cpu65c816_opcodes.c src/cpu/opcodes.c \
+                     src/cpu/cpu65c816_opcodes.c src/cpu/opcode_metadata.c src/cpu/opcodes.c \
                      src/cpu/cpu6502.c src/cpu/addressing.c \
                      src/memory/memory.c src/memory/banking.c src/utils/logging.c
 
 TEST_CPU816_N_SRCS = tests/unit/test_cpu65c816_native.c src/cpu/cpu65c816.c \
-                     src/cpu/cpu65c816_opcodes.c src/cpu/opcodes.c \
+                     src/cpu/cpu65c816_opcodes.c src/cpu/opcode_metadata.c src/cpu/opcodes.c \
                      src/cpu/cpu6502.c src/cpu/addressing.c \
                      src/memory/memory.c src/memory/banking.c src/utils/logging.c
 
 TEST_KLAUS_SRCS = tests/integration/test_klaus_dormann.c \
-                  src/cpu/cpu6502.c src/cpu/opcodes.c src/cpu/addressing.c \
+                  src/cpu/cpu6502.c src/cpu/opcode_metadata.c src/cpu/opcodes.c src/cpu/addressing.c \
                   src/cpu/cpu65c816.c src/cpu/cpu65c816_opcodes.c \
                   src/memory/memory.c src/memory/banking.c src/utils/logging.c
 
 TEST_BOOT_DUAL_SRCS = tests/integration/test_oric_boot_dual.c \
-                      src/cpu/cpu6502.c src/cpu/opcodes.c src/cpu/addressing.c \
+                      src/cpu/cpu6502.c src/cpu/opcode_metadata.c src/cpu/opcodes.c src/cpu/addressing.c \
                       src/cpu/cpu65c816.c src/cpu/cpu65c816_opcodes.c \
                       src/memory/memory.c src/memory/banking.c src/utils/logging.c
 
 TEST_PARAVIRT_SRCS = tests/integration/test_paravirt_demo.c \
-                     src/cpu/cpu6502.c src/cpu/opcodes.c src/cpu/addressing.c \
+                     src/cpu/cpu6502.c src/cpu/opcode_metadata.c src/cpu/opcodes.c src/cpu/addressing.c \
                      src/cpu/cpu65c816.c src/cpu/cpu65c816_opcodes.c \
                      src/memory/memory.c src/memory/banking.c src/utils/logging.c
 
 TEST_ORICOS_BOOT_SRCS = tests/integration/test_oricos_boot.c \
-                       src/cpu/cpu6502.c src/cpu/opcodes.c src/cpu/addressing.c \
+                       src/cpu/cpu6502.c src/cpu/opcode_metadata.c src/cpu/opcodes.c src/cpu/addressing.c \
                        src/cpu/cpu65c816.c src/cpu/cpu65c816_opcodes.c \
                        src/memory/memory.c src/memory/banking.c \
                        src/io/via6522.c src/utils/logging.c
 
 TEST_ORICOS_VISUAL_SRCS = tests/integration/test_oricos_visual.c \
-                       src/cpu/cpu6502.c src/cpu/opcodes.c src/cpu/addressing.c \
+                       src/cpu/cpu6502.c src/cpu/opcode_metadata.c src/cpu/opcodes.c src/cpu/addressing.c \
                        src/cpu/cpu65c816.c src/cpu/cpu65c816_opcodes.c \
                        src/memory/memory.c src/memory/banking.c \
                        src/io/via6522.c src/video/video.c \
@@ -183,7 +183,7 @@ TEST_ORICOS_VISUAL_SRCS = tests/integration/test_oricos_visual.c \
                        src/utils/logging.c
 
 TEST_ORICOS_SD_SRCS = tests/integration/test_oricos_sd.c \
-                       src/cpu/cpu6502.c src/cpu/opcodes.c src/cpu/addressing.c \
+                       src/cpu/cpu6502.c src/cpu/opcode_metadata.c src/cpu/opcodes.c src/cpu/addressing.c \
                        src/cpu/cpu65c816.c src/cpu/cpu65c816_opcodes.c \
                        src/memory/memory.c src/memory/banking.c \
                        src/io/via6522.c src/io/sd_device.c \
@@ -203,7 +203,7 @@ TEST_STORAGE_SRCS = tests/unit/test_storage.c src/storage/sedoric.c \
                     src/storage/disk.c src/utils/logging.c
 
 TEST_SYSTEM_SRCS = tests/unit/test_full_system.c src/cpu/cpu6502.c \
-                   src/cpu/opcodes.c src/cpu/addressing.c src/memory/memory.c \
+                   src/cpu/opcode_metadata.c src/cpu/opcodes.c src/cpu/addressing.c src/memory/memory.c \
                    src/memory/banking.c src/io/via6522.c src/utils/logging.c
 
 test-cpu: $(TEST_CPU_SRCS)
@@ -274,7 +274,7 @@ test-system: $(TEST_SYSTEM_SRCS)
 	@$(CC) $(CFLAGS) $(TEST_SYSTEM_SRCS) $(LDFLAGS) -o test_system
 	@./test_system
 
-TEST_ROM_SRCS = tests/unit/test_rom.c src/cpu/cpu6502.c src/cpu/opcodes.c \
+TEST_ROM_SRCS = tests/unit/test_rom.c src/cpu/cpu6502.c src/cpu/opcode_metadata.c src/cpu/opcodes.c \
                 src/cpu/addressing.c src/memory/memory.c src/memory/banking.c \
                 src/io/via6522.c src/utils/logging.c
 
@@ -283,7 +283,7 @@ test-rom: $(TEST_ROM_SRCS)
 	@./test_rom
 
 TEST_VIDEO_SRCS = tests/unit/test_video.c src/video/video.c src/video/export.c \
-                  src/cpu/cpu6502.c src/cpu/opcodes.c src/cpu/addressing.c \
+                  src/cpu/cpu6502.c src/cpu/opcode_metadata.c src/cpu/opcodes.c src/cpu/addressing.c \
                   src/memory/memory.c src/memory/banking.c src/io/via6522.c \
                   src/utils/logging.c
 
@@ -317,7 +317,7 @@ test-gpu-device: $(TEST_GPU_SRCS)
 	@./test_gpu_device
 
 TEST_ORICOS_GPU_SRCS = tests/integration/test_oricos_gpu.c \
-                       src/cpu/cpu6502.c src/cpu/opcodes.c src/cpu/addressing.c \
+                       src/cpu/cpu6502.c src/cpu/opcode_metadata.c src/cpu/opcodes.c src/cpu/addressing.c \
                        src/cpu/cpu65c816.c src/cpu/cpu65c816_opcodes.c \
                        src/memory/memory.c src/memory/banking.c \
                        src/io/via6522.c src/io/sd_device.c \
@@ -329,7 +329,7 @@ test-oricos-gpu: $(TEST_ORICOS_GPU_SRCS)
 	@./test_oricos_gpu
 
 TEST_ORICOS_WINDOW_SRCS = tests/integration/test_oricos_window.c \
-                       src/cpu/cpu6502.c src/cpu/opcodes.c src/cpu/addressing.c \
+                       src/cpu/cpu6502.c src/cpu/opcode_metadata.c src/cpu/opcodes.c src/cpu/addressing.c \
                        src/cpu/cpu65c816.c src/cpu/cpu65c816_opcodes.c \
                        src/memory/memory.c src/memory/banking.c \
                        src/io/via6522.c src/io/sd_device.c \
@@ -341,7 +341,7 @@ test-oricos-window: $(TEST_ORICOS_WINDOW_SRCS)
 	@./test_oricos_window
 
 TEST_ORICOS_VRAM_SRCS = tests/integration/test_oricos_vram.c \
-                       src/cpu/cpu6502.c src/cpu/opcodes.c src/cpu/addressing.c \
+                       src/cpu/cpu6502.c src/cpu/opcode_metadata.c src/cpu/opcodes.c src/cpu/addressing.c \
                        src/cpu/cpu65c816.c src/cpu/cpu65c816_opcodes.c \
                        src/memory/memory.c src/memory/banking.c \
                        src/io/via6522.c src/io/sd_device.c \
@@ -353,7 +353,7 @@ test-oricos-vram: $(TEST_ORICOS_VRAM_SRCS)
 	@./test_oricos_vram
 
 TEST_ORICOS_LIVE_SRCS = tests/integration/test_oricos_live_alloc.c \
-                       src/cpu/cpu6502.c src/cpu/opcodes.c src/cpu/addressing.c \
+                       src/cpu/cpu6502.c src/cpu/opcode_metadata.c src/cpu/opcodes.c src/cpu/addressing.c \
                        src/cpu/cpu65c816.c src/cpu/cpu65c816_opcodes.c \
                        src/memory/memory.c src/memory/banking.c \
                        src/io/via6522.c src/io/sd_device.c \
@@ -379,7 +379,7 @@ test-audio: $(TEST_AUDIO_SRCS)
 	@./test_audio
 
 TEST_DEBUGGER_SRCS = tests/unit/test_debugger.c src/debugger.c \
-                     src/cpu/cpu6502.c src/cpu/opcodes.c src/cpu/addressing.c \
+                     src/cpu/cpu6502.c src/cpu/opcode_metadata.c src/cpu/opcodes.c src/cpu/addressing.c \
                      src/cpu/cpu65c816.c src/cpu/cpu65c816_opcodes.c src/cpu/cpu_core.c \
                      src/memory/memory.c src/memory/banking.c \
                      src/io/via6522.c src/utils/logging.c
@@ -395,7 +395,7 @@ test-cast: $(TEST_CAST_SRCS)
 	@./test_cast
 
 TEST_SAVESTATE_SRCS = tests/unit/test_savestate.c src/savestate.c \
-                      src/cpu/cpu6502.c src/cpu/opcodes.c src/cpu/addressing.c \
+                      src/cpu/cpu6502.c src/cpu/opcode_metadata.c src/cpu/opcodes.c src/cpu/addressing.c \
                       src/memory/memory.c src/memory/banking.c \
                       src/io/via6522.c src/io/keyboard.c src/io/microdisc.c \
                       src/audio/ay3891x.c src/video/video.c \
@@ -439,7 +439,7 @@ test-renderer: $(TEST_RENDERER_SRCS)
 	@./test_renderer
 
 TEST_TRACE_SRCS = tests/unit/test_trace.c src/utils/trace.c \
-                  src/cpu/cpu6502.c src/cpu/opcodes.c src/cpu/addressing.c \
+                  src/cpu/cpu6502.c src/cpu/opcode_metadata.c src/cpu/opcodes.c src/cpu/addressing.c \
                   src/memory/memory.c src/memory/banking.c src/utils/logging.c
 
 test-trace: $(TEST_TRACE_SRCS)
@@ -447,7 +447,7 @@ test-trace: $(TEST_TRACE_SRCS)
 	@./test_trace
 
 TEST_PROFILER_SRCS = tests/unit/test_profiler.c src/utils/profiler.c \
-                     src/cpu/cpu6502.c src/cpu/opcodes.c src/cpu/addressing.c \
+                     src/cpu/cpu6502.c src/cpu/opcode_metadata.c src/cpu/opcodes.c src/cpu/addressing.c \
                      src/memory/memory.c src/memory/banking.c src/utils/logging.c
 
 test-profiler: $(TEST_PROFILER_SRCS)
@@ -455,7 +455,7 @@ test-profiler: $(TEST_PROFILER_SRCS)
 	@./test_profiler
 
 TEST_ROMINFO_SRCS = tests/unit/test_rominfo.c src/utils/rominfo.c \
-                    src/cpu/cpu6502.c src/cpu/opcodes.c src/cpu/addressing.c \
+                    src/cpu/cpu6502.c src/cpu/opcode_metadata.c src/cpu/opcodes.c src/cpu/addressing.c \
                     src/memory/memory.c src/memory/banking.c src/utils/logging.c
 
 test-rominfo: $(TEST_ROMINFO_SRCS)
@@ -475,7 +475,7 @@ test-keyboard: $(TEST_KEYBOARD_SRCS)
 	@$(CC) $(CFLAGS) -DHAS_SDL2 $(shell pkg-config --cflags sdl2 2>/dev/null) $(TEST_KEYBOARD_SRCS) $(LDFLAGS) $(shell pkg-config --libs sdl2 2>/dev/null) -o test_keyboard
 	@./test_keyboard
 
-TEST_COVERAGE_SRCS = tests/unit/test_coverage.c src/cpu/cpu6502.c src/cpu/opcodes.c \
+TEST_COVERAGE_SRCS = tests/unit/test_coverage.c src/cpu/cpu6502.c src/cpu/opcode_metadata.c src/cpu/opcodes.c \
                      src/cpu/addressing.c \
                      src/cpu/cpu65c816.c src/cpu/cpu65c816_opcodes.c src/cpu/cpu_core.c \
                      src/memory/memory.c src/memory/banking.c \

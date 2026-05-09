@@ -38,24 +38,10 @@ typedef struct {
     memory_t* memory;       /**< Pointer to memory subsystem */
 } cpu6502_t;
 
-/**
- * @brief Addressing modes
- */
-typedef enum {
-    ADDR_IMPLICIT,      /**< Implicit (no operand) */
-    ADDR_ACCUMULATOR,   /**< Accumulator */
-    ADDR_IMMEDIATE,     /**< Immediate (#$nn) */
-    ADDR_ZERO_PAGE,     /**< Zero Page ($nn) */
-    ADDR_ZERO_PAGE_X,   /**< Zero Page,X ($nn,X) */
-    ADDR_ZERO_PAGE_Y,   /**< Zero Page,Y ($nn,Y) */
-    ADDR_RELATIVE,      /**< Relative (branch) */
-    ADDR_ABSOLUTE,      /**< Absolute ($nnnn) */
-    ADDR_ABSOLUTE_X,    /**< Absolute,X ($nnnn,X) */
-    ADDR_ABSOLUTE_Y,    /**< Absolute,Y ($nnnn,Y) */
-    ADDR_INDIRECT,      /**< Indirect (JMP) */
-    ADDR_INDEXED_INDIRECT,  /**< Indexed Indirect ($nn,X) */
-    ADDR_INDIRECT_INDEXED   /**< Indirect Indexed ($nn),Y */
-} addressing_mode_t;
+/* addressing_mode_t déplacé vers `opcode_metadata.h` en PH-2.c.2 (ADR-18
+ * étape 1.C). Inclu via cpu_types.h ? Non — pour rester rétro-compat des
+ * consommateurs de cpu6502.h, on inclut directement opcode_metadata.h ici. */
+#include "cpu/opcode_metadata.h"
 
 /**
  * @brief Initialize CPU state

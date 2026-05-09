@@ -1,12 +1,27 @@
 VERSION_TRACKING - Phosphoric
 =====================================
 
-Current Version: 1.22.13-alpha
+Current Version: 1.22.14-alpha
 Release Date: 2026-05-09
-Status: Alpha (Phase 1 PH-2.c.1 — retrait vtable 6502 + dispatch CLI rétro-compat, 535 tests pass)
+Status: Alpha (Phase 1 PH-2.c.2 sub-1 — extraction opcode_metadata neutre, 535 tests pass)
 
 Version History:
 ----------------
+- 1.22.14-alpha (2026-05-09): ADR-18 étape 1.C (sub-2.1) — extraction opcode_metadata
+  * Nouveau : include/cpu/opcode_metadata.h + src/cpu/opcode_metadata.c.
+    Contient opcode_info_t, addressing_mode_t (déplacé de cpu6502.h),
+    extern + définition de opcode_table[256] (extrait de opcodes.c).
+  * cpu_internal.h : retrait typedef opcode_info_t + extern opcode_table,
+    inclut opcode_metadata.h pour rétro-compat.
+  * cpu6502.h : retrait typedef addressing_mode_t, inclut opcode_metadata.h.
+  * opcodes.c : définition opcode_table[256] retirée (déplacée).
+    Conservé reste du fichier (op_*, cpu_execute_opcode, update_nz).
+  * Makefile : src/cpu/opcode_metadata.c ajouté à toutes les TEST_*_SRCS et
+    SOURCES principales (couplage : cpu65c816_opcodes.c → opcode_table).
+  * Découple cpu65c816_opcodes.c de opcodes.c (le 65C816 n'a plus besoin
+    que de opcode_metadata.c, pas du code 6502 d'exécution).
+  * EMU_VERSION 1.22.13-alpha → 1.22.14-alpha.
+  * 535 tests pass (= aucune régression vs PH-2.c.1).
 - 1.22.13-alpha (2026-05-09): ADR-18 étape 1.C (partie 1) — retrait vtable 6502
   * cpu_core.h : retrait CPU_KIND_6502 enum value, extern cpu_core_vtable_6502.
     Bascule include cpu6502.h → cpu_types.h (types neutres uniquement).

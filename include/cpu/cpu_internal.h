@@ -7,6 +7,7 @@
 #define CPU_INTERNAL_H
 
 #include "cpu/cpu6502.h"
+#include "cpu/opcode_metadata.h"  /* opcode_info_t, opcode_table[], addressing_mode_t */
 
 uint8_t cpu_mem_read(cpu6502_t* cpu, uint16_t addr);
 void cpu_mem_write(cpu6502_t* cpu, uint16_t addr, uint8_t val);
@@ -30,14 +31,10 @@ uint8_t cpu_pull(cpu6502_t* cpu);
 void cpu_push_word(cpu6502_t* cpu, uint16_t val);
 uint16_t cpu_pull_word(cpu6502_t* cpu);
 
-typedef struct opcode_info_s {
-    const char* name;
-    uint8_t cycles;
-    uint8_t size;
-    addressing_mode_t mode;
-} opcode_info_t;
+/* opcode_info_t et extern opcode_table déplacés vers opcode_metadata.h en
+ * PH-2.c.2 (ADR-18 étape 1.C). cpu_internal.h les ré-exporte via include
+ * transitif pour rétro-compat des consommateurs historiques. */
 
-extern const opcode_info_t opcode_table[256];
 int cpu_execute_opcode(cpu6502_t* cpu, uint8_t opcode);
 
 #endif
