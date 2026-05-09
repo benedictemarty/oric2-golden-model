@@ -24,7 +24,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 
-#include "cpu/cpu6502.h"  /* memory_t, cpu_irq_source_t, cpu_flags_t partagés */
+#include "cpu/cpu_types.h"  /* memory_t, cpu_irq_source_t, cpu_flags_t neutres */
 
 /**
  * @brief Flags additionnels propres au 65C816 (mode natif).

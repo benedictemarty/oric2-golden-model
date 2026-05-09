@@ -12,7 +12,7 @@
 #include <string.h>
 
 #include "cpu/cpu65c816.h"
-#include "cpu/cpu_internal.h"  /* opcode_table partagé pour la taille d'opérande */
+#include "cpu/opcode_metadata.h"  /* opcode_table neutre pour la taille d'opérande */
 #include "memory/memory.h"
 #include "utils/logging.h"
 

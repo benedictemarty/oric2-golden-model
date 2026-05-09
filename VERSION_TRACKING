@@ -1,12 +1,24 @@
 VERSION_TRACKING - Phosphoric
 =====================================
 
-Current Version: 1.22.14-alpha
+Current Version: 1.22.15-alpha
 Release Date: 2026-05-09
-Status: Alpha (Phase 1 PH-2.c.2 sub-1 — extraction opcode_metadata neutre, 535 tests pass)
+Status: Alpha (Phase 1 PH-2.c.2 sub-2 — cpu65c816 découplé du cœur 6502, 535 tests)
 
 Version History:
 ----------------
+- 1.22.15-alpha (2026-05-09): ADR-18 étape 1.C sub-2 — cpu65c816 découplé du 6502
+  * cpu65c816.h : include cpu/cpu6502.h → cpu/cpu_types.h (memory_t,
+    cpu_irq_source_t, cpu_flags_t neutres uniquement).
+  * cpu65c816.c : include cpu/cpu_internal.h → cpu/opcode_metadata.h.
+  * cpu65c816_opcodes.c : idem (utilise uniquement opcode_table neutre).
+  * Makefile :
+    - TEST_CPU_CORE_SRCS : retrait cpu6502.c, opcodes.c, addressing.c.
+    - TEST_CPU816_SRCS, TEST_CPU816_E_SRCS, TEST_CPU816_N_SRCS : retrait
+      cpu6502.c, opcodes.c, addressing.c. opcode_metadata.c suffit.
+  * Cœur 65C816 désormais autonome : compile sans aucune source 6502.
+  * EMU_VERSION 1.22.14-alpha → 1.22.15-alpha.
+  * 535 tests pass (= aucune régression vs PH-2.c.2 sub-1).
 - 1.22.14-alpha (2026-05-09): ADR-18 étape 1.C (sub-2.1) — extraction opcode_metadata
   * Nouveau : include/cpu/opcode_metadata.h + src/cpu/opcode_metadata.c.
     Contient opcode_info_t, addressing_mode_t (déplacé de cpu6502.h),

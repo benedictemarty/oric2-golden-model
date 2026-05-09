@@ -25,7 +25,7 @@
 #include <string.h>
 
 #include "cpu/cpu65c816.h"
-#include "cpu/cpu_internal.h"  /* opcode_table[] partagé avec le 6502 */
+#include "cpu/opcode_metadata.h"  /* opcode_table[] neutre */
 #include "memory/memory.h"
 
 /* Forward declarations (some helpers reference each other across sections). */
